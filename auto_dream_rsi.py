@@ -46,8 +46,9 @@ from scipy.optimize import linprog, minimize
 from scipy.spatial.distance import cdist
 
 LOCAL_SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dream_rsi_scripts")
+PLUGIN_SCRIPTS_DIR = r"C:\Users\vanya\.gemini\config\plugins\autonomous-research\skills\dream-rsi\scripts"
 SKILL_SCRIPTS_DIR = r"C:\Users\vanya\.gemini\config\skills\dream-rsi\scripts"
-for _cand_dir in (SKILL_SCRIPTS_DIR, LOCAL_SCRIPTS_DIR):
+for _cand_dir in (LOCAL_SCRIPTS_DIR, PLUGIN_SCRIPTS_DIR, SKILL_SCRIPTS_DIR):
     if os.path.isdir(_cand_dir) and _cand_dir not in sys.path:
         sys.path.insert(0, _cand_dir)
 
