@@ -1179,6 +1179,90 @@ def main() -> int:
         f"before_b1={legal_before_b1} after_b1={legal_after_b1} revealed={[n.id for n in revealed_merge]}",
     )
 
+    # -- 16. SLEEP-DAG-RSI v5 upgrades (HOPE + CMS + SLEEP + DAG Bridges 1..4) --
+    print()
+    print("16. SLEEP-DAG-RSI v5 upgrades: HOPE DeltaRuleFastMemory, DAG-KS Consolidation, and Fingerprint MoE REM Dreaming")
+    import numpy as np
+    from sleep_dag_rsi import (
+        CounterfactualDreamingEngine,
+        DeltaRuleFastMemory,
+        ExpandableMoEMLP,
+        ExpertFingerprintMeta,
+        SleepDAGConfig,
+        SleepDAGRSIOrchestrator,
+        SleepLanguageModel,
+        generalized_jsd_loss_and_grad,
+    )
+
+    rng_s5 = np.random.default_rng(20261028)
+    s_log = rng_s5.normal(0.0, 1.0, size=(2, 4, 10))
+    t_log = rng_s5.normal(0.0, 1.0, size=(2, 4, 10))
+    _, anal_g = generalized_jsd_loss_and_grad(s_log, t_log, beta=0.5)
+    s_p = s_log.copy()
+    s_m = s_log.copy()
+    s_p[0, 0, 0] += 1e-6
+    s_m[0, 0, 0] -= 1e-6
+    lp_s5, _ = generalized_jsd_loss_and_grad(s_p, t_log, beta=0.5)
+    lm_s5, _ = generalized_jsd_loss_and_grad(s_m, t_log, beta=0.5)
+    fd_err = abs(float(anal_g[0, 0, 0]) - (lp_s5 - lm_s5) / 2e-6)
+
+    fast_m = DeltaRuleFastMemory(d_model=12, rng=rng_s5)
+    fast_m.b_alpha = np.full((1,), 20.0)
+    fast_m.b_beta = np.full((1,), 10.0)
+    rep_tok = np.repeat(rng_s5.normal(0.0, 1.0, size=(1, 1, 12)), repeats=8, axis=1)
+    _, _, err_n = fast_m.forward(rep_tok, write_Scale=0.85)
+    check(
+        "Generalized JSD analytical gradient (<1e-7) and HOPE DeltaRuleFastMemory associative convergence",
+        fd_err < 1e-7 and err_n[-1] < 1e-4 * err_n[0],
+        f"jsd_fd_err={fd_err:.2e} delta_err={err_n[0]:.3f}->{err_n[-1]:.2e}",
+    )
+
+    cfg_s5 = SleepDAGConfig(vocab_size=32, d_model=16, d_ff=32, d_low=4)
+    blk_s5 = ExpandableMoEMLP(cfg_s5, update_period=4, rng=rng_s5)
+    s_anc = blk_s5.num_base + blk_s5.unlock_new_low_rank_expert(
+        ExpertFingerprintMeta(expert_slot=0, source_node_id="anc", pass_mask=[1, 1, 1, 0, 0, 0], ast_symbols={"k_a"})
+    )
+    s_cln = blk_s5.num_base + blk_s5.unlock_new_low_rank_expert(
+        ExpertFingerprintMeta(expert_slot=0, source_node_id="cln", pass_mask=[1, 1, 1, 0, 0, 0], ast_symbols={"k_b"})
+    )
+    s_cmp = blk_s5.num_base + blk_s5.unlock_new_low_rank_expert(
+        ExpertFingerprintMeta(expert_slot=0, source_node_id="cmp", pass_mask=[0, 0, 0, 1, 1, 1], ast_symbols={"k_c"})
+    )
+    comp_pair_s5 = blk_s5.select_complementary_crossover_experts()
+    check(
+        "ExpandableMoEMLP Error-Fingerprint router skips clone expert and selects complementary pair",
+        comp_pair_s5 is not None and {comp_pair_s5[0], comp_pair_s5[1]} == {s_anc, s_cmp},
+        f"selected={comp_pair_s5} clone_slot={s_cln}",
+    )
+
+    orch_s5 = SleepDAGRSIOrchestrator(cfg=cfg_s5, seed=42)
+    wake_s5 = np.array(
+        [
+            [4, 5, 6, 7, 8, 9, 10, 11, 8, 9, 10, 11],
+            [4, 5, 6, 7, 12, 13, 14, 15, 12, 13, 14, 15],
+        ],
+        dtype=np.int64,
+    )
+    t_s5 = DiscoveryTree(task="s5_demo", baseline_score=50.0, max_parallelism=2)
+    t_s5.add(Node(id="root", parent_id=None, branch=-1, attempt=0, score=50.0))
+    t_s5.add(Node(id="b0_win", parent_id="root", branch=0, attempt=1, score=90.0, pass_mask=[1, 1, 0, 0]))
+    t_s5.add(Node(id="b1_trap", parent_id="root", branch=1, attempt=1, score=20.0, fail_class="algorithmic_failure"))
+    cyc_s5 = orch_s5.run_wake_sleep_cycle(
+        domain_name="s5_demo",
+        wake_sequences=wake_s5,
+        dag_tree=t_s5,
+        trajectory_node_ids=["b0_win", "b1_trap"],
+        fingerprint_meta=ExpertFingerprintMeta(expert_slot=0, source_node_id="b0_win", pass_mask=[1, 1, 0, 0]),
+        retention_evaluator=lambda m: 1.0,
+    )
+    check(
+        "SleepDAGRSIOrchestrator completes 4-phase Wake->NREM->REM->2x2 cycle with DAG loss masking (1/2 supervised)",
+        cyc_s5["ks_stats"]["supervised_trajectories"] == 1
+        and cyc_s5["ks_stats"]["total_wake_trajectories"] == 2
+        and "accepted_pair" in cyc_s5["gate_2x2"],
+        f"supervised={cyc_s5['ks_stats']['supervised_trajectories']}/{cyc_s5['ks_stats']['total_wake_trajectories']} gate={cyc_s5['gate_2x2']['accepted_pair']}",
+    )
+
     print()
     if FAILURES:
         print(f"RESULT: {len(FAILURES)} FAILED -> {FAILURES}")

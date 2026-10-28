@@ -3311,3 +3311,30 @@ def export_lean4_certificate(
         "cert_lean_code": cert_lean,
         "has_sorry": ("sorry" in cert_lean),
     }
+
+
+# ---------------------------------------------------------------------------
+# 16. SLEEP-DAG-RSI v5 Parametric Continual Learning Exports
+# ---------------------------------------------------------------------------
+try:
+    from sleep_dag_rsi import (  # type: ignore
+        CounterfactualDreamingEngine,
+        DAGKnowledgeSeedingConsolidator,
+        DeltaRuleFastMemory,
+        ExpandableMoEMLP,
+        ExpertFingerprintMeta,
+        LoRALinearWrapper,
+        LowRankExpert,
+        SleepDAGConfig,
+        SleepDAGRSIOrchestrator,
+        SleepLanguageModel,
+        compute_r_abs,
+        compute_r_sem_numpy,
+        cross_entropy_loss_and_grad,
+        generalized_jsd_loss_and_grad,
+        levenshtein_distance,
+        softmax_np,
+    )
+except ImportError:
+    pass
+

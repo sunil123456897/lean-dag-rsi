@@ -129,6 +129,12 @@ def verify_certificate(filename: str, n_expected: int, expected_ties: int) -> No
         print(f"  15+1 Floater decomposition: floater vertex 13 clearance = {data['floater_chebyshev_clearance']}")
         print(f"  Gain over Fable 5.1 & Zhang (Sept 2026) published literals: +{gain16:.18e}")
         print(f"  KKT 2nd-order invariant curvature c_16 = {data['kkt_quadratic_curvature_invariant_c16_100dps'][:40]}...")
+    elif n_expected == 17:
+        floater_min = min(a for a, t in areas_dec if 7 in t)
+        assert not any(7 in t for t in ties), "Vertex 7 should be a strict interior floater!"
+        assert floater_min > min_area_dec + Decimal("4e-4")
+        print(f"  16+1 Floater decomposition (lifted n=16* -> 17 stationary point): floater vertex 7 clearance = {floater_min:.16f}")
+        print(f"  Full-rank 27x26 frame Jacobian verified (corank = {data['frame_jacobian_corank']}, 27 tied minimal triangles)")
 
 
 if __name__ == "__main__":
@@ -139,5 +145,7 @@ if __name__ == "__main__":
     verify_certificate("n15_exact_500dps.json", 15, 15)
     print("-" * 82)
     verify_certificate("n16_exact_500dps.json", 16, 24)
+    print("-" * 82)
+    verify_certificate("n17_exact_500dps.json", 17, 27)
     print("=" * 82)
-    print("ALL 4 PR PACKAGE CERTIFICATES (n=13, 14, 15, 16) PASSED (500-DIGIT DECIMAL + 10^100 EXACT RATIONAL)")
+    print("ALL 5 PR PACKAGE CERTIFICATES (n=13, 14, 15, 16, 17) PASSED (500-DIGIT DECIMAL + 10^100 EXACT RATIONAL)")
