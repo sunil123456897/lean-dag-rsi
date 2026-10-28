@@ -1,4 +1,4 @@
-﻿"""
+"""
 Lean-DAG-RSI Engine & Forensic Audit of the Local Dream-RSI Skill (`engine.py`).
 
 This module:
@@ -42,7 +42,12 @@ import sys
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
-SKILL_SCRIPTS_DIR = r"C:\Users\vanya\.gemini\config\skills\dream-rsi\scripts"
+_CANDIDATE_DIRS = [
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "dream_rsi_scripts"),
+    r"C:\Users\vanya\.gemini\config\plugins\autonomous-research\skills\dream-rsi\scripts",
+    r"C:\Users\vanya\.gemini\config\skills\dream-rsi\scripts",
+]
+SKILL_SCRIPTS_DIR = next((d for d in _CANDIDATE_DIRS if os.path.isdir(d)), _CANDIDATE_DIRS[0])
 if os.path.isdir(SKILL_SCRIPTS_DIR) and SKILL_SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SKILL_SCRIPTS_DIR)
 
@@ -361,9 +366,26 @@ class LeanDAGWorld:
         self._cf_counter: int = 0
         self._used_crossovers: Set[Tuple[str, str]] = set()
 
+    def _all_parents_revealed(self, node: orig_engine.Node) -> bool:
+        if node.parent_id is not None and node.parent_id not in self.revealed:
+            return False
+        sec_pid = node.meta.get("secondary_parent_id")
+        if isinstance(sec_pid, str) and sec_pid and sec_pid not in self.revealed:
+            return False
+        extra_pids = node.meta.get("parent_ids")
+        if isinstance(extra_pids, (list, tuple)):
+            for pid in extra_pids:
+                if isinstance(pid, str) and pid and pid not in self.revealed:
+                    return False
+        return True
+
     def _unrevealed_recorded_children(self, nid: str) -> List[orig_engine.Node]:
         cids = self.tree.children_map.get(nid, [])
-        return [self.tree.nodes[cid] for cid in cids if cid not in self.revealed]
+        return [
+            self.tree.nodes[cid]
+            for cid in cids
+            if cid not in self.revealed and self._all_parents_revealed(self.tree.nodes[cid])
+        ]
 
     def unopened_root_count(self) -> int:
         return len(self._unrevealed_recorded_children(self.tree.root_id))

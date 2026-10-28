@@ -531,6 +531,27 @@ class World:
             ]
         )
 
+    def _all_parents_revealed(self, cid: str) -> bool:
+        """
+        Enforce strict DAG causality for recorded merge nodes: a recorded child `cid`
+        with `secondary_parent_id` or `parent_ids` in `meta` can only be revealed
+        once ALL of its recorded parents are in `self.revealed`.
+        """
+        node = self.tree.nodes.get(cid)
+        if node is None:
+            return False
+        if node.parent_id is not None and node.parent_id not in self.revealed:
+            return False
+        sec_pid = node.meta.get("secondary_parent_id")
+        if isinstance(sec_pid, str) and sec_pid and sec_pid not in self.revealed:
+            return False
+        extra_pids = node.meta.get("parent_ids")
+        if isinstance(extra_pids, (list, tuple)):
+            for pid in extra_pids:
+                if isinstance(pid, str) and pid and pid not in self.revealed:
+                    return False
+        return True
+
     def _last_positive_gain(self, nid: str) -> float:
         node = self.revealed.get(nid)
         if node is None or not self.problem.is_success(node) or node.parent_id is None:
@@ -584,7 +605,9 @@ class World:
             if has_revealed_child:
                 continue
             branch_frontiers[node.branch] = nid
-            if any(c not in self.revealed for c in kids):
+            if any(
+                c not in self.revealed and self._all_parents_revealed(c) for c in kids
+            ):
                 actions.append(nid)
             elif use_cf:
                 if (
@@ -703,7 +726,9 @@ class World:
             if pid not in self.revealed:
                 raise ValueError(f"action {pid!r} is outside the revealed prefix")
             pending = [
-                c for c in self.tree.children_map.get(pid, []) if c not in self.revealed
+                c
+                for c in self.tree.children_map.get(pid, [])
+                if c not in self.revealed and self._all_parents_revealed(c)
             ]
             if pending:
                 node = self.tree.nodes[pending[0]]

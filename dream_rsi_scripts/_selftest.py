@@ -1149,6 +1149,36 @@ def main() -> int:
         f"jepa_gain={jepa_pred['expected_union_gain']} dpo_pairs={dpo_rep['pair_count']} lean_verified={lean_cert['verified_exact_int']}",
     )
 
+    # 15d. Recorded Multi-Parent DAG Merge Causality in World.legal_actions() and World.probe()
+    t_dag_caus = DiscoveryTree(task="dag-causality-test", baseline_score=50.0, max_parallelism=2)
+    t_dag_caus.add(Node(id="root", parent_id=None, branch=-1, attempt=0, score=50.0))
+    t_dag_caus.add(Node(id="b0_a1", parent_id="root", branch=0, attempt=1, score=70.0))
+    t_dag_caus.add(Node(id="b1_a1", parent_id="root", branch=1, attempt=1, score=72.0))
+    t_dag_caus.add(
+        Node(
+            id="xover_rec_b0_b1",
+            parent_id="b0_a1",
+            branch=0,
+            attempt=2,
+            score=88.0,
+            meta={"secondary_parent_id": "b1_a1"},
+        )
+    )
+    w_caus = World(t_dag_caus, allow_counterfactual=False, allow_crossover=False)
+    w_caus.probe(["root"])  # reveals only b0_a1 (b1_a1 is still unrevealed!)
+    legal_before_b1 = w_caus.legal_actions()
+    w_caus.probe(["root"])  # now reveals b1_a1 as well
+    legal_after_b1 = w_caus.legal_actions()
+    revealed_merge = w_caus.probe(["b0_a1"])
+    check(
+        "recorded multi-parent merge child is blocked until ALL parents (primary + secondary_parent_id) are revealed",
+        "b0_a1" not in legal_before_b1
+        and "b0_a1" in legal_after_b1
+        and len(revealed_merge) == 1
+        and revealed_merge[0].id == "xover_rec_b0_b1",
+        f"before_b1={legal_before_b1} after_b1={legal_after_b1} revealed={[n.id for n in revealed_merge]}",
+    )
+
     print()
     if FAILURES:
         print(f"RESULT: {len(FAILURES)} FAILED -> {FAILURES}")
