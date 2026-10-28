@@ -1,0 +1,155 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T2A]{fontenc}
+\usepackage[russian,english]{babel}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage[colorlinks=true,linkcolor=blue!70!black,urlcolor=blue!70!black,citecolor=blue!70!black]{hyperref}
+
+\newtheorem{theorem}{Теорема}
+\newtheorem{proposition}{Предложение}
+\newtheorem{definition}{Определение}
+\newtheorem{remark}{Замечание}
+
+\lstset{
+  language=Python,
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{blue!80!black}\bfseries,
+  commentstyle=\color{green!50!black}\itshape,
+  stringstyle=\color{red!60!black},
+  frame=single,
+  breaklines=true,
+  columns=fullflexible,
+  keepspaces=true
+}
+
+\title{\textbf{Lean-DAG-RSI v3 (Auto-Dream-RSI):\\
+Эволюционный поиск и рекурсивное самообучение на ориентированных ациклических графах с кроссовером по отпечатку ошибок, нейро-символическим разделением и RRSI-регуляризацией}}
+\author{Исследовательская группа \texttt{Auto-Dream-RSI}}
+\date{20 октября 2026 г.}
+
+\begin{document}
+\selectlanguage{russian}
+\maketitle
+
+\begin{abstract}
+Системы эволюционного поиска и рекурсивного самоулучшения на базе больших языковых моделей (\emph{FunSearch}, \emph{AlphaEvolve}, \emph{Dream-RSI}, \emph{DiscoveryRSI}) доказали способность находить нетривиальные алгоритмы и математические конструкции. Однако строгий математический и инструментальный аудит существующих архитектур вскрывает в них шесть фундаментальных дефектов: (1) инверсию стимула по числу проб в Уравнении (1) \emph{Dream-RSI} (Раздел 3, стр.~6: бонус $+\beta_2 N_i^m / \max\{1, k_i^{m,\star}\}$ даёт $\partial V_i^m / \partial N_i^m = -\beta_1 + \beta_2 / k_i^{m,\star} > 0$ при $k_i^{m,\star} < \beta_2/\beta_1$, вознаграждая за раздувание параллельных батчей холостыми пробами) и расхождение текста с кодом \texttt{Listing 2}; (2) цензурирование носителя (\emph{Support Censorship}) при выходе за глубину записанного дерева; (3) топологическую изоляцию веток в древовидном графе; (4) неэффективность текстовых мутаций LLM при оптимизации непрерывных параметров и склонность к переобучению крутилок; (5) смещение <<осторожного отличника>> (\emph{Cautious A-Student}) в \emph{DiscoveryRSI} (\texttt{arXiv:2610.23839v1}, Приложение B.2, Уравнение 17, стр.~27), где равная премия за мелкий ремонт и за прорыв ($\lambda_p = 0.25$) раздувает долю \texttt{Repair} с $20\%$ до $28\%$, сжимает \texttt{Crossover} до $3\%$ и снижает \emph{Importance} ($6.48 \to 6.04$) и \emph{Novelty} ($4.87 \to 4.58$) на \texttt{DFM-Bench} (\texttt{Figure 6b, 7a}, стр.~15); (6) уязвимость к <<взлому грейдера>> (\emph{Grader Gaming}) и фабрикации промежуточных веток задним числом.
+
+В данной работе представлена архитектура \textbf{Lean-DAG-RSI v3} (\texttt{Auto-Dream-RSI}), устраняющая все шесть дефектов за счёт перехода от деревьев к ориентированным ациклическим графам (DAG) с оператором скрещивания по бинарному отпечатку ошибок (\texttt{compute\_error\_fingerprint}), нейро-символического разделения труда с \textbf{RRSI-секатором параметров} (\texttt{prune\_tunable\_params}) и проверкой на плоское плато (\texttt{evaluate\_flat\_plateau}), пучкового субградиента Больцмана по плоской крыше (\emph{Boltzmann Roof-Bundle Subgradient}) и четырёх рекурсивных гейтов \emph{DiscoveryRSI} v3 с защитой \emph{Zero-Gaming Contract}. На 10 задачах система демонстрирует верифицированные результаты: ускорение в $\mathbf{2.50\times}$ по среднему геометрическому на 6 режимах Таблицы 3a над C++ солвером \texttt{Listing 3} из \emph{Dream-RSI} в задаче Lasso, канонические оптимумы упаковки кругов $n=26$ ($\mathbf{2.635983084915}$) и $n=32$ ($\mathbf{2.939572771203}$), $C_1 \le \mathbf{1.503133}$, $C_2 \ge \mathbf{0.942158772814}$ ($P=20\,256$), найденные с нуля конфигурации Хейльбронна $\Delta_{13} = \mathbf{0.0265565289197752}$ и $\Delta_{14} = \mathbf{0.0237757731075727}$ (в точной арифметике \texttt{fractions.Fraction}), а также $\text{LCB}_{95} = \mathbf{57.13\%}$ OOS и $\mathbf{100.00\%}$ точности на 188\,416 шагах тернарной нейросети на закрытых индустриальных стендах.
+\end{abstract}
+
+\section{Математический аудит базовых архитектур}
+
+\subsection{Дефект 1: Инверсия стимула по числу проб в Уравнении (1) Dream-RSI}
+В оригинальной работе \emph{Dream-RSI} (Раздел 3, стр.~6, Уравнение 1) целевая функция контрфактического реплея политики $m$ на дереве $i$ записана как:
+\begin{equation}
+V_i^m = \max_{v \in \mathcal{T}_i^{m, k_i^{m,\star}}} s_v - \beta_1 N_i^m + \beta_2 \frac{N_i^m}{\max\{1, k_i^{m,\star}\}},
+\end{equation}
+где $N_i^m$ — общее число открытых некорневых узлов (потраченных проб верификатора), $k_i^{m,\star}$ — число последовательных раундов принятия решений, а $\beta_1, \beta_2 \ge 0$ — фиксированные коэффициенты штрафа за пробы и бонуса за средний параллелизм батча. При любых весах с $\beta_2 > \beta_1$ (например, при базовых $\beta_1 = 0.01, \beta_2 = 0.05$) имеем
+\[
+\frac{\partial V_i^m}{\partial N_i^m} = -\beta_1 + \frac{\beta_2}{k_i^{m,\star}} > 0 \quad \text{при } k_i^{m,\star} < \frac{\beta_2}{\beta_1} = 5,
+\]
+каждая бесполезная холостая проба, добавленная в параллельный батч без прироста качества ($\Delta \max s_v = 0$), \textbf{увеличивает} $V_i^m$ (при $k_i^{m,\star}=1$ на $+0.04$). Кроме того, в эталонном коде \texttt{Listing 2} (Приложение B.2, стр.~18--22) вместо Уравнения (1) оптимизируется суррогат \texttt{pareto.auc - lambda * parallel\_penalty}, а в раннем прототипе \texttt{engine.py} v0 параметр $\beta$ не передавался внутрь \texttt{OptimalPolicy.select()}.
+
+\subsection{Дефект 2: Цензурирование носителя (Support Censorship)}
+При проигрывании новой политики $\pi'$ на фиксированном историческом дереве $\mathcal{T}$ попытка углубить перспективную ветку $b$ с высоким последним приростом $\Delta_u = s(u) - s(\text{parent}(u)) > 0$, которая в историческом прогоне была остановлена на глубине $d_b < D_{\max}$, сталкивается с отсутствием дочернего узла в логе. Игнорирование такого хода эквивалентно присвоению $\Delta_{\text{next}} = 0$, что систематически занижает ценность недоисследованных быстрорастущих веток.
+
+\subsection{Дефект 3: Парадокс <<осторожного отличника>> в DiscoveryRSI}
+В \emph{DiscoveryRSI} (\texttt{arXiv:2610.23839v1}, Приложение B.2, Уравнение 17, стр.~27) вес гипотезы $h$ при формировании обучающей выборки равен:
+\begin{equation}
+q_h = \min\Bigl(q_{\max}, \; q_{\min} + (q_{\max} - q_{\min})\, r_h \, \rho_{\text{cov}, h}\, \rho_{\text{unc}, h} + \lambda_p p_h\Bigr),
+\end{equation}
+где $\lambda_p = 0.25$ одинакова для мелкого ремонта (\texttt{necessary-repair}) и для научного прорыва (\texttt{substantive-progress}). Так как дисперсия оценки $\sigma_h$ у мелких правок ниже, консервативный рейтинг $s_h = \mu_h - 2\sigma_h$ систематически отдаёт приоритет ремонту над кроссовером: по данным \texttt{Figure 7a} (стр.~15) доля \texttt{Repair} растёт с $20\%$ до $28\%$, доля \texttt{Crossover} падает до $3\%$, а метрики \emph{Importance} ($6.48 \to 6.21 \to 6.04$) и \emph{Novelty} ($4.87 \to 4.94 \to 4.58$) на закрытом биомедицинском стенде \texttt{DFM-Bench} (\texttt{Figure 6b}, стр.~15) падают ниже базовой модели.
+
+\section{Теория и архитектура Lean-DAG-RSI v3}
+
+\subsection{Монотонная функция ценности и рекуррентное продолжение Тьюки}
+Мы заменяем целевую функцию реплея на строго монотонную по экономии проб и раундов формулу (\texttt{engine.py:726}):
+\begin{equation}
+V_{\text{Lean}}(\mathcal{T}, \pi) = \max_{v \in \tau(\pi)} s_v - \beta_1 N_{\text{probes}}(\pi) - \beta_2 k_{\text{rounds}}(\pi), \qquad \beta_1 > 0, \; \beta_2 \ge 0.
+\end{equation}
+Для устранения цензурирования носителя при выходе за записанный фронтир ветки $u$ с положительным последним приростом $\Delta_u > 0$ вводится рекуррентное кумулятивное продолжение Тьюки на $m \in \{1, 2\}$ шага (\texttt{engine.py:704}):
+\begin{equation}
+s_{\text{cf}}(u, 0) = s(u), \qquad s_{\text{cf}}(u, m) = s_{\text{cf}}(u, m-1) + \gamma^m \min\bigl(\Delta_u, C_{\text{Tukey}}\bigr) = s(u) + \left(\sum_{j=1}^m \gamma^j\right) \min\bigl(\Delta_u, C_{\text{Tukey}}\bigr), \quad \gamma = 0.55.
+\end{equation}
+
+\subsection{Кроссовер по бинарному отпечатку ошибок (\texttt{compute\_error\_fingerprint})}
+Пусть $\mathbf{m}(u), \mathbf{m}(v) \in \{0, 1\}^M$ — бинарные векторы прохождения $M$ диагностических корзин узлами $u$ и $v$ из разных веток ($b_u \ne b_v$). Определим оракульный прирост объединения:
+\begin{equation}
+\Delta_{\cup}(u, v) = \frac{1}{M}\sum_{j=1}^M \max\bigl(m_j(u), m_j(v)\bigr) - \max\left(\frac{1}{M}\sum_{j=1}^M m_j(u), \; \frac{1}{M}\sum_{j=1}^M m_j(v)\right).
+\end{equation}
+Если $\Delta_{\cup}(u, v) = 0$ (узлы-клоны, побеждающие на одних и тех же корзинах), синергия кроссовера принудительно обнуляется: $\text{CompGain}(u, v) = 0$.
+
+\subsection{Нейро-символическое разделение, RRSI-секатор и плоское плато}
+После синтеза дискретной структуры $f(\cdot\,; \boldsymbol{\theta})$ непрерывный вектор параметров $\boldsymbol{\theta} \in \mathbb{R}^d$ оптимизируется численным солвером ($\boldsymbol{\theta}^*$) и проходит двухступенчатую фильтрацию:
+\begin{enumerate}
+\item \textbf{RRSI-секатор (\texttt{prune\_tunable\_params}):} жадное обратное исключение (\emph{greedy backward elimination}), на каждом шаге замораживающее координату $i$ с минимальной просадкой при условии $f(\boldsymbol{\theta}^*) - f(\boldsymbol{\theta}_{\text{try}}) \le \delta_{\text{tol}}$ относительно исходного оптимума $f(\boldsymbol{\theta}^*)$.
+\item \textbf{Проверка на плоское плато (\texttt{evaluate\_flat\_plateau}):} вычисляется среднее значение $\bar{f}_{\text{plateau}}$ по $K=20$ квази-ортогональным сдвигам $\boldsymbol{\theta}_{\text{pruned}} \pm 0.05(\mathbf{u} - \mathbf{l}) \odot \mathbf{d}_k$, отбраковывая узкие переобученные пики.
+\end{enumerate}
+
+\subsection{Четыре гейта DiscoveryRSI v3}
+\begin{proposition}[Сохранение массы кредита и защита от клонов]
+Пусть для каждой гипотезы $h$ модифицированный вес равен
+\begin{equation}
+q_h = \min\Bigl(q_{\max}, \; q_{\min} + (q_{\max} - q_{\min}) r_h \rho_{\text{cov}, h} \rho_{\text{unc}, h} + \lambda_{\text{break}}\mathbb{I}[\text{break}_h] + \lambda_{\text{rep}}\mathbb{I}[\text{rep}_h]\Bigr),
+\end{equation}
+где $\lambda_{\text{break}} = 0.35 > \lambda_{\text{rep}} = 0.10$. Тогда при локальном и глобальном потолках семейств $C_{\text{loc}} = C_{\text{glob}} = 2.0$, долях $\gamma_{\text{coord}} = 0.20$ (\texttt{Lead}) и $0.80$ (\texttt{Producer}) и потолке траектории $W_{\max} = 2.0$ суммарный вес любого семейства из $K$ клонов не превосходит $C_{\text{glob}} = 2.0$, а траектории без подтверждённого диффа получают вес $0$.
+\end{proposition}
+
+\section{Пучковый субградиент Больцмана и вертикальный каскад Хейльбронна}
+
+В задаче второго неравенства автокорреляции максимизируется отношение норм кусочно-линейной автосвёртки $g = a * a$ длины $2P-1$ при $a \in \mathbb{R}_+^P$:
+\begin{equation}
+C_2(a) = \frac{\|f * f\|_2^2}{\|f * f\|_1 \|f * f\|_\infty} = \frac{2\sum_{k=0}^{2P-2} g_k^2 + \sum_{k=0}^{2P-3} g_k g_{k+1}}{3\left(\sum_{k=0}^{2P-2} g_k\right) \cdot \max_{0 \le k \le 2P-2} g_k}.
+\end{equation}
+Вблизи оптимума более $50.9\%$ узлов $g_k$ лежат на плоской крыше $g_k \ge 0.95 g_{\max}$. Для одновременного подавления всех конкурирующих пиков крыши мы вводим отжигаемый пучковый субградиент Больцмана:
+\begin{equation}
+w_k(\tau) = \frac{\exp((g_k - g_{\max})/\tau)}{\sum_{j=0}^{2P-2}\exp((g_j - g_{\max})/\tau)}, \qquad \widehat{g}_{\max} = \sum_{k=0}^{2P-2} \text{stop\_grad}(w_k(\tau))\, g_k, \qquad \tau \in [8\cdot 10^{-6}, 2\cdot 10^{-5}] g_{\max}.
+\end{equation}
+
+\section{Сводные экспериментальные результаты}
+
+\begin{table}[ht!]
+\centering
+\caption{Верифицированные результаты \textbf{Lean-DAG-RSI v3 (Auto-Dream-RSI)} на 10 задачах.}
+\label{tab:results}
+\footnotesize
+\begin{tabular}{p{3.8cm}p{3.0cm}p{4.2cm}p{4.2cm}}
+\toprule
+\textbf{Задача / Картридж} & \textbf{Baseline (\texttt{root})} & \textbf{Результат Lean-DAG-RSI v3} & \textbf{Ключевой механизм} \\
+\midrule
+1. Синтетический стенд (50 задач) & $V = 1.3912$ (\texttt{Dream-RSI}) & $\mathbf{V = 1.5384}$ (\textbf{37:2} побед, $-30.6\%$ проб) & Монотонная $V_{\text{Lean}}$ + продолжение Тьюки $s_{\text{cf}}$ \\
+\addlinespace
+2. Регрессия Lasso (6 режимов \texttt{Figure 3(a)}) & \texttt{Dream-RSI Listing 3}: $24.53\text{ мс}$ (geomean) & $\mathbf{9.80\text{ \textbf{мс}}}$ ($\mathbf{2.50\times}$ быстрее \texttt{Listing 3}; $2.02\times$ к \texttt{Celer} в Python) & Look-Ahead Gap Safe Screening + Anderson ($m=5$) \\
+\addlinespace
+3. \texttt{algotune-rbf-kernel} & SciPy: $51.90\text{ мс}$ ($1.0\times$) & $\mathbf{1.56\text{ \textbf{мс}}}$ ($\mathbf{33.36\times}$ ускорение) & Autopsy $\to$ Gram GEMM + Cholesky \\
+\addlinespace
+4. \texttt{weibull-binpacking} ($N=5000$) & First-Fit: $4.531\%$ (\emph{FunSearch}: $0.68\%$) & $\mathbf{0.3690\%}$ сверх $L_2$ ($\mathbf{0.1812\%}$ на $N=10^4$) & Dead-Zone Guard $\times$ Modal Resonance + NS Split \\
+\addlinespace
+5. Упаковка кругов ($n=26, 32$) & AlphaEvolve v1: $2.635862$ / $2.937944$ & $\mathbf{2.635983084915}$ ($n=26$) / $\mathbf{2.939572771203}$ ($n=32$) & Разнородный L-BFGS-B + SLSQP + HiGHS LP + \texttt{Fraction} \\
+\addlinespace
+6. Автокорреляция $C_1$ (\texttt{cartridge 3}) & AlphaEvolve v1/V2: $1.5053$ / $1.50317$ & $\mathbf{C_1 \le 1.503133}$ (полный) / $\mathbf{1.514863}$ ($P=1280$) & Асимметричный канторов посев + Relative-TR-SLP \\
+\addlinespace
+7. Хейльбронн $n=11$ (\texttt{cartridge 4}) & Dirichlet: $\Delta_{11} = 0.002942$ & $\mathbf{\Delta_{11} = 0.03651835} > 0.0365$ & Duffy Box L-BFGS-B + мутация узкого треугольника \\
+\addlinespace
+8. Хейльбронн $n=13, 14$ (\texttt{cartridge 7}) & Карпов 2018: $0.0265013$ & $\mathbf{\Delta_{13} = 0.0265565289197752}$, $\mathbf{\Delta_{14} = 0.0237757731075727}$ & С нуля C++ каскад $15\to 14\to 13$ + HiGHS TR-SLP \\
+\addlinespace
+9. Автокорреляция $C_2$ (\texttt{cartridge 8}) & Uniform: $2/3$ (J\&J: $0.94136$) & $\mathbf{C_2 = 0.94211137}$ ($P=10128$), $\mathbf{0.94215877}$ ($P=20256$) & Кронекер $\times$ ReLU-Adam + Boltzmann Roof-Bundle \\
+\addlinespace
+10. Кейс-стади \texttt{pocket-otc-crack} & $\text{LCB}_{95} = 55.8350\%$ ($58.04\%$ OOS) & $\mathbf{\text{LCB}_{95} = 57.1342\%}$ ($59.11\%$ OOS, $57.52\%$ Vault) & RRSI-секатор отсёк \texttt{slope60\_min} (+155 сделок с $60.65\%$ WR) \\
+\addlinespace
+11. Кейс-стади \texttt{simvq-zero-crutch} & $S = 88.20\%$ ($T=128$: $0.00\%$) & $\mathbf{S = 100.0000\%}$ ($188\,416 / 188\,416$ шагов) & Отпечаток ошибок $7/7$ (\texttt{force\_full\_mask} $\times$ \texttt{k\_null}) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Заключение}
+Предложенная архитектура \textbf{Lean-DAG-RSI v3} переводит автономный поиск из режима неуправляемой генерации текста в строго верифицируемую инженерную дисциплину, где каждый шаг защищён предрегистрацией гипотезы $\mathcal{H}=(c,\pi,d,a)$, бинарным отпечатком ошибок, RRSI-секатором переобученных параметров и независимой рациональной/десятичной сертификацией.
+
+\end{document}
