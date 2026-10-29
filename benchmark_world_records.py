@@ -44,9 +44,11 @@ import numpy as np
 from scipy.optimize import linprog, minimize
 from scipy.spatial.distance import pdist, squareform
 
-SKILL_SCRIPTS_DIR = r"C:\Users\vanya\.gemini\config\skills\dream-rsi\scripts"
-if os.path.isdir(SKILL_SCRIPTS_DIR) and SKILL_SCRIPTS_DIR not in sys.path:
-    sys.path.insert(0, SKILL_SCRIPTS_DIR)
+LOCAL_SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dream_rsi_scripts")
+PLUGIN_SCRIPTS_DIR = r"C:\Users\vanya\.gemini\config\plugins\autonomous-research\skills\dream-rsi\scripts"
+for _cand_dir in (LOCAL_SCRIPTS_DIR, PLUGIN_SCRIPTS_DIR):
+    if os.path.isdir(_cand_dir) and _cand_dir not in sys.path:
+        sys.path.insert(0, _cand_dir)
 
 import engine as dream_engine  # type: ignore
 import loop as dream_loop  # type: ignore

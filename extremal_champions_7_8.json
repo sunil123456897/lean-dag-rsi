@@ -1,4 +1,28 @@
 {
+  "cartridge_3_autocorrelation_c1": {
+    "c1_float64": 1.5038227920075125,
+    "c1_exact_fraction_1e16_float": 1.5038227920074991,
+    "c1_exact_fraction_1e50_decimal50": "1.50382279200751274530156572569982352590781783336480",
+    "c1_exact_fraction_1e16_num": "30076455840149951365819241408512",
+    "c1_exact_fraction_1e16_den": "19999999999999980000000000000005",
+    "benchmarks": {
+      "uniform_symmetric_barrier": 2.0,
+      "matolcsi_vinuesa_2010": 1.5098,
+      "alphaevolve_v1_2025": 1.5053,
+      "beats_matolcsi_vinuesa_by": 0.0059772079924875765,
+      "beats_alphaevolve_v1_by": 0.001477207992487628
+    },
+    "autopsy": {
+      "P": 2560,
+      "conv_len_2P_minus_1": 5119,
+      "c1_float64": 1.5038227920075125,
+      "roof_within_1e3": 1717,
+      "roof_within_1e4": 1598,
+      "zero_bins_count": 847,
+      "zero_bins_pct": 33.0859,
+      "left_edge_a0_scaled": 16.067325
+    }
+  },
   "cartridge_7_heilbronn_13_14": {
     "n13": {
       "min_area_float64": 0.026556528919775557,
@@ -395,8 +419,8 @@
     }
   },
   "third_autocorrelation_phi3": {
-    "phi3_float64": 1.4570616625442032,
-    "phi3_decimal50": 1.457061662544203,
+    "phi3_float64": 1.4570585082897531,
+    "phi3_decimal50": 1.4570585082897534,
     "benchmarks": {
       "openevolve": 1.46,
       "evox": 1.4589,
@@ -408,15 +432,15 @@
     },
     "autopsy": {
       "P": 3200,
-      "phi3_float64": 1.4570616625442034,
-      "even_odd_pinch_sum": 1.4570616625442034,
-      "c_ee_at_0": 7.103632872839428,
-      "c_oo_at_0": -5.646571497478301,
-      "c_even_at_0": 1.4570613753611266,
-      "max_abs_c_even": 1.4570613753611266,
-      "max_abs_c_eo_parasitic": 1.4570567743501817,
-      "min_conv": -1.4570575166267397,
-      "negative_lobe_integral": -0.05927241317770471
+      "phi3_float64": 1.4570585082897534,
+      "even_odd_pinch_sum": 1.4570585082897534,
+      "c_ee_at_0": 7.104247064022277,
+      "c_oo_at_0": -5.647188896803032,
+      "c_even_at_0": 1.4570581672192455,
+      "max_abs_c_even": 1.4570584843904308,
+      "max_abs_c_eo_parasitic": 1.4570582907539993,
+      "min_conv": -1.4570583497421994,
+      "negative_lobe_integral": -0.05927523800909782
     }
   }
 }

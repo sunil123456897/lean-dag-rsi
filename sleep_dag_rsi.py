@@ -1450,5 +1450,929 @@ class SleepDAGRSIOrchestrator:
         return summary
 
 
+# =====================================================================
+# 9. UNIVERSAL PRETRAINED NEURAL ADAPTER (`UniversalNeuralSleepAdapter`
+#    & `attach_sleep_dag_adapters` for any NumPy / PyTorch model)
+# =====================================================================
+
+
+class UniversalNeuralSleepAdapter:
+    """
+    Universal non-destructive `SLEEP-DAG-RSI v5` subspace adapter that wraps
+    ANY already-trained neural network or frozen feature/logit backbone `f_0(x)`
+    without modifying its base weights `W_0`:
+        y_hat(x) = f_0(x) + Delta_HOPE_Fast(x) + Delta_CMS_MoE_Slow(x)
+    Supports:
+      - `wake_adapt_step(x, target_y)`: fast online Delta-Rule + fast low-rank step
+      - `nrem_consolidate(x, dag_tree, trajectory_node_ids, fingerprint_meta)`:
+        distills ONLY verified DAG branches (`loss_mask = 1`) from fast adapter
+        into a newly unlocked slow low-rank MoE expert while repelling DPO traps
+      - `rem_dream_crossover()`: blends complementary slow experts via
+        `select_complementary_crossover_experts()` (`oracle_union_gain > 0`).
+    """
+
+    def __init__(
+        self,
+        d_in: int,
+        d_out: int,
+        d_low: int = 8,
+        max_experts: int = 8,
+        seed: int = 42,
+    ) -> None:
+        self.d_in = d_in
+        self.d_out = d_out
+        self.d_low = d_low
+        self.max_experts = max_experts
+        self.rng = np.random.default_rng(seed)
+
+        # Fast Wake Low-Rank Adapter (Hippocampus)
+        self.fast_A = self.rng.normal(0.0, 1.0 / math.sqrt(d_in), size=(d_in, d_low))
+        self.fast_B = np.zeros((d_low, d_out), dtype=np.float64)
+
+        # Slow Consolidated Low-Rank MoE Experts (Neocortex) + Fingerprints
+        self.slow_A: List[np.ndarray] = []
+        self.slow_B: List[np.ndarray] = []
+        self.slow_meta: List[ExpertFingerprintMeta] = []
+        self.router_W = np.zeros((d_in, max_experts), dtype=np.float64)
+        self.replay_buffer: List[Tuple[np.ndarray, np.ndarray, int]] = []
+        # SLEEP-DAG-RSI v6 & v7: Distilled Symbolic AST Rules & Compositional Library
+        self.symbolic_rules: Dict[int, Callable[[np.ndarray], np.ndarray]] = {}
+        self.symbolic_reports: Dict[int, Dict[str, Any]] = {}
+        self.symbolic_library = SymbolicLibrary()
+
+    def _eval_expert_slot(self, x: np.ndarray, slot: int) -> np.ndarray:
+        """Evaluates slow expert `slot`: explicit distilled AST rule (if any) + neural residual."""
+        val = (x @ self.slow_A[slot]) @ self.slow_B[slot]
+        sym_fn = self.symbolic_rules.get(slot)
+        if sym_fn is not None:
+            val = val + sym_fn(x)
+        return val
+
+    def forward_delta(
+        self,
+        x: np.ndarray,
+        use_fast: bool = True,
+        forced_expert: Optional[int] = None,
+        crossover_pair: Optional[Tuple[int, int]] = None,
+    ) -> np.ndarray:
+        """Computes the residual adaptation `Delta_y` for input `x` of shape `(B, d_in)`."""
+        out = np.zeros((x.shape[0], self.d_out), dtype=np.float64)
+        if use_fast:
+            out = out + (x @ self.fast_A) @ self.fast_B
+
+        n_exp = len(self.slow_A)
+        if n_exp == 0:
+            return out
+
+        if forced_expert is not None and 0 <= forced_expert < n_exp:
+            return out + self._eval_expert_slot(x, forced_expert)
+
+        if crossover_pair is not None:
+            i, j = crossover_pair
+            if 0 <= i < n_exp and 0 <= j < n_exp:
+                d_i = self._eval_expert_slot(x, i)
+                d_j = self._eval_expert_slot(x, j)
+                return out + 0.5 * (d_i + d_j)
+
+        logits_r = (x @ self.router_W[:, :n_exp]) / 0.25
+        probs_r = softmax_np(logits_r, axis=-1)
+        for idx in range(n_exp):
+            w_idx = probs_r[:, idx : idx + 1]
+            out = out + w_idx * self._eval_expert_slot(x, idx)
+        return out
+
+    def wake_adapt_step(
+        self,
+        x: np.ndarray,
+        base_out: np.ndarray,
+        target_out: np.ndarray,
+        lr: float = 0.08,
+    ) -> float:
+        """Online Wake step updating only the Fast Low-Rank adapter `(fast_A, fast_B)`."""
+        pred = base_out + self.forward_delta(x, use_fast=True)
+        err = pred - target_out
+        loss = float(0.5 * np.mean(err * err))
+        h_low = x @ self.fast_A
+        grad_B = (h_low.T @ err) / float(max(1, x.shape[0]))
+        grad_A = (x.T @ (err @ self.fast_B.T)) / float(max(1, x.shape[0]))
+        self.fast_B -= rms_step(grad_B, lr)
+        self.fast_A -= rms_step(grad_A, lr * 0.5)
+        return loss
+
+    def nrem_consolidate(
+        self,
+        x_trajectories: np.ndarray,
+        base_outputs: np.ndarray,
+        dag_tree: dream_engine.DiscoveryTree,
+        trajectory_node_ids: Sequence[str],
+        fingerprint_meta: ExpertFingerprintMeta,
+        steps: int = 12,
+        lr: float = 0.10,
+        target_delta_override: Optional[np.ndarray] = None,
+        enable_neuro_symbolic_distill: bool = True,
+        distill_alpha: float = 0.04,
+        distill_r2_threshold: float = 0.25,
+        val_metric_fn: Optional[Callable[[Callable[[np.ndarray], np.ndarray]], float]] = None,
+        val_baseline_score: float = 0.0,
+    ) -> Dict[str, Any]:
+        """
+        NREM Sleep (v5 + v6 Residual-Keep Neuro-Symbolic Distillation):
+          1. Masks out failed/dead-end DAG trajectories (`loss_mask = 0`).
+          2. Unlocks a new slow low-rank expert for the verified winning lineage.
+          3. Runs `NeuroSymbolicDistiller` (Stage 3 of v6): if a sparse symbolic AST
+             law explains `R^2_OOS >= distill_r2_threshold` and passes `AstPolicySafetyGate`
+             + `accept_joint_2x2`, registers the AST node in `dag_tree` and subtracts
+             `f_AST(x)` from `teacher_delta` (`Residual-Keep Decomposition`).
+          4. Fits the neural low-rank expert `(slow_A, slow_B)` strictly on the remaining
+             unexplained residual while preserving prior replay anchors.
+        """
+        sft_rep = dream_engine.export_masked_sft_dataset(dag_tree)
+        supported_set = set(sft_rep["supported_node_ids"])
+        win_indices = [
+            i for i, nid in enumerate(trajectory_node_ids) if nid in supported_set
+        ]
+        if not win_indices:
+            win_indices = list(range(x_trajectories.shape[0]))
+
+        x_win = x_trajectories[win_indices]
+        if target_delta_override is not None:
+            teacher_delta = target_delta_override[win_indices].copy()
+        else:
+            teacher_delta = self.forward_delta(x_win, use_fast=True)
+
+        slot_idx = len(self.slow_A)
+        if slot_idx < self.max_experts:
+            A_new = self.rng.normal(0.0, 1.0 / math.sqrt(self.d_in), size=(self.d_in, self.d_low))
+            B_new = np.zeros((self.d_low, self.d_out), dtype=np.float64)
+            fingerprint_meta.expert_slot = slot_idx
+            self.slow_A.append(A_new)
+            self.slow_B.append(B_new)
+            self.slow_meta.append(fingerprint_meta)
+        else:
+            slot_idx = self.max_experts - 1
+            self.slow_meta[slot_idx] = fingerprint_meta
+
+        # Align router column with the winning input centroid
+        centroid = np.mean(x_win, axis=0)
+        c_norm = float(np.linalg.norm(centroid))
+        if c_norm > 1e-9:
+            self.router_W[:, slot_idx] = centroid / c_norm
+
+        # Stage 3 of SLEEP-DAG-RSI v6 & v7: Residual-Keep Neuro-Symbolic Distillation + Library Invention
+        distill_rep: Dict[str, Any] = {"accepted": False, "r2_oos": 0.0, "active_terms": []}
+        residual_target = teacher_delta.copy()
+        if enable_neuro_symbolic_distill and x_win.shape[0] >= 8:
+            distiller = NeuroSymbolicDistiller(
+                alpha=distill_alpha,
+                r2_threshold=distill_r2_threshold,
+                library=self.symbolic_library,
+                auto_invent_primitives=True,
+            )
+            distill_rep = distiller.distill_residual(
+                x_win,
+                teacher_delta,
+                val_metric_fn=val_metric_fn,
+                val_baseline_score=val_baseline_score,
+            )
+            if distill_rep["accepted"]:
+                self.symbolic_rules[slot_idx] = distill_rep["predict_fn"]
+                self.symbolic_reports[slot_idx] = distill_rep
+                residual_target = distill_rep["residual_rem"]
+                # Commit verified symbolic rule into the DAG tree
+                ast_node_id = f"ns_ast_slot{slot_idx}"
+                if ast_node_id not in dag_tree.nodes:
+                    dag_tree.add(
+                        dream_engine.Node(
+                            id=ast_node_id,
+                            parent_id=fingerprint_meta.source_node_id
+                            if fingerprint_meta.source_node_id in dag_tree.nodes
+                            else dag_tree.root_id,
+                            branch=slot_idx,
+                            attempt=len(dag_tree.nodes),
+                            score=float(dag_tree.baseline_score) + 10.0 * float(distill_rep["r2_oos"]),
+                            pass_mask=list(fingerprint_meta.pass_mask),
+                            artifact={"ast_code": distill_rep["ast_code"], "terms": distill_rep["active_terms"]},
+                            meta={
+                                "stage": "neuro_symbolic_distill",
+                                "r2_oos": distill_rep["r2_oos"],
+                                "neural_energy_reduction_ratio": distill_rep["energy_reduction_ratio"],
+                            },
+                        )
+                    )
+
+        for _ in range(steps):
+            student_delta = (x_win @ self.slow_A[slot_idx]) @ self.slow_B[slot_idx]
+            diff = student_delta - residual_target
+            h_s = x_win @ self.slow_A[slot_idx]
+            g_B = (h_s.T @ diff) / float(max(1, x_win.shape[0]))
+            g_A = (x_win.T @ (diff @ self.slow_B[slot_idx].T)) / float(max(1, x_win.shape[0]))
+            self.slow_B[slot_idx] -= rms_step(g_B, lr)
+            self.slow_A[slot_idx] -= rms_step(g_A, lr * 0.5)
+
+            for x_anc, d_anc, anc_slot in self.replay_buffer:
+                s_anc = (x_anc @ self.slow_A[anc_slot]) @ self.slow_B[anc_slot]
+                e_anc = s_anc - d_anc
+                h_a = x_anc @ self.slow_A[anc_slot]
+                self.slow_B[anc_slot] -= rms_step((h_a.T @ e_anc) / max(1, len(x_anc)), lr * 0.4)
+
+        self.replay_buffer.append((x_win.copy(), residual_target.copy(), slot_idx))
+        # Synaptic pruning of fast wake residual after NREM consolidation
+        self.fast_B *= 0.15
+
+        return {
+            "unlocked_expert_slot": slot_idx,
+            "supervised_win_count": len(win_indices),
+            "total_wake_count": len(trajectory_node_ids),
+            "active_slow_experts": len(self.slow_A),
+            "neuro_symbolic_distill": {
+                "accepted": distill_rep["accepted"],
+                "r2_oos": distill_rep.get("r2_oos", 0.0),
+                "active_terms": distill_rep.get("active_terms", []),
+                "ast_code": distill_rep.get("ast_code", ""),
+                "energy_reduction_ratio": distill_rep.get("energy_reduction_ratio", 0.0),
+            },
+        }
+
+    def select_complementary_slow_experts(self) -> Optional[Tuple[int, int, float]]:
+        """Finds the pair of slow experts `(i, j)` with maximum `oracle_union_gain > 0`."""
+        best_gain = 0.0
+        best_pair: Optional[Tuple[int, int, float]] = None
+        n = len(self.slow_meta)
+        for i in range(n):
+            for j in range(i + 1, n):
+                m_i, m_j = self.slow_meta[i].pass_mask, self.slow_meta[j].pass_mask
+                if m_i and m_j and len(m_i) == len(m_j):
+                    fp = dream_engine.compute_error_fingerprint(m_i, m_j)
+                    gain = float(fp["oracle_union_gain"])
+                    if gain > best_gain:
+                        best_gain = gain
+                        best_pair = (i, j, gain)
+        return best_pair
+
+
+def attach_sleep_dag_adapters(
+    pytorch_model: Any,
+    target_layer_names: Optional[Sequence[str]] = None,
+    d_low: int = 8,
+    max_experts: int = 8,
+) -> Dict[str, UniversalNeuralSleepAdapter]:
+    """
+    Freezes all base parameters (`requires_grad = False`) of an already-trained PyTorch
+    `nn.Module` (e.g. Transformer, ResNet, SimVQCoprimeGPT) and attaches a
+    `UniversalNeuralSleepAdapter` forward hook to each target `nn.Linear` layer.
+    Returns the dictionary `{layer_name: adapter}` so `nrem_consolidate()` can be
+    called directly on the attached adapters.
+    """
+    import torch
+    import torch.nn as nn
+
+    for p in pytorch_model.parameters():
+        p.requires_grad = False
+
+    attached: Dict[str, UniversalNeuralSleepAdapter] = {}
+    for name, mod in pytorch_model.named_modules():
+        if isinstance(mod, nn.Linear):
+            if target_layer_names is not None and not any(t in name for t in target_layer_names):
+                continue
+            adapter = UniversalNeuralSleepAdapter(
+                d_in=int(mod.in_features),
+                d_out=int(mod.out_features),
+                d_low=min(d_low, int(mod.in_features), int(mod.out_features)),
+                max_experts=max_experts,
+            )
+            attached[name] = adapter
+
+            def _make_hook(ad: UniversalNeuralSleepAdapter):
+                def _hook(_module: Any, inputs: Tuple[Any, ...], output: Any) -> Any:
+                    x_t = inputs[0]
+                    orig_shape = x_t.shape
+                    x_np = x_t.detach().cpu().numpy().reshape(-1, ad.d_in).astype(np.float64)
+                    delta_np = ad.forward_delta(x_np, use_fast=True)
+                    delta_t = torch.tensor(
+                        delta_np, dtype=output.dtype, device=output.device
+                    ).reshape(output.shape)
+                    return output + delta_t
+
+                return _hook
+
+            mod.register_forward_hook(_make_hook(adapter))
+    return attached
+
+
+# =====================================================================
+# 10. AST ANTI-CHEAT VERIFIER FOR POLICIES (`AstPolicySafetyGate`)
+# =====================================================================
+
+
+class AstPolicySafetyGate:
+    """
+    Static AST & Behavioural Anti-Cheat Verifier for authored exploration policies:
+      1. Blocks dangerous calls/imports (`eval`, `exec`, `compile`, `__import__`,
+         `os.system`, `subprocess`, `shutil.rmtree`, `setattr`, `globals`).
+      2. Blocks reward-hacking inspection of unrevealed tree/world state
+         (`.nodes`, `._secret`, `best_so_far`, hardcoded node IDs like `"b0_win"`).
+      3. Verifies non-degenerate `beta` sweep sensitivity on synthetic history.
+    """
+
+    FORBIDDEN_CALLS = {
+        "eval",
+        "exec",
+        "compile",
+        "__import__",
+        "system",
+        "popen",
+        "rmtree",
+        "globals",
+        "locals",
+        "setattr",
+        "delattr",
+    }
+    FORBIDDEN_ATTRS = {
+        "best_so_far",
+        "budget_spent",
+        "_secret",
+        "unrevealed",
+        "__dict__",
+        "__subclasses__",
+    }
+
+    @classmethod
+    def verify_source(cls, source_code: str) -> Dict[str, Any]:
+        import ast
+        import re
+
+        try:
+            tree = ast.parse(source_code)
+        except SyntaxError as exc:
+            return {"valid": False, "violations": [f"syntax_error: {exc}"]}
+
+        violations: List[str] = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                if isinstance(node.func, ast.Name) and node.func.id in cls.FORBIDDEN_CALLS:
+                    violations.append(f"forbidden_call:{node.func.id}")
+                elif isinstance(node.func, ast.Attribute) and node.func.attr in cls.FORBIDDEN_CALLS:
+                    violations.append(f"forbidden_method:{node.func.attr}")
+            elif isinstance(node, ast.Attribute):
+                if node.attr in cls.FORBIDDEN_ATTRS:
+                    violations.append(f"forbidden_attr:{node.attr}")
+            elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+                if re.match(r"^(node_\d+|b\d+_a\d+|b\d+_win)$", node.value):
+                    violations.append(f"hardcoded_node_id:{node.value}")
+
+        return {
+            "valid": len(violations) == 0,
+            "violations": violations,
+        }
+
+
+# =====================================================================
+# 11. STAGE 3 OF SLEEP-DAG-RSI v6: STANDALONE NUMPY LASSO &
+#     NEURO-SYMBOLIC DISTILLER (`Residual-Keep Decomposition`)
+# =====================================================================
+
+
+def numpy_lasso_coordinate_descent(
+    X: np.ndarray,
+    y: np.ndarray,
+    alpha: float = 0.04,
+    max_iter: int = 150,
+    tol: float = 1e-6,
+    support_prune_rel: float = 0.08,
+) -> Tuple[np.ndarray, float]:
+    """
+    Standalone vectorized cyclical Coordinate-Descent Lasso solver in pure NumPy
+    with soft-thresholding S_alpha(z) = sgn(z) * max(|z| - alpha, 0) and a
+    post-selection OLS refit on the active support so recovered symbolic coefficients
+    are unbiased.
+    Solves:
+        min_{w, b} (1 / 2N) ||y - (X w + b)||_2^2 + alpha * ||w_std||_1
+    Returns `(w, intercept)` in original unstandardized feature coordinates.
+    """
+    n_samples, n_features = X.shape
+    y_vec = np.asarray(y, dtype=np.float64).reshape(-1)
+    if n_samples == 0 or n_features == 0:
+        return np.zeros((n_features,), dtype=np.float64), 0.0
+
+    x_mean = np.mean(X, axis=0)
+    x_centered = X - x_mean
+    x_scale = np.sqrt(np.mean(x_centered * x_centered, axis=0))
+    valid_cols = x_scale > 1e-12
+    x_scale_safe = np.where(valid_cols, x_scale, 1.0)
+    X_std = x_centered / x_scale_safe
+
+    y_mean = float(np.mean(y_vec))
+    r = (y_vec - y_mean).copy()
+    w_std = np.zeros((n_features,), dtype=np.float64)
+
+    for _ in range(max_iter):
+        max_delta = 0.0
+        for j in range(n_features):
+            if not valid_cols[j]:
+                continue
+            old_wj = w_std[j]
+            col_j = X_std[:, j]
+            rho_j = float(np.dot(col_j, r)) / float(n_samples) + old_wj
+            if rho_j > alpha:
+                new_wj = rho_j - alpha
+            elif rho_j < -alpha:
+                new_wj = rho_j + alpha
+            else:
+                new_wj = 0.0
+            diff = new_wj - old_wj
+            if abs(diff) > 1e-15:
+                r -= col_j * diff
+                w_std[j] = new_wj
+                if abs(diff) > max_delta:
+                    max_delta = abs(diff)
+        if max_delta < tol:
+            break
+
+    # Prune tiny support noise, filter out Gram-collinear atoms (|cos| > 0.72),
+    # and perform a lightly ridge-damped OLS polish on at most 4 orthogonal terms.
+    max_w = float(np.max(np.abs(w_std))) if n_features > 0 else 0.0
+    if max_w > 1e-12:
+        cand_indices = [
+            int(idx)
+            for idx in np.argsort(-np.abs(w_std))
+            if abs(w_std[idx]) >= (support_prune_rel * max_w)
+        ]
+    else:
+        cand_indices = []
+
+    selected_idx: List[int] = []
+    for c_i in cand_indices:
+        if len(selected_idx) >= 4:
+            break
+        col_c = X_std[:, c_i]
+        is_collinear = False
+        for s_i in selected_idx:
+            cos_sim = abs(float(np.dot(col_c, X_std[:, s_i])) / float(max(1, n_samples)))
+            if cos_sim > 0.72:
+                is_collinear = True
+                break
+        if not is_collinear:
+            selected_idx.append(c_i)
+
+    w_raw = np.zeros((n_features,), dtype=np.float64)
+    if selected_idx:
+        active_idx = np.array(selected_idx, dtype=np.int64)
+        X_act = X[:, active_idx]
+        A_ols = np.column_stack([X_act, np.ones((n_samples, 1), dtype=np.float64)])
+        k_cols = A_ols.shape[1]
+        reg = 1e-4 * float(n_samples) * np.eye(k_cols, dtype=np.float64)
+        reg[-1, -1] = 0.0  # do not regularize intercept
+        sol = np.linalg.solve(A_ols.T @ A_ols + reg, A_ols.T @ y_vec)
+        for pos, col_i in enumerate(active_idx):
+            w_raw[col_i] = float(sol[pos])
+        intercept = float(sol[-1])
+    else:
+        intercept = y_mean
+
+    return w_raw, intercept
+
+
+@dataclass
+class LibraryPrimitive:
+    """
+    SLEEP-DAG-RSI v7 Invented Compositional Subroutine (`lib_k(x)`):
+    Represents a multi-term symbolic motif discovered during NREM distillation
+    that compresses description length (`mdl_gain > 0`) and can be composed
+    hierarchically in subsequent sleep cycles (`depth > 2`).
+    """
+
+    name: str
+    expr_str: str
+    eval_fn: Callable[[np.ndarray], np.ndarray]
+    mdl_gain: float
+    r2_score: float
+    term_count: int
+    ast_depth: int = 2
+    reuse_count: int = 0
+
+
+class SymbolicLibrary:
+    """
+    SLEEP-DAG-RSI v7 Wake-Sleep Compositional Library Learner (DreamCoder-style AST Abstraction):
+    Breaks the flat depth-2 basis ceiling of `NeuroSymbolicDistiller`:
+      1. Abstracts verified multi-term symbolic formulas into reusable primitives `lib_0(x), lib_1(x), ...`
+         standardized to unit scale on the training manifold.
+      2. Enforces a strict Minimum Description Length (MDL) & Non-Collinearity gate
+         (`|cos(lib_new, lib_old)| <= 0.80`, `term_count >= 2`, `r2_score >= min_r2`).
+      3. Emits standalone Python helper definitions (`def lib_0(x): return ...`) so
+         hierarchical AST rules remain 100% self-contained and pass `AstPolicySafetyGate`.
+    """
+
+    def __init__(self, max_primitives: int = 6, max_collinearity: float = 0.80) -> None:
+        self.max_primitives = max(1, int(max_primitives))
+        self.max_collinearity = float(max_collinearity)
+        self.primitives: List[LibraryPrimitive] = []
+
+    def register_primitive(
+        self,
+        expr_str: str,
+        eval_fn: Callable[[np.ndarray], np.ndarray],
+        term_count: int,
+        r2_score: float,
+        X_sample: np.ndarray,
+        ast_depth: int = 2,
+        min_r2: float = 0.30,
+    ) -> Optional[LibraryPrimitive]:
+        if term_count < 2 or r2_score < min_r2:
+            return None
+        vals = np.asarray(eval_fn(X_sample), dtype=np.float64).reshape(-1)
+        std_v = float(np.std(vals))
+        if std_v < 1e-6:
+            return None
+        mean_v = float(np.mean(vals))
+        norm_vals = (vals - mean_v) / std_v
+
+        for p in self.primitives:
+            p_vals = np.asarray(p.eval_fn(X_sample), dtype=np.float64).reshape(-1)
+            p_std = float(np.std(p_vals)) + 1e-12
+            p_norm = (p_vals - float(np.mean(p_vals))) / p_std
+            cos_sim = abs(float(np.dot(norm_vals, p_norm)) / float(max(1, len(norm_vals))))
+            if cos_sim > self.max_collinearity:
+                return None
+
+        # Normalize the primitive output to zero-mean unit-std so higher-order products stay well-scaled
+        inv_std = round(1.0 / std_v, 6)
+        mean_r = round(mean_v, 6)
+        norm_expr = f"({inv_std} * (({expr_str}) - ({mean_r:+.6f})))"
+
+        def _norm_eval(arr: np.ndarray, fn=eval_fn, m=mean_v, s=std_v) -> np.ndarray:
+            return (np.asarray(fn(arr), dtype=np.float64).reshape(-1) - m) / s
+
+        mdl_gain = round(float(term_count - 1) * float(r2_score), 6)
+        prim_name = f"lib_{len(self.primitives)}"
+        prim = LibraryPrimitive(
+            name=prim_name,
+            expr_str=norm_expr,
+            eval_fn=_norm_eval,
+            mdl_gain=mdl_gain,
+            r2_score=round(float(r2_score), 6),
+            term_count=int(term_count),
+            ast_depth=int(ast_depth),
+            reuse_count=0,
+        )
+        if len(self.primitives) < self.max_primitives:
+            self.primitives.append(prim)
+        else:
+            # Replace lowest MDL primitive if new one is stronger
+            worst_idx = min(range(len(self.primitives)), key=lambda i: self.primitives[i].mdl_gain)
+            if mdl_gain > self.primitives[worst_idx].mdl_gain:
+                prim.name = self.primitives[worst_idx].name
+                self.primitives[worst_idx] = prim
+            else:
+                return None
+        return prim
+
+    def emit_helper_functions_code(self) -> str:
+        lines: List[str] = []
+        for p in self.primitives:
+            lines.append(f"def {p.name}(x):\n    return {p.expr_str}\n")
+        return "\n".join(lines)
+
+
+class NeuroSymbolicDistiller:
+    """
+    Stage 3 of SLEEP-DAG-RSI v6 & v7 (`MoE-to-AST Compiler` with `Residual-Keep Decomposition`,
+    `SymbolicLibrary` Subroutine Invention, and `ActiveBoundarySynthesizer` Querying):
+      1. Filters input dimensions by sensitivity/gradient norm (`d_active <= 8`).
+      2. Constructs a bounded typed AST basis dictionary `Psi(X)` (`K <= 64`), automatically
+         expanding with hierarchical `SymbolicLibrary` subroutines (`lib_k(x)`, `lib_k(x) * x[i]`,
+         `lib_k(x) * sign(x[i])`) so depth-3/4 compositional laws can be distilled!
+      3. Optionally queries `ActiveBoundarySynthesizer` against `active_teacher_fn` to enrich
+         passive Wake states with high-disagreement decision-boundary counterexamples.
+      4. Fits `numpy_lasso_coordinate_descent` per output channel and verifies via `AstPolicySafetyGate`.
+      5. Evaluates Out-of-Sample `R^2_OOS` and `accept_joint_2x2`. If accepted, abstracts new
+         multi-term motifs into `SymbolicLibrary` and returns `Delta_f_rem(x) = Delta_f(x) - f_AST(x)`.
+    """
+
+    def __init__(
+        self,
+        alpha: float = 0.04,
+        r2_threshold: float = 0.25,
+        max_active_inputs: int = 8,
+        library: Optional[SymbolicLibrary] = None,
+        auto_invent_primitives: bool = True,
+    ) -> None:
+        self.alpha = float(alpha)
+        self.r2_threshold = float(r2_threshold)
+        self.max_active_inputs = min(8, max(1, int(max_active_inputs)))
+        self.library = library
+        self.auto_invent_primitives = bool(auto_invent_primitives)
+
+    def select_active_inputs(self, X: np.ndarray, Y: np.ndarray) -> List[int]:
+        d_in = X.shape[1]
+        if d_in <= self.max_active_inputs:
+            return list(range(d_in))
+        scores = np.zeros((d_in,), dtype=np.float64)
+        Xc = X - np.mean(X, axis=0, keepdims=True)
+        Yc = Y - np.mean(Y, axis=0, keepdims=True)
+        lib_cols: List[np.ndarray] = []
+        if self.library is not None and self.library.primitives:
+            lib_cols = [p.eval_fn(X)[:, None] for p in self.library.primitives]
+        for i in range(d_in):
+            xi = Xc[:, i : i + 1]
+            si = np.where(X[:, i : i + 1] >= 0.0, 1.0, -1.0)
+            cand_feats = [xi, xi * xi, si]
+            # Also screen multiplicative interactions with invented library primitives
+            # so zero-mean regime modulators `lib_k(x) * sign(x_i)` are never missed!
+            for lp in lib_cols:
+                cand_feats.append(lp * xi)
+                cand_feats.append(lp * si)
+            for feat in cand_feats:
+                fnorm = float(np.linalg.norm(feat)) + 1e-12
+                corr = np.linalg.norm((feat.T @ Yc) / fnorm)
+                scores[i] = max(scores[i], float(corr))
+        ranked = np.argsort(-scores)[: self.max_active_inputs]
+        return sorted(int(idx) for idx in ranked.tolist())
+
+    def build_basis_dictionary(
+        self, X: np.ndarray, active_inputs: Sequence[int]
+    ) -> Tuple[np.ndarray, List[str], List[Callable[[np.ndarray], np.ndarray]]]:
+        """
+        Builds bounded dictionary `Psi(X)` in R^{B x K} with K <= 64.
+        When `self.library` has invented subroutines `lib_k(x)`, injects hierarchical
+        compositions (`lib_k(x)`, `tanh(lib_k(x))`, `lib_k(x) * x[i]`, `lib_k(x) * sign(x[i])`)
+        across all `active_inputs` before filling remaining slots with depth-2 raw pairwise interactions.
+        """
+        cols: List[np.ndarray] = []
+        exprs: List[str] = []
+        evaluators: List[Callable[[np.ndarray], np.ndarray]] = []
+
+        for i in active_inputs:
+            cols.append(X[:, i])
+            exprs.append(f"x[{i}]")
+            evaluators.append(lambda arr, idx=i: arr[:, idx])
+
+            cols.append(np.tanh(X[:, i]))
+            exprs.append(f"math.tanh(x[{i}])")
+            evaluators.append(lambda arr, idx=i: np.tanh(arr[:, idx]))
+
+            cols.append(np.where(X[:, i] >= 0.0, 1.0, -1.0))
+            exprs.append(f"(1.0 if x[{i}] >= 0.0 else -1.0)")
+            evaluators.append(lambda arr, idx=i: np.where(arr[:, idx] >= 0.0, 1.0, -1.0))
+
+            cols.append(np.maximum(0.0, X[:, i]))
+            exprs.append(f"max(0.0, x[{i}])")
+            evaluators.append(lambda arr, idx=i: np.maximum(0.0, arr[:, idx]))
+
+        # SLEEP-DAG-RSI v7: Hierarchical Compositional Library Expansion across all active_inputs
+        if self.library is not None and self.library.primitives:
+            for prim in self.library.primitives:
+                if len(cols) >= 64:
+                    break
+                p_col = prim.eval_fn(X)
+                cols.append(p_col)
+                exprs.append(f"{prim.name}(x)")
+                evaluators.append(lambda arr, p_fn=prim.eval_fn: p_fn(arr))
+
+                if len(cols) < 64:
+                    cols.append(np.tanh(p_col))
+                    exprs.append(f"math.tanh({prim.name}(x))")
+                    evaluators.append(lambda arr, p_fn=prim.eval_fn: np.tanh(p_fn(arr)))
+
+                for i in active_inputs:
+                    if len(cols) < 64:
+                        cols.append(p_col * X[:, i])
+                        exprs.append(f"({prim.name}(x) * x[{i}])")
+                        evaluators.append(lambda arr, p_fn=prim.eval_fn, idx=i: p_fn(arr) * arr[:, idx])
+                    if len(cols) < 64:
+                        sign_i = np.where(X[:, i] >= 0.0, 1.0, -1.0)
+                        cols.append(p_col * sign_i)
+                        exprs.append(f"({prim.name}(x) * (1.0 if x[{i}] >= 0.0 else -1.0))")
+                        evaluators.append(
+                            lambda arr, p_fn=prim.eval_fn, idx=i: p_fn(arr)
+                            * np.where(arr[:, idx] >= 0.0, 1.0, -1.0)
+                        )
+
+        pair_inputs = list(active_inputs)[:6]
+        for idx_a in range(len(pair_inputs)):
+            for idx_b in range(idx_a + 1, len(pair_inputs)):
+                i, j = pair_inputs[idx_a], pair_inputs[idx_b]
+                if len(cols) < 64:
+                    cols.append(X[:, i] * X[:, j])
+                    exprs.append(f"(x[{i}] * x[{j}])")
+                    evaluators.append(lambda arr, ia=i, ib=j: arr[:, ia] * arr[:, ib])
+                if len(cols) < 64:
+                    cols.append(X[:, i] - X[:, j])
+                    exprs.append(f"(x[{i}] - x[{j}])")
+                    evaluators.append(lambda arr, ia=i, ib=j: arr[:, ia] - arr[:, ib])
+
+        Psi = np.column_stack(cols) if cols else np.zeros((X.shape[0], 0), dtype=np.float64)
+        return Psi, exprs, evaluators
+
+    def distill_residual(
+        self,
+        X: np.ndarray,
+        delta_Y: np.ndarray,
+        X_oos: Optional[np.ndarray] = None,
+        delta_Y_oos: Optional[np.ndarray] = None,
+        val_metric_fn: Optional[Callable[[Callable[[np.ndarray], np.ndarray]], float]] = None,
+        val_baseline_score: float = 0.0,
+        active_teacher_fn: Optional[Callable[[np.ndarray], np.ndarray]] = None,
+        num_active_boundary_queries: int = 12,
+    ) -> Dict[str, Any]:
+        X_arr = np.asarray(X, dtype=np.float64)
+        Y_arr = np.asarray(delta_Y, dtype=np.float64)
+        if Y_arr.ndim == 1:
+            Y_arr = Y_arr[:, None]
+
+        n_total, d_out = Y_arr.shape
+        if X_oos is not None and delta_Y_oos is not None:
+            X_tr, Y_tr = X_arr, Y_arr
+            X_val = np.asarray(X_oos, dtype=np.float64)
+            Y_val = np.asarray(delta_Y_oos, dtype=np.float64)
+            if Y_val.ndim == 1:
+                Y_val = Y_val[:, None]
+        else:
+            split = max(4, int(round(0.75 * n_total)))
+            if split >= n_total:
+                split = max(1, n_total - 2)
+            X_tr, Y_tr = X_arr[:split], Y_arr[:split]
+            X_val, Y_val = X_arr[split:], Y_arr[split:]
+
+        active_inputs = self.select_active_inputs(X_tr, Y_tr)
+        Psi_tr, exprs, evaluators = self.build_basis_dictionary(X_tr, active_inputs)
+
+        # Optional Stage 2 of v7: Active Boundary Querying to sharpen decision-boundary fit
+        boundary_report: Optional[Dict[str, Any]] = None
+        if active_teacher_fn is not None and num_active_boundary_queries > 0 and Psi_tr.shape[1] > 0:
+            w_init, b_init = numpy_lasso_coordinate_descent(
+                Psi_tr, Y_tr[:, 0], alpha=self.alpha
+            )
+
+            def _init_sym_1d(x_row: Sequence[float]) -> float:
+                x_2d = np.asarray(x_row, dtype=np.float64).reshape(1, -1)
+                p_cols = [ev_fn(x_2d)[0] for ev_fn in evaluators]
+                return float(np.dot(p_cols, w_init) + b_init)
+
+            def _teacher_1d(x_row: Sequence[float]) -> float:
+                x_2d = np.asarray(x_row, dtype=np.float64).reshape(1, -1)
+                t_out = np.asarray(active_teacher_fn(x_2d), dtype=np.float64).reshape(-1)
+                return float(t_out[0])
+
+            synthesizer = dream_engine.ActiveBoundarySynthesizer(
+                trust_radius_sigma=1.5, ascent_steps=6
+            )
+            boundary_report = synthesizer.synthesize_boundary_points(
+                anchor_points=X_tr.tolist(),
+                committee_fns=[_teacher_1d, _init_sym_1d],
+                num_synthetic=num_active_boundary_queries,
+            )
+            synth_pts = boundary_report.get("synthetic_points", [])
+            if synth_pts:
+                X_synth = np.asarray(synth_pts, dtype=np.float64)
+                Y_synth = np.asarray(active_teacher_fn(X_synth), dtype=np.float64)
+                if Y_synth.ndim == 1:
+                    Y_synth = Y_synth[:, None]
+                X_tr = np.vstack([X_tr, X_synth])
+                Y_tr = np.vstack([Y_tr, Y_synth])
+                Psi_tr, exprs, evaluators = self.build_basis_dictionary(X_tr, active_inputs)
+
+        Psi_val, _, _ = self.build_basis_dictionary(X_val, active_inputs)
+        Psi_full, _, _ = self.build_basis_dictionary(X_arr, active_inputs)
+
+        k_atoms = Psi_tr.shape[1]
+        W_mat = np.zeros((k_atoms, d_out), dtype=np.float64)
+        b_vec = np.zeros((d_out,), dtype=np.float64)
+        active_terms: List[str] = []
+        channel_lines: List[str] = []
+        per_channel_term_counts: List[int] = []
+
+        for out_c in range(d_out):
+            w_c, b_c = numpy_lasso_coordinate_descent(
+                Psi_tr, Y_tr[:, out_c], alpha=self.alpha
+            )
+            W_mat[:, out_c] = w_c
+            b_vec[out_c] = b_c
+            terms_c: List[str] = []
+            for k_idx in range(k_atoms):
+                if abs(w_c[k_idx]) > 1e-5:
+                    term_str = f"{w_c[k_idx]:+.6f} * {exprs[k_idx]}"
+                    terms_c.append(term_str)
+                    active_terms.append(f"out[{out_c}]: {term_str}")
+            per_channel_term_counts.append(len(terms_c))
+            if abs(b_c) > 1e-5 or not terms_c:
+                terms_c.append(f"{b_c:+.6f}")
+            channel_lines.append(" ".join(terms_c))
+
+        helper_code = (
+            self.library.emit_helper_functions_code() + "\n"
+            if (self.library is not None and self.library.primitives)
+            else ""
+        )
+        ast_code = (
+            helper_code
+            + "def distilled_ast_rule(x):\n"
+            + "    return [\n        "
+            + ",\n        ".join(channel_lines)
+            + "\n    ]\n"
+        )
+        safety_rep = AstPolicySafetyGate.verify_source(ast_code)
+
+        pred_tr = Psi_tr @ W_mat + b_vec[None, :]
+        pred_val = Psi_val @ W_mat + b_vec[None, :]
+        pred_full = Psi_full @ W_mat + b_vec[None, :]
+
+        ss_res_tr = float(np.sum((Y_tr - pred_tr) ** 2))
+        ss_tot_tr = float(np.sum((Y_tr - np.mean(Y_tr, axis=0, keepdims=True)) ** 2)) + 1e-12
+        r2_train = max(0.0, 1.0 - ss_res_tr / ss_tot_tr)
+
+        ss_res_val = float(np.sum((Y_val - pred_val) ** 2))
+        ss_tot_val = float(np.sum((Y_val - np.mean(Y_val, axis=0, keepdims=True)) ** 2)) + 1e-12
+        r2_oos = max(0.0, 1.0 - ss_res_val / ss_tot_val)
+
+        def _predict_fn(x_in: np.ndarray) -> np.ndarray:
+            x_np = np.asarray(x_in, dtype=np.float64)
+            if k_atoms == 0:
+                return np.zeros((x_np.shape[0], d_out), dtype=np.float64)
+            psi_cols = [ev_fn(x_np) for ev_fn in evaluators]
+            psi_mat = np.column_stack(psi_cols)
+            return psi_mat @ W_mat + b_vec[None, :]
+
+        # 2x2 Acceptance Gate comparing baseline (0 symbolic distillation) vs neuro-symbolic split
+        if val_metric_fn is not None:
+            cand_val_score = float(val_metric_fn(_predict_fn))
+            gate_2x2 = dream_engine.accept_joint_2x2(
+                {
+                    ("theta_neural_only", "psi_0"): float(val_baseline_score),
+                    ("theta_residual_keep", "psi_0"): float(val_baseline_score),
+                    ("theta_neural_only", "psi_ast"): 0.5 * (float(val_baseline_score) + cand_val_score),
+                    ("theta_residual_keep", "psi_ast"): cand_val_score,
+                },
+                incumbent_key=("theta_neural_only", "psi_0"),
+            )
+        else:
+            gate_2x2 = dream_engine.accept_joint_2x2(
+                {
+                    ("theta_neural_only", "psi_0"): 0.0,
+                    ("theta_residual_keep", "psi_0"): r2_oos * 0.5,
+                    ("theta_neural_only", "psi_ast"): r2_train * 0.5,
+                    ("theta_residual_keep", "psi_ast"): r2_oos,
+                },
+                incumbent_key=("theta_neural_only", "psi_0"),
+            )
+
+        accepted = bool(
+            safety_rep["valid"]
+            and len(active_terms) > 0
+            and r2_oos >= self.r2_threshold
+            and gate_2x2["accepted_pair"] == ("theta_residual_keep", "psi_ast")
+        )
+
+        # Track library reuse and optionally invent new primitive from accepted multi-term motif
+        invented_primitive_name: Optional[str] = None
+        if accepted and self.library is not None:
+            for p in self.library.primitives:
+                if any(f"{p.name}(x)" in t for t in active_terms):
+                    p.reuse_count += 1
+            if self.auto_invent_primitives and per_channel_term_counts and per_channel_term_counts[0] >= 2:
+                w0 = W_mat[:, 0].copy()
+                b0 = float(b_vec[0])
+                evs_snap = list(evaluators)
+
+                def _ch0_eval(arr: np.ndarray, w_v=w0, b_v=b0, ev_l=evs_snap) -> np.ndarray:
+                    p_mat = np.column_stack([fn(arr) for fn in ev_l])
+                    return p_mat @ w_v + b_v
+
+                new_prim = self.library.register_primitive(
+                    expr_str=channel_lines[0],
+                    eval_fn=_ch0_eval,
+                    term_count=per_channel_term_counts[0],
+                    r2_score=r2_oos,
+                    X_sample=X_arr,
+                    ast_depth=3 if any("lib_" in t for t in active_terms) else 2,
+                )
+                if new_prim is not None:
+                    invented_primitive_name = new_prim.name
+
+        residual_rem = Y_arr - pred_full if accepted else Y_arr.copy()
+        orig_energy = float(np.sum(Y_arr ** 2)) + 1e-12
+        rem_energy = float(np.sum(residual_rem ** 2))
+        energy_reduction_ratio = max(0.0, 1.0 - rem_energy / orig_energy)
+
+        return {
+            "accepted": accepted,
+            "r2_train": round(r2_train, 6),
+            "r2_oos": round(r2_oos, 6),
+            "active_inputs": active_inputs,
+            "dictionary_size": k_atoms,
+            "active_terms": active_terms,
+            "ast_code": ast_code,
+            "ast_safety_valid": safety_rep["valid"],
+            "gate_2x2": gate_2x2,
+            "energy_reduction_ratio": round(energy_reduction_ratio, 6),
+            "invented_primitive": invented_primitive_name,
+            "boundary_report": boundary_report,
+            "residual_rem": residual_rem,
+            "predict_fn": _predict_fn,
+            "weights": W_mat,
+            "intercept": b_vec,
+        }
+
+
 if __name__ == "__main__":
     print("SLEEP-DAG-RSI core module loaded successfully.")

@@ -1184,6 +1184,7 @@ def main() -> int:
     print("16. SLEEP-DAG-RSI v5 upgrades: HOPE DeltaRuleFastMemory, DAG-KS Consolidation, and Fingerprint MoE REM Dreaming")
     import numpy as np
     from sleep_dag_rsi import (
+        AstPolicySafetyGate,
         CounterfactualDreamingEngine,
         DeltaRuleFastMemory,
         ExpandableMoEMLP,
@@ -1191,6 +1192,7 @@ def main() -> int:
         SleepDAGConfig,
         SleepDAGRSIOrchestrator,
         SleepLanguageModel,
+        UniversalNeuralSleepAdapter,
         generalized_jsd_loss_and_grad,
     )
 
@@ -1261,6 +1263,318 @@ def main() -> int:
         and cyc_s5["ks_stats"]["total_wake_trajectories"] == 2
         and "accepted_pair" in cyc_s5["gate_2x2"],
         f"supervised={cyc_s5['ks_stats']['supervised_trajectories']}/{cyc_s5['ks_stats']['total_wake_trajectories']} gate={cyc_s5['gate_2x2']['accepted_pair']}",
+    )
+
+    u_adap = UniversalNeuralSleepAdapter(d_in=8, d_out=4, d_low=3, max_experts=4, seed=42)
+    x_u = rng_s5.normal(0.0, 1.0, size=(2, 8))
+    b_u = np.zeros((2, 4), dtype=np.float64)
+    y_u = np.ones((2, 4), dtype=np.float64)
+    l0_u = u_adap.wake_adapt_step(x_u, b_u, y_u, lr=0.15)
+    l1_u = u_adap.wake_adapt_step(x_u, b_u, y_u, lr=0.15)
+    nrem_u = u_adap.nrem_consolidate(
+        x_u,
+        b_u,
+        t_s5,
+        ["b0_win", "b1_trap"],
+        ExpertFingerprintMeta(expert_slot=0, source_node_id="b0_win", pass_mask=[1, 1, 0, 0]),
+    )
+    safe_ok = AstPolicySafetyGate.verify_source("def select(obs, k):\n    return obs['legal'][:k]\n")
+    safe_bad = AstPolicySafetyGate.verify_source("def select(obs, k):\n    eval('1+1')\n    return ['b0_win']\n")
+    check(
+        "UniversalNeuralSleepAdapter (Wake->NREM consolidation) and AstPolicySafetyGate verify cleanly",
+        l1_u < l0_u
+        and nrem_u["supervised_win_count"] == 1
+        and nrem_u["active_slow_experts"] == 1
+        and safe_ok["valid"] is True
+        and safe_bad["valid"] is False
+        and len(safe_bad["violations"]) >= 2,
+        f"loss={l0_u:.3f}->{l1_u:.3f} violations={safe_bad['violations']}",
+    )
+
+    # -- 17. SLEEP-DAG-RSI v6 upgrades (WaldMicroSentinel, SpectralFrameLifter, KKT Condensation & NeuroSymbolicDistiller) --
+    print()
+    print(
+        "17. SLEEP-DAG-RSI v6 upgrades: WaldMicroSentinel (5% early veto + DPO), SpectralFrameLifter (regularized kappa_eff + KKT condensation), and NeuroSymbolicDistiller (Residual-Keep)"
+    )
+    import math
+    from engine import (
+        DyadicHomotopyTransform,
+        EigenRotationTransform,
+        KktSlackTransform,
+        NeuroSymbolicDistiller,
+        SpectralFrameLifter,
+        SpectralMetaAtlas,
+        WaldMicroSentinel,
+        compute_spectral_diagnostics,
+        numpy_lasso_coordinate_descent,
+    )
+
+    # 17a. WaldMicroSentinel: 5% early abort on bad mutation, full eval on good mutation,
+    # exemption of adversarial slice on crossover/high-beta, and DPO negative export
+    sentinel = WaldMicroSentinel(adv_frac=0.025, strat_frac=0.025, gamma_lcb=1.96, tol_margin=0.01)
+    n_dom = 200
+    parent_pts = [1.0 if i >= 10 else -3.0 for i in range(n_dom)]
+    t_v6 = DiscoveryTree(task="v6_sentinel_test", baseline_score=0.5, max_parallelism=3)
+    p_root = t_v6.add(Node(id="root", parent_id=None, branch=-1, attempt=0, score=0.5))
+    p_parent = t_v6.add(
+        Node(id="b0_parent", parent_id="root", branch=0, attempt=1, score=sum(parent_pts) / n_dom)
+    )
+    c_bad = Node(id="b0_bad_child", parent_id="b0_parent", branch=0, attempt=2, score=0.0)
+    c_good = Node(id="b0_good_child", parent_id="b0_parent", branch=1, attempt=2, score=0.0)
+    c_xover = Node(id="b0_xover_child", parent_id="b0_parent", branch=2, attempt=2, score=0.0)
+
+    rep_bad = sentinel.evaluate_gate(
+        parent_node=p_parent,
+        child_node=c_bad,
+        parent_pointwise_scores=parent_pts,
+        eval_slice_fn=lambda idxs: [parent_pts[i] - 0.8 for i in idxs],
+        eval_full_fn=lambda: [0.0] * n_dom,
+    )
+    rep_good = sentinel.evaluate_gate(
+        parent_node=p_parent,
+        child_node=c_good,
+        parent_pointwise_scores=parent_pts,
+        eval_slice_fn=lambda idxs: [parent_pts[i] + 0.5 for i in idxs],
+        eval_full_fn=lambda: [x + 0.5 for x in parent_pts],
+    )
+    rep_xover = sentinel.evaluate_gate(
+        parent_node=p_parent,
+        child_node=c_xover,
+        parent_pointwise_scores=parent_pts,
+        eval_slice_fn=lambda idxs: [parent_pts[i] + 0.2 for i in idxs],
+        eval_full_fn=lambda: [x + 0.2 for x in parent_pts],
+        is_crossover=True,
+    )
+    t_v6.add(c_bad)
+    t_v6.add(c_good)
+    dpo_v6 = export_dag_dpo_pairs(t_v6, min_score_gap=0.1)
+    prob_v6 = Problem()
+    check(
+        "WaldMicroSentinel aborts bad mutation at 5% cost, exempts crossover from adversarial slice, shields is_success(), and feeds DPO negative pairs",
+        rep_bad["aborted"] is True
+        and rep_bad["cost_spent"] <= 0.06
+        and prob_v6.is_success(c_bad) is False
+        and prob_v6.hard_failure(c_bad) is True
+        and rep_good["passed"] is True
+        and rep_good["cost_spent"] == 1.0
+        and rep_xover["exempt_adversarial"] is True
+        and any(p["rejected_id"] == "b0_bad_child" and p["rejected_reason"] == "sentinel_pruned" for p in dpo_v6["dpo_pairs"]),
+        f"bad_cost={rep_bad['cost_spent']} (saved={rep_bad['compute_saved']}) lcb={rep_bad['lcb']} dpo_pairs={dpo_v6['pair_count']}",
+    )
+
+    # 17b. SpectralFrameLifter, Regularized kappa_eff (M < d rank guard), EigenRotation, KKT Active-Set Condensation, and Atlas Quarantine
+    # Case 1: Rank-deficient M=2 < d=4 isotropic subspace must NOT trigger false-positive kappa -> inf
+    g_rank_def = [
+        [2.0, 0.0, 0.0, 0.0],
+        [0.0, 2.0, 0.0, 0.0],
+        [0.0, 0.0, 0.0, 0.0],
+        [0.0, 0.0, 0.0, 0.0],
+    ]
+    diag_m_lt_d = compute_spectral_diagnostics(g_rank_def, m_buckets=2)
+    # Case 2: Genuine 10^9 ill-conditioned rotated valley in 2D
+    c45 = math.sqrt(0.5)
+    l1, l2 = 1e9, 1.0
+    g_valley = [
+        [c45 * c45 * l1 + c45 * c45 * l2, c45 * c45 * (l1 - l2)],
+        [c45 * c45 * (l1 - l2), c45 * c45 * l1 + c45 * c45 * l2],
+    ]
+    lifter = SpectralFrameLifter()
+    lift_rep = lifter.detect_and_lift(
+        task_name="valley_task",
+        theta_anchor=[1.0, -1.0],
+        g_mat=g_valley,
+        m_buckets=4,
+    )
+    rot_tf: EigenRotationTransform = lift_rep["transform"]  # type: ignore
+    y_rot = rot_tf.forward_project([2.5, 0.5])
+    x_rec = rot_tf.inverse_projection(y_rot)
+    inv_err = max(abs(x_rec[0] - 2.5), abs(x_rec[1] - 0.5))
+
+    # Case 3: KKT Slack Transform + Active-Set Condensation (3 tight ties at 0.0265, 3 inactive at 0.18)
+    kkt_tf = KktSlackTransform(base_dim=4, num_constraints=6, mu_penalty=20.0)
+    f_ties = [0.0265, 0.0266, 0.0265, 0.180, 0.210, 0.195]
+    u_init = kkt_tf.forward_project([0.1, 0.2, 0.3, 0.4], initial_constraint_vals=f_ties)
+    cond_rep = kkt_tf.condense_active_set(u_init, f_ties, sigma_mult=0.5)
+    x_kkt_orig = kkt_tf.inverse_projection(cond_rep["condensed_u"])
+
+    # Case 4: Atlas Quarantine after 2 failed probes
+    atlas = SpectralMetaAtlas()
+    atlas.record_outcome("noisy_task", "eigen_rotation", gained_score=False)
+    atlas.record_outcome("noisy_task", "eigen_rotation", gained_score=False)
+    quarantined_op = atlas.select_operator("noisy_task", lift_rep["diagnostics"])
+
+    check(
+        "SpectralFrameLifter avoids M<d false positives, triggers EigenRotation (inv_err<1e-12), condenses KKT slacks (6->3), and quarantines failed atlas operators",
+        diag_m_lt_d["is_ill_conditioned"] is False
+        and abs(diag_m_lt_d["kappa_eff"] - 1.0) < 1e-6
+        and lift_rep["triggered"] is True
+        and lift_rep["operator"] == "eigen_rotation"
+        and inv_err < 1e-12
+        and cond_rep["active_slack_count"] == 3
+        and cond_rep["pruned_slack_count"] == 3
+        and x_kkt_orig == [0.1, 0.2, 0.3, 0.4]
+        and quarantined_op is None,
+        f"m_lt_d_kappa={diag_m_lt_d['kappa_eff']} valley_log10_kappa={lift_rep['diagnostics']['log10_kappa_eff']} inv_err={inv_err:.2e} kkt_slacks=6->{cond_rep['active_slack_count']}",
+    )
+
+    # 17c. Pure-NumPy Coordinate-Descent Lasso & NeuroSymbolicDistiller (Residual-Keep Decomposition)
+    rng_v6 = np.random.default_rng(42)
+    X_sym = rng_v6.uniform(-2.0, 2.0, size=(64, 10))
+    # True symbolic law: 2.0 * (x[0] * x[1]) - 1.5 * sign(x[2]) + small smooth neural residue
+    sign_x2 = np.where(X_sym[:, 2] >= 0.0, 1.0, -1.0)
+    smooth_res = 0.08 * np.sin(X_sym[:, 3])
+    Y_sym = (2.0 * (X_sym[:, 0] * X_sym[:, 1]) - 1.5 * sign_x2 + smooth_res)[:, None]
+
+    t_ns = DiscoveryTree(task="v6_ns_distill", baseline_score=50.0, max_parallelism=2)
+    t_ns.add(Node(id="root", parent_id=None, branch=-1, attempt=0, score=50.0))
+    t_ns.add(Node(id="b0_win", parent_id="root", branch=0, attempt=1, score=85.0, pass_mask=[1, 1, 1, 0]))
+
+    adap_v6 = UniversalNeuralSleepAdapter(d_in=10, d_out=1, d_low=4, max_experts=4, seed=42)
+    nrem_v6 = adap_v6.nrem_consolidate(
+        x_trajectories=X_sym,
+        base_outputs=np.zeros_like(Y_sym),
+        dag_tree=t_ns,
+        trajectory_node_ids=["b0_win"] * 64,
+        fingerprint_meta=ExpertFingerprintMeta(expert_slot=0, source_node_id="b0_win", pass_mask=[1, 1, 1, 0]),
+        steps=25,
+        lr=0.12,
+        target_delta_override=Y_sym,
+        enable_neuro_symbolic_distill=True,
+    )
+    ns_info = nrem_v6["neuro_symbolic_distill"]
+    pred_hybrid = adap_v6.forward_delta(X_sym, use_fast=False, forced_expert=0)
+    hybrid_mse = float(np.mean((Y_sym - pred_hybrid) ** 2))
+    check(
+        "NeuroSymbolicDistiller recovers exact AST terms (x[0]*x[1], sign(x[2])) with R^2_OOS>=0.95, passes AstPolicySafetyGate, and cuts neural residual energy by >95%",
+        ns_info["accepted"] is True
+        and ns_info["r2_oos"] >= 0.95
+        and ns_info["energy_reduction_ratio"] >= 0.95
+        and "(x[0] * x[1])" in ns_info["ast_code"]
+        and "x[2] >= 0.0" in ns_info["ast_code"]
+        and "ns_ast_slot0" in t_ns.nodes
+        and hybrid_mse < 0.01,
+        f"r2_oos={ns_info['r2_oos']:.4f} energy_cut={ns_info['energy_reduction_ratio']:.2%} hybrid_mse={hybrid_mse:.5f} terms={ns_info['active_terms']}",
+    )
+
+    # ------------------------------------------------------------------
+    # 18. SLEEP-DAG-RSI v7 upgrades: AstCodeSplicer, ActiveBoundarySynthesizer,
+    #     and SymbolicLibrary Hierarchical Compositional Distillation
+    # ------------------------------------------------------------------
+    print("\n18. SLEEP-DAG-RSI v7 upgrades: AstCodeSplicer, ActiveBoundarySynthesizer, and SymbolicLibrary (depth-3 laws)")
+    from engine import ActiveBoundarySynthesizer, AstCodeSplicer
+    from sleep_dag_rsi import SymbolicLibrary
+
+    # 18a. Autonomous AST Code Splicer integrated with compute_hyper_crossover
+    base_code = (
+        "def solve_kernel(x):\n"
+        "    low_regime = 0.0\n"
+        "    high_regime = 0.0\n"
+        "    return low_regime + high_regime\n"
+    )
+    parent_u_code = (
+        "def helper_low(v):\n"
+        "    return v * v + 1.0\n\n"
+        "def solve_kernel(x):\n"
+        "    low_regime = helper_low(x) if x < 0.0 else 0.0\n"
+        "    high_regime = 0.0\n"
+        "    return low_regime + high_regime\n"
+    )
+    parent_v_code = (
+        "def helper_high(v):\n"
+        "    return 2.0 * v + 3.0\n\n"
+        "def solve_kernel(x):\n"
+        "    low_regime = 0.0\n"
+        "    high_regime = helper_high(x) if x >= 0.0 else 0.0\n"
+        "    return low_regime + high_regime\n"
+    )
+    n_u_ast = Node(
+        id="b0_low",
+        parent_id="root",
+        branch=0,
+        attempt=1,
+        score=75.0,
+        pass_mask=[1, 1, 0, 0],
+        artifact={"code": parent_u_code, "base_code": base_code},
+        meta={"ast_touches": ["func_new:helper_low", "fn:solve_kernel:assign:low_regime"]},
+    )
+    n_v_ast = Node(
+        id="b1_high",
+        parent_id="root",
+        branch=1,
+        attempt=1,
+        score=75.0,
+        pass_mask=[0, 0, 1, 1],
+        artifact={"code": parent_v_code, "base_code": base_code},
+        meta={"ast_touches": ["func_new:helper_high", "fn:solve_kernel:assign:high_regime"]},
+    )
+    hx_rep = compute_hyper_crossover([n_u_ast, n_v_ast], baseline=50.0)
+    sp_art = hx_rep.get("spliced_artifact") or {}
+    ns_exec: Dict[str, Any] = {}
+    if sp_art.get("valid"):
+        exec(sp_art["spliced_code"], ns_exec)
+    fn_spliced = ns_exec.get("solve_kernel")
+    spliced_vals = [fn_spliced(v) for v in (-2.0, -1.0, 1.0, 2.0)] if fn_spliced else []
+    expected_vals = [5.0, 2.0, 5.0, 7.0]
+    check(
+        "AstCodeSplicer merges orthogonal helpers + intra-function variables via compute_hyper_crossover into 100% passing executable code",
+        sp_art.get("valid") is True
+        and sp_art.get("splice_mode") == "structural_ast_merge"
+        and sp_art.get("ast_collision_iou") == 0.0
+        and spliced_vals == expected_vals,
+        f"mode={sp_art.get('splice_mode')} iou={sp_art.get('ast_collision_iou')} vals={spliced_vals}",
+    )
+
+    # 18b. ActiveBoundarySynthesizer: bichromatic bisection + projected ascent on committee disagreement
+    # Two models that agree near [-0.2, 0.2] but diverge sharply near boundary x_0 - x_1 ~ 1.2
+    Anchors_v7 = [[0.05 * ((i % 5) - 2), 0.05 * ((i // 5) - 2)] for i in range(25)]
+    Anchors_v7.append([0.8, -0.5])
+    Anchors_v7.append([-0.8, 0.5])
+    f_comm_1 = lambda x: math.tanh(2.5 * (x[0] - x[1]))
+    f_comm_2 = lambda x: math.tanh(2.5 * (x[0] - x[1])) - 1.8 * max(0.0, (x[0] - x[1]) ** 2 - 0.15)
+    synth_v7 = ActiveBoundarySynthesizer(trust_radius_sigma=2.0, ascent_steps=8, step_lr=0.25)
+    b_rep = synth_v7.synthesize_boundary_points(Anchors_v7, [f_comm_1, f_comm_2], num_synthetic=6)
+    check(
+        "ActiveBoundarySynthesizer amplifies committee disagreement (>3x over passive anchors) and locates sign-flipping boundary counterexamples",
+        b_rep["disagreement_amplification"] >= 3.0
+        and b_rep["synthetic_mean_disagreement"] > b_rep["anchor_mean_disagreement"]
+        and b_rep["boundary_crossings_found"] >= 1,
+        f"anchor_dis={b_rep['anchor_mean_disagreement']:.4f} -> synth_dis={b_rep['synthetic_mean_disagreement']:.4f} ({b_rep['disagreement_amplification']:.2f}x) crossings={b_rep['boundary_crossings_found']}",
+    )
+
+    # 18c. SymbolicLibrary + Hierarchical NeuroSymbolicDistiller (cracking depth-3 law where flat v6 fails)
+    rng_v7 = np.random.default_rng(77)
+    X_lib = rng_v7.uniform(-2.0, 2.0, size=(96, 6))
+    # Cycle 1 law: composite motif M(x) = 1.6 * (x[0] * x[1]) - 1.2 * tanh(x[2])
+    Y_cycle1 = 1.6 * (X_lib[:, 0] * X_lib[:, 1]) - 1.2 * np.tanh(X_lib[:, 2])
+    lib_v7 = SymbolicLibrary()
+    dist_c1 = NeuroSymbolicDistiller(alpha=0.03, library=lib_v7, auto_invent_primitives=True)
+    rep_c1 = dist_c1.distill_residual(X_lib, Y_cycle1)
+
+    # Cycle 2 law (depth-3 composition): Y_cycle2 = 2.2 * lib_0(x) * sign(x[3]) + 0.8 * x[4]
+    # Note: expanding lib_0(x) * sign(x[3]) in raw inputs is (x[0]*x[1]*sign(x[3])) and (tanh(x[2])*sign(x[3])),
+    # which are degree-3 / depth-3 terms completely absent from the flat v6 basis dictionary!
+    sign_x3 = np.where(X_lib[:, 3] >= 0.0, 1.0, -1.0)
+    prim0_vals = lib_v7.primitives[0].eval_fn(X_lib)
+    Y_cycle2 = 2.2 * (prim0_vals * sign_x3) + 0.8 * X_lib[:, 4]
+
+    # Compare flat v6 distiller (no library) vs v7 hierarchical distiller (with SymbolicLibrary)
+    dist_v6_flat = NeuroSymbolicDistiller(alpha=0.03, library=None, auto_invent_primitives=False)
+    rep_v6_flat = dist_v6_flat.distill_residual(X_lib, Y_cycle2)
+
+    dist_v7_hier = NeuroSymbolicDistiller(alpha=0.03, library=lib_v7, auto_invent_primitives=True)
+    rep_v7_hier = dist_v7_hier.distill_residual(X_lib, Y_cycle2)
+
+    check(
+        "SymbolicLibrary abstracts Cycle-1 motif into lib_0(x) and cracks depth-3 law in Cycle 2 (v7 R^2_OOS>=0.98 vs flat v6 R^2_OOS<0.25)",
+        rep_c1["accepted"] is True
+        and rep_c1["invented_primitive"] == "lib_0"
+        and rep_v7_hier["accepted"] is True
+        and rep_v7_hier["r2_oos"] >= 0.98
+        and rep_v6_flat["r2_oos"] < 0.25
+        and "def lib_0(x):" in rep_v7_hier["ast_code"]
+        and "(lib_0(x) * (1.0 if x[3] >= 0.0 else -1.0))" in rep_v7_hier["ast_code"]
+        and lib_v7.primitives[0].reuse_count >= 1,
+        f"v6_flat_r2={rep_v6_flat['r2_oos']:.4f} vs v7_hier_r2={rep_v7_hier['r2_oos']:.4f} invented={rep_c1['invented_primitive']} reuse={lib_v7.primitives[0].reuse_count}",
     )
 
     print()

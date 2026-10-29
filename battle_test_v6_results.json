@@ -1,0 +1,102 @@
+{
+  "trial_1_heilbronn": {
+    "n_points": 16,
+    "total_triangles_per_eval": 560,
+    "num_candidates": 60,
+    "v5_triangle_evals": 33600,
+    "v6_triangle_evals": 5540,
+    "triangle_eval_savings_pct": 83.51,
+    "v5_wall_ms": 9.7,
+    "v6_wall_ms": 6.32,
+    "speedup_x": 1.53,
+    "v6_aborted_candidates": 53,
+    "v6_survivor_candidates": 7,
+    "winner_agreement": true,
+    "best_candidate_id": "cand_55_apex_step",
+    "parent_min_area": 0.018118759608,
+    "recovered_min_area": 0.018320022832,
+    "dpo_negative_pairs_harvested": 346,
+    "kkt_initial_slacks": 560,
+    "kkt_condensed_active_slacks": 57,
+    "kkt_pruned_inactive_slacks": 503,
+    "kkt_inverse_projection_err": 0.0
+  },
+  "trial_2_spectral": {
+    "dimension": 8,
+    "active_modes_kept": 6,
+    "sloppy_null_modes_frozen": 2,
+    "log10_kappa_eff": 8.0,
+    "operator_selected": "eigen_rotation",
+    "initial_loss": 56022986.3499,
+    "v5_loss_after_40_steps": 13.053421,
+    "v6_loss_after_15_lifted_steps": 2.136843e-06,
+    "loss_reduction_factor": 6108742.6
+  },
+  "trial_3_bitcoin": {
+    "total_aligned_bars": 149953,
+    "zero_lookahead_verified": true,
+    "timeframes": {
+      "4h": {
+        "train_active_bars": 166,
+        "vault_trades": 91,
+        "regime_distill_accepted": true,
+        "regime_distill_r2_oos": 0.727784,
+        "regime_energy_cut_pct": 72.74,
+        "distilled_readable_terms": [
+          "out[0]: -0.838109 * math.tanh(dir_z_price_20)",
+          "out[0]: -0.349083 * (dir_wick_rejection * dir_mom_4_atr)"
+        ],
+        "naive_vault_monthly_ret_pct": -5.322,
+        "hybrid_vault_monthly_ret_pct": 1.431,
+        "overfit_sizing_blocked_by_2x2": true,
+        "vault_v5_monthly_ret_pct": 4.948,
+        "vault_v6_monthly_ret_pct": 4.948,
+        "vault_v5_profit_factor": 1.524,
+        "vault_v6_profit_factor": 1.524
+      },
+      "1d": {
+        "train_active_bars": 89,
+        "vault_trades": 46,
+        "regime_distill_accepted": true,
+        "regime_distill_r2_oos": 0.71786,
+        "regime_energy_cut_pct": 70.85,
+        "distilled_readable_terms": [
+          "out[0]: -0.793387 * math.tanh(dir_z_price_20)",
+          "out[0]: -0.091297 * (1.0 if dir_wick_rejection >= 0.0 else -1.0)",
+          "out[0]: -0.036254 * (1.0 if dir_mom_4_atr >= 0.0 else -1.0)",
+          "out[0]: -0.487656 * (dir_wick_rejection * dir_mom_4_atr)"
+        ],
+        "naive_vault_monthly_ret_pct": -3.474,
+        "hybrid_vault_monthly_ret_pct": 2.937,
+        "overfit_sizing_blocked_by_2x2": true,
+        "vault_v5_monthly_ret_pct": 3.573,
+        "vault_v6_monthly_ret_pct": 3.573,
+        "vault_v5_profit_factor": 1.696,
+        "vault_v6_profit_factor": 1.696
+      }
+    }
+  },
+  "trial_4_v7_upgrades": {
+    "splicer_valid": true,
+    "splicer_mode": "structural_ast_merge",
+    "splicer_ast_iou": 0.0,
+    "splicer_merged_symbols": [
+      "branch_wick_squeeze:func:compute_wick_squeeze",
+      "branch_exhaustion:func:compute_exhaustion_pullback",
+      "branch_wick_squeeze:evaluate_regime_edge.assign:wick_component",
+      "branch_exhaustion:evaluate_regime_edge.assign:rev_component"
+    ],
+    "splicer_regime_bucket_pass_rate": "4/4 (100% vs 50% single parent)",
+    "cycle1_invented_primitive": "lib_0",
+    "cycle1_r2_oos": 1.0,
+    "cycle2_v6_flat_r2_oos": 0.0,
+    "cycle2_v7_hierarchical_r2_oos": 1.0,
+    "cycle2_v7_energy_cut_pct": 100.0,
+    "cycle2_v7_active_terms": [
+      "out[0]: +0.649927 * math.tanh(x[5])",
+      "out[0]: +1.799914 * (lib_0(x) * (1.0 if x[7] >= 0.0 else -1.0))"
+    ],
+    "active_boundary_amplification_x": 10.9976,
+    "active_boundary_crossings": 0
+  }
+}

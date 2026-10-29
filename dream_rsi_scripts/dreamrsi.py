@@ -9,6 +9,7 @@ Dream-RSI command line.
     python dreamrsi.py status --task NAME   ranking, history, current policy
     python dreamrsi.py trees --task NAME    proof that a tree was recorded
     python dreamrsi.py ideate --task NAME   synthesize new hybrid/DAG/neuro-symbolic ideas
+    python dreamrsi.py sleep --demo|--task  run SLEEP-DAG-RSI v5 Wake->NREM->REM->2x2 cycle
 """
 
 from __future__ import annotations
@@ -313,6 +314,93 @@ def cmd_ideate(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_sleep(args: argparse.Namespace) -> int:
+    import numpy as np
+    from engine import SpectralFrameLifter, WaldMicroSentinel
+    from sleep_dag_rsi import (
+        ExpertFingerprintMeta,
+        NeuroSymbolicDistiller,
+        SleepDAGConfig,
+        SleepDAGRSIOrchestrator,
+    )
+
+    cfg = SleepDAGConfig(vocab_size=32, d_model=16, d_ff=32, d_low=4, consolidation_steps=10)
+    orch = SleepDAGRSIOrchestrator(cfg=cfg, seed=42)
+
+    if args.demo or not args.task:
+        trees = synth_trees("sleep-demo")
+        t0 = trees[0]
+        wake_seqs = np.array(
+            [
+                [4, 5, 6, 7, 8, 9, 10, 11, 8, 9, 10, 11],
+                [4, 5, 6, 7, 12, 13, 14, 15, 12, 13, 14, 15],
+            ],
+            dtype=np.int64,
+        )
+        res = orch.run_wake_sleep_cycle(
+            domain_name="sleep-demo",
+            wake_sequences=wake_seqs,
+            dag_tree=t0,
+            trajectory_node_ids=["d0", "x"],
+            fingerprint_meta=ExpertFingerprintMeta(
+                expert_slot=0, source_node_id="d0", pass_mask=[1, 1, 1, 0, 0, 0]
+            ),
+            retention_evaluator=lambda _m: 1.0,
+        )
+        # Attach SLEEP-DAG-RSI v6 demo verification (WaldMicroSentinel + SpectralFrameLifter + NeuroSymbolicDistiller)
+        rng_v6 = np.random.default_rng(42)
+        X_demo = rng_v6.uniform(-2.0, 2.0, size=(48, 6))
+        Y_demo = (1.5 * (X_demo[:, 0] * X_demo[:, 1]) - 1.0 * np.where(X_demo[:, 2] >= 0.0, 1.0, -1.0))[:, None]
+        ns_rep = NeuroSymbolicDistiller().distill_residual(X_demo, Y_demo)
+        lifter_rep = SpectralFrameLifter().detect_and_lift(
+            task_name="sleep-demo",
+            theta_anchor=[1.0, -1.0],
+            g_mat=[[5e8, 5e8 - 1.0], [5e8 - 1.0, 5e8]],
+            m_buckets=4,
+        )
+        res["v6_spectral_and_neuro_symbolic"] = {
+            "frame_lifter_triggered": lifter_rep["triggered"],
+            "frame_lifter_operator": lifter_rep["operator"],
+            "log10_kappa_eff": lifter_rep["diagnostics"]["log10_kappa_eff"],
+            "neuro_symbolic_accepted": ns_rep["accepted"],
+            "neuro_symbolic_r2_oos": ns_rep["r2_oos"],
+            "neuro_symbolic_terms": ns_rep["active_terms"],
+            "energy_reduction_ratio": ns_rep["energy_reduction_ratio"],
+        }
+        print(json.dumps(res, ensure_ascii=False, indent=2))
+        return 0
+
+    trees = load_pool(task=args.task, pool_dir=args.pool)
+    if not trees:
+        print(f"no trees recorded for {args.task!r}")
+        return 2
+    t_last = trees[-1]
+    nodes = [n for n in t_last.nodes.values() if n.id != "root"]
+    nodes.sort(key=lambda n: n.score, reverse=True)
+    top_id = nodes[0].id if nodes else "root"
+    bot_id = nodes[-1].id if len(nodes) > 1 else top_id
+    p_mask = list(nodes[0].pass_mask) if (nodes and nodes[0].pass_mask) else [1, 1, 0, 0]
+    wake_seqs = np.array(
+        [
+            [4, 5, 6, 7, 8, 9, 10, 11, 8, 9, 10, 11],
+            [4, 5, 6, 7, 12, 13, 14, 15, 12, 13, 14, 15],
+        ],
+        dtype=np.int64,
+    )
+    res = orch.run_wake_sleep_cycle(
+        domain_name=args.task,
+        wake_sequences=wake_seqs,
+        dag_tree=t_last,
+        trajectory_node_ids=[top_id, bot_id],
+        fingerprint_meta=ExpertFingerprintMeta(
+            expert_slot=0, source_node_id=top_id, pass_mask=p_mask
+        ),
+        retention_evaluator=lambda _m: 1.0,
+    )
+    print(json.dumps(res, ensure_ascii=False, indent=2))
+    return 0
+
+
 def main(argv: list | None = None) -> int:
     ap = argparse.ArgumentParser(
         prog="dreamrsi",
@@ -357,6 +445,13 @@ def main(argv: list | None = None) -> int:
     )
     id_sub.add_argument("--task", required=True)
     id_sub.set_defaults(func=cmd_ideate)
+
+    sl_sub = sub.add_parser(
+        "sleep", help="run SLEEP-DAG-RSI v5 Wake->NREM->REM->2x2 consolidation cycle"
+    )
+    sl_sub.add_argument("--task", help="task name in pool")
+    sl_sub.add_argument("--demo", action="store_true", help="run on synthetic demo tree")
+    sl_sub.set_defaults(func=cmd_sleep)
 
     args = ap.parse_args(argv)
     return args.func(args)

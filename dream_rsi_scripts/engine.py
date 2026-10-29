@@ -92,8 +92,8 @@ class Problem:
         )
 
     def hard_failure(self, node: "Node") -> bool:
-        """A clean run that is still wrong: an algorithmic dead end."""
-        return self.class_of(node) == "algorithmic_failure"
+        """A clean run that is still wrong or aborted by the sentinel: an algorithmic dead end."""
+        return self.class_of(node) in ("algorithmic_failure", "sentinel_pruned")
 
 
 # ---------------------------------------------------------------------------
@@ -2870,6 +2870,28 @@ def compute_hyper_crossover(
         if len(selected_ids) >= 2
         else ""
     )
+    spliced_artifact: Optional[Dict[str, Any]] = None
+    if len(selected_ids) >= 2:
+        parent_code_pairs: List[Tuple[str, str]] = []
+        base_src: Optional[str] = None
+        for idx in selected_idx:
+            n_obj = valid_nodes[idx][0]
+            art = n_obj.artifact if isinstance(n_obj.artifact, dict) else {}
+            meta_d = n_obj.meta if isinstance(n_obj.meta, dict) else {}
+            code_str = art.get("code") or meta_d.get("code")
+            if isinstance(code_str, str) and code_str.strip():
+                parent_code_pairs.append((n_obj.id, code_str))
+            if base_src is None:
+                b_cand = art.get("base_code") or meta_d.get("base_code")
+                if isinstance(b_cand, str) and b_cand.strip():
+                    base_src = b_cand
+        if len(parent_code_pairs) >= 2:
+            splicer = AstCodeSplicer()
+            spliced_artifact = splicer.splice_parents(
+                base_source=base_src or parent_code_pairs[0][1],
+                parent_sources=parent_code_pairs,
+            )
+
     return {
         "selected_ids": selected_ids if len(selected_ids) >= 2 else [],
         "action": action_str,
@@ -2879,15 +2901,31 @@ def compute_hyper_crossover(
         "best_single_mean": round(current_best_single, 6),
         "total_ast_collision": round(current_coll, 6),
         "rejected_candidates": rejected_reasons,
+        "spliced_artifact": spliced_artifact,
     }
 
 
 def _jacobi_eigh_symmetric(mat: List[List[float]], max_sweeps: int = 60) -> Tuple[List[float], List[List[float]]]:
     """
-    Pure-Python deterministic Jacobi eigenvalue solver for real symmetric matrices G in R^{d x d}.
+    Deterministic symmetric eigenvalue solver for real symmetric matrices G in R^{d x d}.
+    Uses fast C-level `numpy.linalg.eigh` when NumPy is available and d > 12, with
+    pure-Python deterministic Jacobi rotations as a zero-dependency fallback.
     Returns (eigenvalues_ascending, eigenvectors_as_columns_list[mode][coord]).
     """
     d = len(mat)
+    if d == 0:
+        return [], []
+    if d > 12:
+        try:
+            import numpy as _np
+            arr = _np.asarray(mat, dtype=_np.float64)
+            arr = 0.5 * (arr + arr.T)
+            w, v_np = _np.linalg.eigh(arr)
+            evals_np = [float(x) for x in w.tolist()]
+            evecs_np = [[float(v_np[coord, mode]) for coord in range(d)] for mode in range(d)]
+            return evals_np, evecs_np
+        except Exception:
+            pass
     a = [[float(mat[r][c]) for c in range(d)] for r in range(d)]
     v = [[1.0 if r == c else 0.0 for c in range(d)] for r in range(d)]
 
@@ -3314,27 +3352,1320 @@ def export_lean4_certificate(
 
 
 # ---------------------------------------------------------------------------
-# 16. SLEEP-DAG-RSI v5 Parametric Continual Learning Exports
+# 16. SLEEP-DAG-RSI v6: WaldMicroSentinel, SpectralFrameLifter & MetaAtlas
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class SentinelSlice:
+    """
+    SLEEP-DAG-RSI v6 Multi-Fidelity Sentinel Slice (`S_sentinel = S_adv U S_strat`).
+    Holds the 2.5% parent adversarial failure indices and 2.5% uniform stratified
+    anchor indices, with automatic exemption of `S_adv` for macro-innovations
+    (`crossover`, `frame_transform`, or high-temperature `beta >= 0.8`).
+    """
+
+    domain_size: int
+    adversarial_indices: List[int]
+    stratified_indices: List[int]
+    combined_indices: List[int]
+    exempt_adversarial: bool
+    cost_fraction: float
+
+
+class WaldMicroSentinel:
+    """
+    Stage 1 of SLEEP-DAG-RSI v6: Sequential Lower-Confidence-Bound (LCB) Early Veto.
+    Evaluates a candidate mutation on a ~5% sentinel slice first:
+      - Standard mutations evaluate on `S_adv U S_strat` (catching regressions on
+        the parent's fragile manifold plus global anchor points).
+      - Macro-innovations (`is_crossover`, `is_frame_transform`, `beta >= 0.8`)
+        evaluate ONLY on `S_strat` so global reorganizations are not killed for
+        trading off the parent's local error patch.
+      - Acts strictly as a ONE-WAY VETO: survivors must still pass 100% full-domain
+        evaluation for final ranking and DAG acceptance (preventing slice Goodharting).
+      - Aborted nodes receive `fail_class = "sentinel_pruned"` and `meta["sentinel_aborted"] = True`,
+        shielding `V_Lean` replay while feeding `export_dag_dpo_pairs()` negative targets.
+    """
+
+    def __init__(
+        self,
+        adv_frac: float = 0.025,
+        strat_frac: float = 0.025,
+        gamma_lcb: float = 1.96,
+        tol_margin: float = 0.01,
+    ) -> None:
+        self.adv_frac = adv_frac
+        self.strat_frac = strat_frac
+        self.gamma_lcb = gamma_lcb
+        self.tol_margin = tol_margin
+
+    def build_slice(
+        self,
+        parent_scores_or_errors: Sequence[float],
+        higher_is_better: bool = True,
+        is_crossover: bool = False,
+        is_frame_transform: bool = False,
+        beta: float = 0.5,
+    ) -> SentinelSlice:
+        n_total = len(parent_scores_or_errors)
+        if n_total == 0:
+            return SentinelSlice(0, [], [], [], True, 0.0)
+
+        k_adv = max(1, int(round(self.adv_frac * n_total)))
+        k_strat = max(1, int(round(self.strat_frac * n_total)))
+
+        # Adversarial core: worst-performing indices of the parent
+        if higher_is_better:
+            ranked_worst = sorted(range(n_total), key=lambda idx: float(parent_scores_or_errors[idx]))
+        else:
+            ranked_worst = sorted(
+                range(n_total), key=lambda idx: abs(float(parent_scores_or_errors[idx])), reverse=True
+            )
+        adv_idx = sorted(ranked_worst[:k_adv])
+
+        # Deterministic uniform stratified anchor across the full domain
+        stride = max(1, n_total // k_strat)
+        strat_idx = sorted({min(n_total - 1, i * stride) for i in range(k_strat)})
+
+        exempt = bool(is_crossover or is_frame_transform or beta >= 0.8)
+        if exempt:
+            # Double stratified density when adversarial slice is exempted so sample size stays ~5%
+            k_strat_ex = max(2, int(round((self.adv_frac + self.strat_frac) * n_total)))
+            stride_ex = max(1, n_total // k_strat_ex)
+            combined = sorted({min(n_total - 1, i * stride_ex) for i in range(k_strat_ex)})
+        else:
+            combined = sorted(set(adv_idx).union(strat_idx))
+
+        cost_frac = round(len(combined) / float(n_total), 6)
+        return SentinelSlice(
+            domain_size=n_total,
+            adversarial_indices=adv_idx,
+            stratified_indices=strat_idx,
+            combined_indices=combined,
+            exempt_adversarial=exempt,
+            cost_fraction=cost_frac,
+        )
+
+    def evaluate_gate(
+        self,
+        parent_node: Node,
+        child_node: Node,
+        parent_pointwise_scores: Sequence[float],
+        eval_slice_fn: Callable[[Sequence[int]], Sequence[float]],
+        eval_full_fn: Optional[Callable[[], Sequence[float]]] = None,
+        is_crossover: bool = False,
+        is_frame_transform: bool = False,
+        beta: float = 0.5,
+        warmup_grace_remaining: int = 0,
+        aggregation: str = "mean",
+    ) -> Dict[str, Any]:
+        """
+        Evaluates candidate `child_node` on the 5% sentinel slice:
+          - `aggregation="mean"`: Wald Sequential LCB on mean difference `delta_mu + gamma * SE >= -tol_margin`.
+          - `aggregation="min"`: Exact extremal upper-bound filter for max-min problems (e.g. Heilbronn):
+            since `min_{all}(s_child) <= min_{sentinel}(s_child)`, any candidate with
+            `min_{sentinel}(s_child) < min_{all}(s_parent) - tol_margin` is provably suboptimal (0 false negatives).
+          - `aggregation="max"`: Exact extremal lower-bound filter for min-max problems (e.g. Autocorrelation C_2).
+        """
+        higher_is_better = aggregation != "max"
+        sentinel_slice = self.build_slice(
+            parent_pointwise_scores,
+            higher_is_better=higher_is_better,
+            is_crossover=is_crossover,
+            is_frame_transform=is_frame_transform,
+            beta=beta,
+        )
+        idxs = sentinel_slice.combined_indices
+        if not idxs:
+            return {"passed": True, "aborted": False, "cost_spent": 1.0, "node": child_node}
+
+        child_slice_scores = [float(v) for v in eval_slice_fn(idxs)]
+        parent_slice_scores = [float(parent_pointwise_scores[i]) for i in idxs]
+        k = len(idxs)
+        diffs = [child_slice_scores[j] - parent_slice_scores[j] for j in range(k)]
+        delta_mu = sum(diffs) / float(k)
+        if k > 1:
+            var_d = sum((d - delta_mu) ** 2 for d in diffs) / float(k - 1)
+            se_mu = math.sqrt(max(0.0, var_d) / float(k))
+        else:
+            se_mu = 0.0
+
+        if aggregation == "min":
+            parent_ext = min(float(v) for v in parent_pointwise_scores)
+            child_slice_ext = min(child_slice_scores)
+            lcb = child_slice_ext - parent_ext
+            passed = bool(warmup_grace_remaining > 0 or lcb >= -self.tol_margin)
+        elif aggregation == "max":
+            parent_ext = max(float(v) for v in parent_pointwise_scores)
+            child_slice_ext = max(child_slice_scores)
+            lcb = parent_ext - child_slice_ext
+            passed = bool(warmup_grace_remaining > 0 or lcb >= -self.tol_margin)
+        else:
+            lcb = delta_mu + self.gamma_lcb * se_mu
+            passed = bool(warmup_grace_remaining > 0 or lcb >= -self.tol_margin)
+
+        if not passed:
+            child_node.fail_class = "sentinel_pruned"
+            child_node.valid = False
+            child_node.score = round(float(parent_node.score) + delta_mu, 6)
+            child_node.delta_vs_parent = round(delta_mu, 6)
+            child_node.meta = dict(child_node.meta or {})
+            child_node.meta["sentinel_aborted"] = True
+            child_node.meta["sentinel_cost"] = sentinel_slice.cost_fraction
+            child_node.meta["sentinel_lcb"] = round(lcb, 6)
+            child_node.meta["exempt_adversarial"] = sentinel_slice.exempt_adversarial
+            return {
+                "passed": False,
+                "aborted": True,
+                "cost_spent": sentinel_slice.cost_fraction,
+                "compute_saved": round(1.0 - sentinel_slice.cost_fraction, 6),
+                "delta_mean": round(delta_mu, 6),
+                "se": round(se_mu, 6),
+                "lcb": round(lcb, 6),
+                "exempt_adversarial": sentinel_slice.exempt_adversarial,
+                "slice_size": k,
+                "node": child_node,
+            }
+
+        # Survivor: evaluate on 100% full benchmark so ranking never Goodharts the sentinel slice
+        full_cost = 1.0
+        if eval_full_fn is not None:
+            full_scores = [float(v) for v in eval_full_fn()]
+            full_mean = sum(full_scores) / float(max(1, len(full_scores)))
+            child_node.score = round(full_mean, 6)
+            child_node.delta_vs_parent = round(full_mean - float(parent_node.score), 6)
+        child_node.fail_class = "ok"
+        child_node.valid = True
+        child_node.meta = dict(child_node.meta or {})
+        child_node.meta["sentinel_aborted"] = False
+        child_node.meta["sentinel_cost"] = 1.0
+        child_node.meta["sentinel_lcb"] = round(lcb, 6)
+        child_node.meta["exempt_adversarial"] = sentinel_slice.exempt_adversarial
+        return {
+            "passed": True,
+            "aborted": False,
+            "cost_spent": full_cost,
+            "compute_saved": 0.0,
+            "delta_mean": round(delta_mu, 6),
+            "se": round(se_mu, 6),
+            "lcb": round(lcb, 6),
+            "exempt_adversarial": sentinel_slice.exempt_adversarial,
+            "slice_size": k,
+            "node": child_node,
+        }
+
+
+def compute_spectral_diagnostics(
+    g_mat: Sequence[Sequence[float]],
+    m_buckets: Optional[int] = None,
+    train_score: float = 0.0,
+    oos_score: float = 0.0,
+    pass_mask: Optional[Sequence[int]] = None,
+    use_hutchinson_above_d: int = 30,
+    seed: int = 42,
+) -> Dict[str, Any]:
+    """
+    SLEEP-DAG-RSI v6 Regularized Spectral Diagnostics on G = (1/M) J^T J:
+      1. Computes Effective Spectral Rank `r_eff(G) = (Tr G)^2 / Tr(G^2)` (using exact
+         eigenvalues for d <= 30 or Hutchinson Rademacher trace estimator for d > 30).
+      2. Computes Regularized Condition Number `kappa_eff(G) = lambda_max / max(lambda_support, 1e-12)`
+         restricted to the observable rank support `min(M, d)` so trailing zero eigenvalues
+         when `M < d` NEVER trigger false-positive `kappa -> inf` singularities!
+      3. Outputs the dimensionless 4D Stall Signature:
+         `sigma = (log10(kappa_eff), r_eff / d, train_oos_gap, fingerprint_entropy)`.
+    """
+    d = len(g_mat)
+    if d == 0:
+        return {
+            "d": 0,
+            "r_eff": 0.0,
+            "r_eff_ratio": 0.0,
+            "kappa_eff": 1.0,
+            "log10_kappa_eff": 0.0,
+            "stall_signature": (0.0, 0.0, 0.0, 0.0),
+            "is_ill_conditioned": False,
+        }
+
+    evals, evecs = _jacobi_eigh_symmetric([list(row) for row in g_mat])
+    pos_evals = [max(0.0, float(ev)) for ev in evals]
+    lam_max = max(pos_evals[-1] if pos_evals else 0.0, 1e-12)
+
+    if d > use_hutchinson_above_d:
+        # Hutchinson stochastic Rademacher trace estimation O(m * d^2) with m=16
+        rng_h = random.Random(seed)
+        m_probes = 16
+        tr_est = 0.0
+        tr_sq_est = 0.0
+        for _ in range(m_probes):
+            v = [1.0 if rng_h.random() >= 0.5 else -1.0 for _ in range(d)]
+            gv = [sum(float(g_mat[r][c]) * v[c] for c in range(d)) for r in range(d)]
+            v_gv = sum(v[r] * gv[r] for r in range(d))
+            gv_norm_sq = sum(x * x for x in gv)
+            tr_est += v_gv / float(m_probes)
+            tr_sq_est += gv_norm_sq / float(m_probes)
+        r_eff = (tr_est * tr_est) / max(tr_sq_est, 1e-24)
+    else:
+        tr_g = sum(pos_evals)
+        tr_g2 = sum(ev * ev for ev in pos_evals)
+        r_eff = (tr_g * tr_g) / max(tr_g2, 1e-24)
+
+    r_eff = max(1.0, min(float(d), r_eff))
+    observable_rank = min(d, int(m_buckets)) if (m_buckets is not None and m_buckets > 0) else d
+    support_idx = max(0, d - observable_rank)
+    lam_support = max(pos_evals[support_idx], 1e-12)
+    kappa_eff = lam_max / lam_support
+    log10_kappa = math.log10(max(1.0, kappa_eff))
+
+    # Shannon entropy of pass_mask bit distribution in [0, 1]
+    fp_entropy = 0.0
+    if pass_mask and len(pass_mask) > 0:
+        p1 = sum(1 for b in pass_mask if b) / float(len(pass_mask))
+        p0 = 1.0 - p1
+        if 0.0 < p1 < 1.0:
+            fp_entropy = -(p1 * math.log2(p1) + p0 * math.log2(p0))
+
+    train_oos_gap = float(train_score) - float(oos_score)
+    sig = (
+        round(log10_kappa, 4),
+        round(r_eff / float(d), 4),
+        round(train_oos_gap, 4),
+        round(fp_entropy, 4),
+    )
+    return {
+        "d": d,
+        "observable_rank": observable_rank,
+        "eigenvalues": [round(ev, 10) for ev in pos_evals],
+        "eigenvectors": evecs,
+        "r_eff": round(r_eff, 6),
+        "r_eff_ratio": round(r_eff / float(d), 6),
+        "kappa_eff": round(kappa_eff, 4),
+        "log10_kappa_eff": round(log10_kappa, 4),
+        "train_oos_gap": round(train_oos_gap, 6),
+        "fingerprint_entropy": round(fp_entropy, 6),
+        "stall_signature": sig,
+        "is_ill_conditioned": bool(kappa_eff >= 1e8),
+    }
+
+
+class FrameTransform:
+    """
+    Base class for Stage 2 Autonomous Coordinate / Representation Transformations (Phi -> Phi').
+    Enforces two hard safety invariants:
+      1. `inverse_projection(u_lifted) -> x_orig`: Maps any point in the lifted/rotated
+         frame back to the immutable original task coordinates for outer & Blind Vault scoring.
+      2. `condense_active_set(...)`: Collapses inactive auxiliary/slack coordinates after
+         warmup to prevent monotonic dimension bloat.
+    """
+
+    name: str = "identity"
+    warmup_grace_steps: int = 1
+
+    def forward_project(self, x_orig: Sequence[float]) -> List[float]:
+        return [float(v) for v in x_orig]
+
+    def inverse_projection(self, u_lifted: Sequence[float]) -> List[float]:
+        return [float(v) for v in u_lifted]
+
+
+class EigenRotationTransform(FrameTransform):
+    """
+    Preconditioned Eigen-Basis Rotation (`Phi -> Phi_eigen`):
+    Diagonalizes the ill-conditioned Gauss-Newton matrix `G = V Lambda V^T`, freezes
+    sloppy/nullspace directions (`lambda_i < null_rel_tol * lambda_max`), and scales
+    active stiff eigenvectors by `1 / sqrt(lambda_i)`.
+    Turns a narrow valley with `kappa_eff > 10^8` into an isotropic sphere (`kappa = 1`),
+    while `inverse_projection(y)` maps back to exact original coordinates `theta`.
+    """
+
+    name: str = "eigen_rotation"
+
+    def __init__(
+        self,
+        theta_anchor: Sequence[float],
+        g_mat: Sequence[Sequence[float]],
+        spans: Optional[Sequence[float]] = None,
+        null_rel_tol: float = 1e-10,
+    ) -> None:
+        self.theta_anchor = [float(x) for x in theta_anchor]
+        self.d = len(self.theta_anchor)
+        self.spans = [float(s) for s in spans] if spans is not None else [1.0] * self.d
+        evals, evecs = _jacobi_eigh_symmetric([list(r) for r in g_mat])
+        lam_max = max((max(0.0, float(ev)) for ev in evals), default=1.0)
+        lam_max = max(lam_max, 1e-12)
+
+        self.active_modes: List[int] = [
+            m for m, ev in enumerate(evals) if max(0.0, float(ev)) >= null_rel_tol * lam_max
+        ]
+        if not self.active_modes:
+            self.active_modes = list(range(self.d))
+
+        self.eigenvalues = [max(1e-12, float(evals[m])) for m in self.active_modes]
+        self.eigenvectors = [[float(evecs[m][coord]) for coord in range(self.d)] for m in self.active_modes]
+        # Metric preconditioner scales step by 1 / sqrt(lambda_m) normalized to median scale
+        inv_sqrt = [1.0 / math.sqrt(ev) for ev in self.eigenvalues]
+        max_scale = max(inv_sqrt) if inv_sqrt else 1.0
+        self.scales = [s / max_scale for s in inv_sqrt]
+        self.warmup_grace_steps = 1
+
+    @property
+    def active_dim(self) -> int:
+        return len(self.active_modes)
+
+    def forward_project(self, x_orig: Sequence[float]) -> List[float]:
+        dx_norm = [
+            (float(x_orig[i]) - self.theta_anchor[i]) / max(1e-12, self.spans[i])
+            for i in range(self.d)
+        ]
+        y: List[float] = []
+        for m_idx, vec in enumerate(self.eigenvectors):
+            proj = sum(dx_norm[i] * vec[i] for i in range(self.d))
+            y.append(proj / max(1e-12, self.scales[m_idx]))
+        return y
+
+    def inverse_projection(self, u_lifted: Sequence[float]) -> List[float]:
+        dx_norm = [0.0] * self.d
+        for m_idx, vec in enumerate(self.eigenvectors):
+            if m_idx < len(u_lifted):
+                coeff = float(u_lifted[m_idx]) * self.scales[m_idx]
+                for i in range(self.d):
+                    dx_norm[i] += coeff * vec[i]
+        return [
+            self.theta_anchor[i] + dx_norm[i] * self.spans[i]
+            for i in range(self.d)
+        ]
+
+
+class KktSlackTransform(FrameTransform):
+    """
+    Smooth KKT Slack-Variable Lifter with Active-Set Condensation (`Phi -> Phi_kkt`):
+    Resolves non-smooth max-min tie traps `max_x min_{k in 1..K} f_k(x)` (such as
+    equiareal triangle ties in Heilbronn) by lifting `x in R^d` to `u = (x, z) in R^{d + |A|}`
+    where `z` are auxiliary slack targets for active constraints `A`.
+    Includes `condense_active_set()` to prune inactive slack variables after 3 steps,
+    preventing monotonic dimension bloat (`d -> d + K -> d + |A_tight|`).
+    """
+
+    name: str = "kkt_slack_lift"
+
+    def __init__(
+        self,
+        base_dim: int,
+        num_constraints: int,
+        mu_penalty: float = 10.0,
+        active_indices: Optional[Sequence[int]] = None,
+    ) -> None:
+        self.base_dim = int(base_dim)
+        self.num_constraints = int(num_constraints)
+        self.mu_penalty = float(mu_penalty)
+        self.active_indices: List[int] = (
+            [int(i) for i in active_indices]
+            if active_indices is not None
+            else list(range(num_constraints))
+        )
+        self.warmup_grace_steps = 1
+        self.step_count = 0
+
+    @property
+    def lifted_dim(self) -> int:
+        return self.base_dim + len(self.active_indices)
+
+    def forward_project(
+        self,
+        x_orig: Sequence[float],
+        initial_constraint_vals: Optional[Sequence[float]] = None,
+    ) -> List[float]:
+        base = [float(x_orig[i]) for i in range(self.base_dim)]
+        if initial_constraint_vals is not None:
+            slacks = [float(initial_constraint_vals[k]) for k in self.active_indices]
+        else:
+            slacks = [0.0 for _ in self.active_indices]
+        return base + slacks
+
+    def inverse_projection(self, u_lifted: Sequence[float]) -> List[float]:
+        """Strictly strips auxiliary KKT slack variables and returns original x in R^d."""
+        return [float(u_lifted[i]) for i in range(self.base_dim)]
+
+    def evaluate_lifted_surrogate(
+        self,
+        u_lifted: Sequence[float],
+        constraint_eval_fn: Callable[[Sequence[float]], Sequence[float]],
+    ) -> float:
+        x_orig = self.inverse_projection(u_lifted)
+        f_vals = [float(v) for v in constraint_eval_fn(x_orig)]
+        if not self.active_indices:
+            return min(f_vals) if f_vals else 0.0
+        slacks = [float(u_lifted[self.base_dim + idx]) for idx in range(len(self.active_indices))]
+        z_mean = sum(slacks) / float(len(slacks))
+        penalty = 0.0
+        for idx, k_con in enumerate(self.active_indices):
+            viol = max(0.0, slacks[idx] - f_vals[k_con])
+            tie_dev = slacks[idx] - z_mean
+            penalty += self.mu_penalty * (viol * viol) + 0.5 * self.mu_penalty * (tie_dev * tie_dev)
+        return z_mean - penalty
+
+    def condense_active_set(
+        self,
+        u_lifted: Sequence[float],
+        constraint_vals: Sequence[float],
+        sigma_mult: float = 1.5,
+    ) -> Dict[str, Any]:
+        """
+        Active-Set Condensation (Unlifting): drops slack variables for constraints
+        that sit comfortably above the minimum active tie manifold (`f_k - f_min > sigma_mult * std`),
+        shrinking the state dimension back to the tight active tie set.
+        """
+        self.step_count += 1
+        x_orig = self.inverse_projection(u_lifted)
+        f_vals = [float(v) for v in constraint_vals]
+        if not self.active_indices or len(self.active_indices) <= 1:
+            return {
+                "condensed_u": list(u_lifted),
+                "active_slack_count": len(self.active_indices),
+                "pruned_slack_count": 0,
+            }
+
+        active_f = [f_vals[k] for k in self.active_indices]
+        f_min = min(active_f)
+        f_mean = sum(active_f) / float(len(active_f))
+        f_std = math.sqrt(
+            max(1e-12, sum((v - f_mean) ** 2 for v in active_f) / float(len(active_f)))
+        )
+        thresh = f_min + sigma_mult * f_std
+
+        kept_indices: List[int] = []
+        kept_slacks: List[float] = []
+        for pos, k_con in enumerate(self.active_indices):
+            if f_vals[k_con] <= thresh + 1e-9:
+                kept_indices.append(k_con)
+                slack_val = (
+                    float(u_lifted[self.base_dim + pos])
+                    if (self.base_dim + pos) < len(u_lifted)
+                    else f_vals[k_con]
+                )
+                kept_slacks.append(slack_val)
+
+        if not kept_indices:
+            min_k = min(self.active_indices, key=lambda k: f_vals[k])
+            kept_indices = [min_k]
+            kept_slacks = [f_vals[min_k]]
+
+        pruned_count = len(self.active_indices) - len(kept_indices)
+        self.active_indices = kept_indices
+        condensed_u = x_orig + kept_slacks
+        return {
+            "condensed_u": condensed_u,
+            "active_indices": list(self.active_indices),
+            "active_slack_count": len(self.active_indices),
+            "pruned_slack_count": pruned_count,
+            "lifted_dim": self.lifted_dim,
+        }
+
+
+class DyadicHomotopyTransform(FrameTransform):
+    """
+    Multi-Scale Dyadic Coarsening & Prolongation (`Phi -> Phi_dyadic`):
+    Maps a fine discretization grid of dimension `P` to a coarse grid of dimension
+    `P_coarse = max(4, P // 2^level)` via block averaging, and prolongates back to
+    exact dimension `P` via piecewise-linear interpolation in `inverse_projection`.
+    """
+
+    name: str = "dyadic_homotopy"
+
+    def __init__(self, fine_dim: int, level: int = 2) -> None:
+        self.fine_dim = int(fine_dim)
+        self.level = max(1, int(level))
+        self.coarse_dim = max(4, self.fine_dim // (2 ** self.level))
+        self.warmup_grace_steps = 1
+
+    def forward_project(self, x_orig: Sequence[float]) -> List[float]:
+        n = len(x_orig)
+        if n <= self.coarse_dim:
+            return [float(v) for v in x_orig]
+        coarse: List[float] = []
+        for i in range(self.coarse_dim):
+            start = int(round(i * n / float(self.coarse_dim)))
+            end = max(start + 1, int(round((i + 1) * n / float(self.coarse_dim))))
+            chunk = [float(x_orig[j]) for j in range(start, min(n, end))]
+            coarse.append(sum(chunk) / float(len(chunk)))
+        return coarse
+
+    def inverse_projection(self, u_lifted: Sequence[float]) -> List[float]:
+        c_len = len(u_lifted)
+        if c_len == 0:
+            return [0.0] * self.fine_dim
+        if c_len == 1 or self.fine_dim == 1:
+            return [float(u_lifted[0])] * self.fine_dim
+        fine: List[float] = []
+        for i in range(self.fine_dim):
+            pos = i * (c_len - 1) / float(self.fine_dim - 1)
+            idx_lo = int(math.floor(pos))
+            idx_hi = min(c_len - 1, idx_lo + 1)
+            frac = pos - idx_lo
+            val = (1.0 - frac) * float(u_lifted[idx_lo]) + frac * float(u_lifted[idx_hi])
+            fine.append(val)
+        return fine
+
+
+class SpectralMetaAtlas:
+    """
+    Cross-Task Spectral Operator Atlas (`meta_operator_atlas`):
+    Indexes verified structural transformations (`eigen_rotation`, `kkt_slack_lift`,
+    `dyadic_homotopy`) by dimensionless stall signatures and task geometry, with
+    automatic provenance quarantine if a transferred operator fails to produce
+    positive gain within `max_trial_probes = 2` evaluations.
+    """
+
+    def __init__(self) -> None:
+        self.entries: List[Dict[str, Any]] = [
+            {
+                "operator": "kkt_slack_lift",
+                "task_family": "geometric_extremal",
+                "min_log10_kappa": 6.0,
+                "requires_min_tie": True,
+                "description": "Lifts non-smooth min-tie bottleneck into smooth KKT slack variables with active-set condensation.",
+            },
+            {
+                "operator": "dyadic_homotopy",
+                "task_family": "fourier_spectral",
+                "min_dim": 64,
+                "description": "Coarsens high-resolution grid by 2^k and prolongates back via linear spline homotopy.",
+            },
+            {
+                "operator": "eigen_rotation",
+                "task_family": "general",
+                "min_log10_kappa": 6.0,
+                "description": "Preconditioned rotation into Gauss-Newton eigenvectors V with nullspace freezing.",
+            },
+        ]
+        self.trial_counts: Dict[Tuple[str, str], int] = {}
+        self.positive_credits: Dict[Tuple[str, str], int] = {}
+        self.quarantined: Set[Tuple[str, str]] = set()
+
+    def record_outcome(self, task_name: str, operator_name: str, gained_score: bool) -> bool:
+        key = (task_name, operator_name)
+        self.trial_counts[key] = self.trial_counts.get(key, 0) + 1
+        if gained_score:
+            self.positive_credits[key] = self.positive_credits.get(key, 0) + 1
+        elif self.trial_counts[key] >= 2 and self.positive_credits.get(key, 0) == 0:
+            self.quarantined.add(key)
+        return key not in self.quarantined
+
+    def select_operator(
+        self,
+        task_name: str,
+        diagnostics: Dict[str, Any],
+        has_min_tie_structure: bool = False,
+        consecutive_oos_failures: int = 0,
+    ) -> Optional[str]:
+        log10_k = float(diagnostics.get("log10_kappa_eff", 0.0))
+        d = int(diagnostics.get("d", 0))
+        stalled = bool(log10_k >= 6.0 or consecutive_oos_failures >= 4)
+        if not stalled:
+            return None
+
+        candidates: List[str] = []
+        if has_min_tie_structure:
+            candidates.append("kkt_slack_lift")
+        if d >= 64:
+            candidates.append("dyadic_homotopy")
+        candidates.append("eigen_rotation")
+
+        for op in candidates:
+            if (task_name, op) not in self.quarantined:
+                return op
+        return None
+
+
+class SpectralFrameLifter:
+    """
+    Stage 2 Coordinator: inspects Gauss-Newton matrix `G = (1/M) J^T J` and DAG OOS
+    trajectory, queries `SpectralMetaAtlas`, and instantiates the matching `FrameTransform`
+    with a mandatory inverse projection `Phi^-1` and 1-step warmup grace budget.
+    """
+
+    def __init__(self, atlas: Optional[SpectralMetaAtlas] = None) -> None:
+        self.atlas = atlas or SpectralMetaAtlas()
+
+    def detect_and_lift(
+        self,
+        task_name: str,
+        theta_anchor: Sequence[float],
+        g_mat: Sequence[Sequence[float]],
+        m_buckets: Optional[int] = None,
+        spans: Optional[Sequence[float]] = None,
+        train_score: float = 0.0,
+        oos_score: float = 0.0,
+        pass_mask: Optional[Sequence[int]] = None,
+        has_min_tie_structure: bool = False,
+        num_tie_constraints: int = 0,
+        consecutive_oos_failures: int = 0,
+    ) -> Dict[str, Any]:
+        diag = compute_spectral_diagnostics(
+            g_mat=g_mat,
+            m_buckets=m_buckets,
+            train_score=train_score,
+            oos_score=oos_score,
+            pass_mask=pass_mask,
+        )
+        op_name = self.atlas.select_operator(
+            task_name=task_name,
+            diagnostics=diag,
+            has_min_tie_structure=has_min_tie_structure,
+            consecutive_oos_failures=consecutive_oos_failures,
+        )
+        if op_name is None:
+            return {
+                "triggered": False,
+                "operator": None,
+                "diagnostics": diag,
+                "transform": FrameTransform(),
+                "warmup_grace_steps": 0,
+            }
+
+        if op_name == "kkt_slack_lift" and num_tie_constraints > 0:
+            transform: FrameTransform = KktSlackTransform(
+                base_dim=len(theta_anchor),
+                num_constraints=num_tie_constraints,
+            )
+        elif op_name == "dyadic_homotopy":
+            transform = DyadicHomotopyTransform(fine_dim=len(theta_anchor), level=2)
+        else:
+            transform = EigenRotationTransform(
+                theta_anchor=theta_anchor,
+                g_mat=g_mat,
+                spans=spans,
+            )
+
+        return {
+            "triggered": True,
+            "operator": op_name,
+            "diagnostics": diag,
+            "transform": transform,
+            "warmup_grace_steps": transform.warmup_grace_steps,
+        }
+
+
+# ---------------------------------------------------------------------------
+# 17. SLEEP-DAG-RSI v7: Autonomous AST Code Splicer (`AstCodeSplicer`) &
+#     Active Boundary Counterexample Synthesizer (`ActiveBoundarySynthesizer`)
+# ---------------------------------------------------------------------------
+
+
+class AstCodeSplicer:
+    """
+    SLEEP-DAG-RSI v7 Autonomous Multi-Parent AST Structural Splicer:
+    Turns `compute_hyper_crossover` recommendations into verified, executable Python
+    source code without requiring an external LLM or manual merge step:
+      1. Parses the lowest common ancestor (`base_source`) and 2..K parent source strings
+         into abstract syntax trees (`ast.parse`).
+      2. Extracts structural AST diffs per parent:
+         - Top-level helper functions (`ast.FunctionDef`), imports, and module constants.
+         - Intra-function statement mutations indexed by assignment target variable
+           (`ast.Assign` / `ast.AugAssign`) or hook block.
+      3. When parent mutations touch disjoint AST spans (`ast_collision_iou < 0.30`),
+         splices all non-colliding top-level helpers and intra-function variable updates
+         into a single unified AST (`splice_mode = "structural_ast_merge"`).
+      4. When parents modify the same return expression on complementary buckets,
+         automatically synthesizes renamed parent sub-functions `_parent_<id>_<fn>` and
+         a verified combiner/dispatcher (`splice_mode = "ensemble_dispatch_merge"`).
+      5. Verifies the spliced code through `compile(..., "<ast_splice>", "exec")` and
+         static AST safety checks (blocking `eval`, `exec`, `globals`, etc.).
+    """
+
+    FORBIDDEN_CALLS = {
+        "eval",
+        "exec",
+        "compile",
+        "__import__",
+        "system",
+        "popen",
+        "rmtree",
+        "globals",
+        "locals",
+        "setattr",
+        "delattr",
+    }
+
+    @staticmethod
+    def _stmt_key(stmt: Any, idx: int) -> str:
+        import ast
+
+        if isinstance(stmt, ast.Assign) and stmt.targets:
+            t0 = stmt.targets[0]
+            if isinstance(t0, ast.Name):
+                return f"assign:{t0.id}"
+            return f"assign:{ast.unparse(t0)}"
+        if isinstance(stmt, ast.AugAssign):
+            if isinstance(stmt.target, ast.Name):
+                return f"augassign:{stmt.target.id}"
+            return f"augassign:{ast.unparse(stmt.target)}"
+        if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
+            return f"assign:{stmt.target.id}"
+        if isinstance(stmt, ast.Return):
+            return "return"
+        return f"stmt_{idx}:{type(stmt).__name__}"
+
+    def extract_structural_touches(
+        self, source_code: str, base_source: Optional[str] = None
+    ) -> Set[str]:
+        import ast
+
+        try:
+            tree = ast.parse(source_code)
+        except SyntaxError:
+            return set()
+
+        base_funcs: Dict[str, Any] = {}
+        base_assigns: Dict[str, str] = {}
+        if base_source:
+            try:
+                b_tree = ast.parse(base_source)
+                for node in b_tree.body:
+                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        base_funcs[node.name] = node
+                    elif isinstance(node, ast.Assign) and node.targets:
+                        k = self._stmt_key(node, 0)
+                        base_assigns[k] = ast.unparse(node)
+            except SyntaxError:
+                pass
+
+        touches: Set[str] = set()
+        for node in tree.body:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if node.name not in base_funcs:
+                    touches.add(f"func_new:{node.name}")
+                else:
+                    b_fn = base_funcs[node.name]
+                    b_map = {
+                        self._stmt_key(s, idx): ast.unparse(s)
+                        for idx, s in enumerate(b_fn.body)
+                    }
+                    for idx, s in enumerate(node.body):
+                        k = self._stmt_key(s, idx)
+                        s_str = ast.unparse(s)
+                        if b_map.get(k) != s_str:
+                            touches.add(f"fn:{node.name}:{k}")
+            elif isinstance(node, ast.Assign) and node.targets:
+                k = self._stmt_key(node, 0)
+                if base_assigns.get(k) != ast.unparse(node):
+                    touches.add(f"mod_{k}")
+        return touches
+
+    def splice_parents(
+        self,
+        base_source: str,
+        parent_sources: Sequence[Tuple[str, str]],
+        combine_mode: str = "auto",
+        entry_func: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        import ast
+        import copy
+        import re
+
+        if len(parent_sources) < 2:
+            return {
+                "valid": False,
+                "spliced_code": base_source,
+                "splice_mode": "insufficient_parents",
+                "merged_symbols": [],
+                "ast_collision_iou": 0.0,
+                "violations": ["need_at_least_2_parents"],
+            }
+
+        try:
+            base_tree = ast.parse(base_source)
+        except SyntaxError as exc:
+            return {
+                "valid": False,
+                "spliced_code": "",
+                "splice_mode": "syntax_error_base",
+                "merged_symbols": [],
+                "ast_collision_iou": 0.0,
+                "violations": [f"base_syntax_error:{exc}"],
+            }
+
+        parsed_parents: List[Tuple[str, Any, Set[str]]] = []
+        for pid, p_src in parent_sources:
+            try:
+                p_tree = ast.parse(p_src)
+            except SyntaxError as exc:
+                return {
+                    "valid": False,
+                    "spliced_code": "",
+                    "splice_mode": "syntax_error_parent",
+                    "merged_symbols": [],
+                    "ast_collision_iou": 0.0,
+                    "violations": [f"parent_syntax_error:{pid}:{exc}"],
+                }
+            touches = self.extract_structural_touches(p_src, base_source=base_source)
+            parsed_parents.append((pid, p_tree, touches))
+
+        # Compute pairwise AST touch IoU (ignoring shared `return` if combine_mode handles it)
+        non_return_sets = [
+            {t for t in touches if not t.endswith(":return")}
+            for _, _, touches in parsed_parents
+        ]
+        max_iou = 0.0
+        for i in range(len(non_return_sets)):
+            for j in range(i + 1, len(non_return_sets)):
+                max_iou = max(max_iou, _ast_iou(non_return_sets[i], non_return_sets[j]))
+
+        merged_tree = copy.deepcopy(base_tree)
+        base_top_funcs: Dict[str, Any] = {}
+        base_top_assigns: Dict[str, Any] = {}
+        for node in base_tree.body:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                base_top_funcs[node.name] = node
+            elif isinstance(node, ast.Assign):
+                base_top_assigns[self._stmt_key(node, 0)] = node
+
+        merged_symbols: List[str] = []
+        new_top_nodes: List[Any] = []
+        seen_new_names: Set[str] = set()
+
+        # 1. Collect orthogonal new top-level imports, constants, and helper functions from parents
+        for pid, p_tree, _ in parsed_parents:
+            for node in p_tree.body:
+                if isinstance(node, (ast.Import, ast.ImportFrom)):
+                    u_str = ast.unparse(node)
+                    if not any(
+                        isinstance(b, (ast.Import, ast.ImportFrom)) and ast.unparse(b) == u_str
+                        for b in merged_tree.body + new_top_nodes
+                    ):
+                        new_top_nodes.append(copy.deepcopy(node))
+                elif isinstance(node, ast.Assign):
+                    k = self._stmt_key(node, 0)
+                    u_str = ast.unparse(node)
+                    if k not in base_top_assigns and k not in seen_new_names:
+                        seen_new_names.add(k)
+                        new_top_nodes.append(copy.deepcopy(node))
+                        merged_symbols.append(f"{pid}:{k}")
+                    elif k in base_top_assigns and u_str != ast.unparse(base_top_assigns[k]):
+                        for idx_b, b_node in enumerate(merged_tree.body):
+                            if isinstance(b_node, ast.Assign) and self._stmt_key(b_node, 0) == k:
+                                merged_tree.body[idx_b] = copy.deepcopy(node)
+                                merged_symbols.append(f"{pid}:{k}")
+                                break
+                elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    if node.name not in base_top_funcs and node.name not in seen_new_names:
+                        seen_new_names.add(node.name)
+                        new_top_nodes.append(copy.deepcopy(node))
+                        merged_symbols.append(f"{pid}:func:{node.name}")
+
+        # 2. Merge intra-function statement modifications across shared functions
+        return_collision_detected = False
+        target_fn_name = entry_func
+        for idx_b, b_node in enumerate(merged_tree.body):
+            if not isinstance(b_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            fn_name = b_node.name
+            if target_fn_name is None:
+                target_fn_name = fn_name
+            orig_fn = base_top_funcs.get(fn_name)
+            if orig_fn is None:
+                continue
+
+            orig_stmt_map: Dict[str, str] = {}
+            orig_order: List[str] = []
+            stmt_slots: Dict[str, Any] = {}
+            for s_idx, stmt in enumerate(orig_fn.body):
+                k = self._stmt_key(stmt, s_idx)
+                orig_stmt_map[k] = ast.unparse(stmt)
+                orig_order.append(k)
+                stmt_slots[k] = copy.deepcopy(stmt)
+
+            extra_inserted_stmts: List[Any] = []
+            extra_seen_keys: Set[str] = set()
+            modified_returns: List[Tuple[str, Any]] = []
+
+            for pid, p_tree, _ in parsed_parents:
+                p_fn = next(
+                    (
+                        n
+                        for n in p_tree.body
+                        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+                        and n.name == fn_name
+                    ),
+                    None,
+                )
+                if p_fn is None:
+                    continue
+                for s_idx, p_stmt in enumerate(p_fn.body):
+                    k = self._stmt_key(p_stmt, s_idx)
+                    p_str = ast.unparse(p_stmt)
+                    if k == "return":
+                        if orig_stmt_map.get("return") != p_str:
+                            modified_returns.append((pid, copy.deepcopy(p_stmt)))
+                    elif k in orig_stmt_map:
+                        if orig_stmt_map[k] != p_str:
+                            stmt_slots[k] = copy.deepcopy(p_stmt)
+                            merged_symbols.append(f"{pid}:{fn_name}.{k}")
+                    elif k not in extra_seen_keys:
+                        extra_seen_keys.add(k)
+                        extra_inserted_stmts.append(copy.deepcopy(p_stmt))
+                        merged_symbols.append(f"{pid}:{fn_name}.{k}")
+
+            if len(modified_returns) == 1:
+                pid_r, ret_stmt = modified_returns[0]
+                stmt_slots["return"] = ret_stmt
+                merged_symbols.append(f"{pid_r}:{fn_name}.return")
+            elif len(modified_returns) >= 2:
+                # Check if one parent's return is just additive or if both modified return expressions
+                ret_exprs = [ast.unparse(r_stmt.value) for _, r_stmt in modified_returns if r_stmt.value is not None]
+                orig_ret_Node = orig_fn.body[-1] if orig_fn.body and isinstance(orig_fn.body[-1], ast.Return) else None
+                orig_ret_str = ast.unparse(orig_ret_Node.value) if (orig_ret_Node and orig_ret_Node.value) else ""
+                # Try additive delta composition if return is a sum or expression over base return
+                additive_deltas: List[str] = []
+                for _, r_stmt in modified_returns:
+                    if r_stmt.value is not None:
+                        r_s = ast.unparse(r_stmt.value)
+                        if orig_ret_str and r_s.startswith(orig_ret_str + " + "):
+                            additive_deltas.append(r_s[len(orig_ret_str) + 3 :])
+                if len(additive_deltas) == len(modified_returns) and orig_ret_str:
+                    combined_ret_src = orig_ret_str + "".join(f" + ({d_s})" for d_s in additive_deltas)
+                    stmt_slots["return"] = ast.parse(f"return {combined_ret_src}").body[0]
+                    for pid_r, _ in modified_returns:
+                        merged_symbols.append(f"{pid_r}:{fn_name}.return_delta")
+                elif combine_mode == "ensemble" or max_iou > 0.30:
+                    return_collision_detected = True
+                else:
+                    # Combine complementary return expressions according to combine_mode
+                    if combine_mode == "max":
+                        comb_expr = f"max({', '.join(f'({e})' for e in ret_exprs)})"
+                    elif combine_mode == "min":
+                        comb_expr = f"min({', '.join(f'({e})' for e in ret_exprs)})"
+                    else:
+                        w = round(1.0 / float(len(ret_exprs)), 6)
+                        comb_expr = " + ".join(f"{w} * ({e})" for e in ret_exprs)
+                    stmt_slots["return"] = ast.parse(f"return {comb_expr}").body[0]
+                    for pid_r, _ in modified_returns:
+                        merged_symbols.append(f"{pid_r}:{fn_name}.return_combined")
+
+            # Rebuild function body with extra non-return statements inserted right before `return`
+            new_body: List[Any] = []
+            for k in orig_order:
+                if k == "return":
+                    new_body.extend(extra_inserted_stmts)
+                new_body.append(stmt_slots[k])
+            if "return" not in orig_order and extra_inserted_stmts:
+                new_body.extend(extra_inserted_stmts)
+            b_node.body = new_body
+
+        splice_mode = "structural_ast_merge"
+        if return_collision_detected and target_fn_name is not None:
+            # Mode C: Full sub-function renaming & ensemble dispatch
+            splice_mode = "ensemble_dispatch_merge"
+            helper_fn_names: List[str] = []
+            ensemble_body_nodes: List[Any] = []
+            for pid, p_tree, _ in parsed_parents:
+                safe_pid = re.sub(r"[^a-zA-Z0-9_]", "_", str(pid))
+                for node in p_tree.body:
+                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == target_fn_name:
+                        sub_fn = copy.deepcopy(node)
+                        sub_fn.name = f"_parent_{safe_pid}_{target_fn_name}"
+                        helper_fn_names.append(sub_fn.name)
+                        ensemble_body_nodes.append(sub_fn)
+                        merged_symbols.append(f"{pid}:dispatch:{sub_fn.name}")
+            if helper_fn_names:
+                orig_fn = base_top_funcs[target_fn_name]
+                arg_names = [a.arg for a in orig_fn.args.args]
+                call_args = ", ".join(arg_names)
+                w = round(1.0 / float(len(helper_fn_names)), 6)
+                calls_expr = " + ".join(f"{w} * {h_name}({call_args})" for h_name in helper_fn_names)
+                wrapper_src = f"def {target_fn_name}({call_args}):\n    return {calls_expr}\n"
+                wrapper_fn = ast.parse(wrapper_src).body[0]
+                merged_tree.body = new_top_nodes + ensemble_body_nodes + [wrapper_fn]
+        else:
+            # Insert new helper functions/imports above existing functions
+            imports = [n for n in new_top_nodes if isinstance(n, (ast.Import, ast.ImportFrom))]
+            helpers = [n for n in new_top_nodes if not isinstance(n, (ast.Import, ast.ImportFrom))]
+            merged_tree.body = imports + helpers + merged_tree.body
+
+        ast.fix_missing_locations(merged_tree)
+        spliced_code = ast.unparse(merged_tree)
+
+        violations: List[str] = []
+        try:
+            compile(spliced_code, "<ast_splice>", "exec")
+        except SyntaxError as exc:
+            violations.append(f"compile_error:{exc}")
+
+        for node in ast.walk(merged_tree):
+            if isinstance(node, ast.Call):
+                if isinstance(node.func, ast.Name) and node.func.id in self.FORBIDDEN_CALLS:
+                    violations.append(f"forbidden_call:{node.func.id}")
+                elif isinstance(node.func, ast.Attribute) and node.func.attr in self.FORBIDDEN_CALLS:
+                    violations.append(f"forbidden_method:{node.func.attr}")
+
+        return {
+            "valid": len(violations) == 0,
+            "spliced_code": spliced_code,
+            "splice_mode": splice_mode,
+            "merged_symbols": merged_symbols,
+            "ast_collision_iou": round(max_iou, 6),
+            "violations": violations,
+        }
+
+
+class ActiveBoundarySynthesizer:
+    """
+    SLEEP-DAG-RSI v7 Active Disagreement & Boundary Counterexample Synthesizer:
+    Breaks the passive historical replay ceiling by actively synthesizing inputs
+    `x* in B(X_anchor, r)` that maximize committee disagreement or straddle the
+    zero/decision boundary between competing policies, models, or experts:
+      1. Bichromatic Boundary Bisection: locates anchor pairs `(x_i, x_j)` where
+         committee models reverse rank or flip sign, and bisects along the connecting
+         chord to land directly on the decision boundary.
+      2. Projected Gradient Ascent on Disagreement `D(x)`: takes central finite-difference
+         steps along `grad_x Var_k(f_k(x))` clamped within the local trust-region hyperbox
+         `[x_anchor - r * sigma, x_anchor + r * sigma]` and global bounds.
+      3. Feeds high-disagreement boundary states into `WaldMicroSentinel` (active veto)
+         and `NeuroSymbolicDistiller` (active tail distillation).
+    """
+
+    def __init__(
+        self,
+        trust_radius_sigma: float = 1.5,
+        ascent_steps: int = 8,
+        step_lr: float = 0.20,
+        fd_eps: float = 1e-3,
+        probe_zero_boundary: bool = True,
+    ) -> None:
+        self.trust_radius_sigma = float(trust_radius_sigma)
+        self.ascent_steps = max(1, int(ascent_steps))
+        self.step_lr = float(step_lr)
+        self.fd_eps = float(fd_eps)
+        self.probe_zero_boundary = bool(probe_zero_boundary)
+
+    @staticmethod
+    def _to_vec(val: Any) -> List[float]:
+        if isinstance(val, (int, float)):
+            return [float(val)]
+        if hasattr(val, "tolist"):
+            flat = val.tolist()
+            if isinstance(flat, (int, float)):
+                return [float(flat)]
+            if isinstance(flat, list) and flat and isinstance(flat[0], list):
+                return [float(x) for x in flat[0]]
+            return [float(x) for x in flat]
+        if isinstance(val, (list, tuple)):
+            return [float(x) for x in val]
+        return [float(val)]
+
+    def evaluate_disagreement(
+        self,
+        x: Sequence[float],
+        committee_fns: Sequence[Callable[[Sequence[float]], Any]],
+    ) -> Dict[str, Any]:
+        preds = [self._to_vec(fn(x)) for fn in committee_fns]
+        k_models = len(preds)
+        if k_models < 2 or not preds[0]:
+            return {"objective": 0.0, "variance": 0.0, "sign_conflict": False, "preds": preds}
+        d_out = len(preds[0])
+        mean_vec = [
+            sum(preds[m][c] for m in range(k_models)) / float(k_models)
+            for c in range(d_out)
+        ]
+        variance = (
+            sum(
+                sum((preds[m][c] - mean_vec[c]) ** 2 for c in range(d_out))
+                for m in range(k_models)
+            )
+            / float(k_models)
+        )
+        # Check if committee members disagree on the sign of channel 0 or have large gap
+        signs = {1 if preds[m][0] >= 0.0 else -1 for m in range(k_models)}
+        sign_conflict = len(signs) > 1
+        boundary_bonus = 0.0
+        if self.probe_zero_boundary:
+            mean_mag = math.sqrt(sum(v * v for v in mean_vec) / float(d_out))
+            boundary_bonus = 0.15 * variance * math.exp(-mean_mag)
+        return {
+            "objective": variance + boundary_bonus,
+            "variance": variance,
+            "sign_conflict": sign_conflict,
+            "preds": preds,
+        }
+
+    def synthesize_boundary_points(
+        self,
+        anchor_points: Sequence[Sequence[float]],
+        committee_fns: Sequence[Callable[[Sequence[float]], Any]],
+        num_synthetic: int = 8,
+        bounds: Optional[Sequence[Tuple[float, float]]] = None,
+    ) -> Dict[str, Any]:
+        n_anc = len(anchor_points)
+        if n_anc == 0 or len(committee_fns) < 2:
+            return {
+                "synthetic_points": [],
+                "anchor_mean_disagreement": 0.0,
+                "synthetic_mean_disagreement": 0.0,
+                "disagreement_amplification": 1.0,
+                "boundary_crossings_found": 0,
+            }
+
+        d = len(anchor_points[0])
+        anchors = [[float(v) for v in row] for row in anchor_points]
+
+        # Compute per-coordinate std and bounds across anchors
+        col_means = [sum(anchors[r][c] for r in range(n_anc)) / float(n_anc) for c in range(d)]
+        col_stds = [
+            max(
+                1e-4,
+                math.sqrt(
+                    sum((anchors[r][c] - col_means[c]) ** 2 for r in range(n_anc))
+                    / float(max(1, n_anc - 1))
+                ),
+            )
+            for c in range(d)
+        ]
+        if bounds is not None and len(bounds) == d:
+            global_lows = [float(b[0]) for b in bounds]
+            global_highs = [float(b[1]) for b in bounds]
+        else:
+            global_lows = [
+                min(anchors[r][c] for r in range(n_anc)) - self.trust_radius_sigma * col_stds[c]
+                for c in range(d)
+            ]
+            global_highs = [
+                max(anchors[r][c] for r in range(n_anc)) + self.trust_radius_sigma * col_stds[c]
+                for c in range(d)
+            ]
+
+        anchor_evals = [self.evaluate_disagreement(x, committee_fns) for x in anchors]
+        anchor_mean_dis = (
+            sum(ev["variance"] for ev in anchor_evals) / float(n_anc)
+        )
+
+        # 1. Build initial seed pool: top high-disagreement anchors + bichromatic chord midpoints
+        seeds: List[Tuple[List[float], List[float]]] = []  # (seed_x, trust_center_x)
+        ranked_anc = sorted(
+            range(n_anc), key=lambda i: anchor_evals[i]["objective"], reverse=True
+        )
+        for i in ranked_anc[: max(2, num_synthetic // 2)]:
+            seeds.append((list(anchors[i]), list(anchors[i])))
+
+        # Bichromatic chord search between anchors where difference (f_0 - f_1) flips sign
+        diff_vals = [
+            anchor_evals[i]["preds"][0][0] - anchor_evals[i]["preds"][1][0]
+            for i in range(n_anc)
+        ]
+        for i in range(min(n_anc, 24)):
+            for j in range(i + 1, min(n_anc, 24)):
+                if diff_vals[i] * diff_vals[j] < 0.0:
+                    denom = abs(diff_vals[i]) + abs(diff_vals[j]) + 1e-12
+                    alpha = abs(diff_vals[j]) / denom
+                    mid = [
+                        alpha * anchors[i][c] + (1.0 - alpha) * anchors[j][c]
+                        for c in range(d)
+                    ]
+                    seeds.append((mid, mid))
+                    if len(seeds) >= num_synthetic * 2:
+                        break
+            if len(seeds) >= num_synthetic * 2:
+                break
+
+        # Pad seeds if needed
+        while len(seeds) < num_synthetic:
+            base_idx = len(seeds) % n_anc
+            pert = [
+                min(
+                    global_highs[c],
+                    max(
+                        global_lows[c],
+                        anchors[base_idx][c]
+                        + 0.25 * col_stds[c] * (1.0 if (len(seeds) + c) % 2 == 0 else -1.0),
+                    ),
+                )
+                for c in range(d)
+            ]
+            seeds.append((pert, list(anchors[base_idx])))
+
+        # 2. Projected Gradient Ascent on committee disagreement D(x)
+        optimized_candidates: List[Tuple[float, bool, List[float]]] = []
+        for seed_x, center_x in seeds[: max(num_synthetic, len(seeds))]:
+            curr_x = list(seed_x)
+            lows_loc = [
+                max(global_lows[c], center_x[c] - self.trust_radius_sigma * col_stds[c])
+                for c in range(d)
+            ]
+            highs_loc = [
+                min(global_highs[c], center_x[c] + self.trust_radius_sigma * col_stds[c])
+                for c in range(d)
+            ]
+            for _ in range(self.ascent_steps):
+                grad = [0.0] * d
+                for c in range(d):
+                    h = max(1e-5, self.fd_eps * col_stds[c])
+                    x_p = list(curr_x)
+                    x_m = list(curr_x)
+                    x_p[c] = min(highs_loc[c], curr_x[c] + h)
+                    x_m[c] = max(lows_loc[c], curr_x[c] - h)
+                    denom = max(1e-12, x_p[c] - x_m[c])
+                    d_p = self.evaluate_disagreement(x_p, committee_fns)["objective"]
+                    d_m = self.evaluate_disagreement(x_m, committee_fns)["objective"]
+                    grad[c] = (d_p - d_m) / denom
+                g_norm = math.sqrt(sum(g * g for g in grad))
+                if g_norm < 1e-12:
+                    break
+                for c in range(d):
+                    step = self.step_lr * col_stds[c] * (grad[c] / g_norm)
+                    curr_x[c] = min(highs_loc[c], max(lows_loc[c], curr_x[c] + step))
+
+            ev_final = self.evaluate_disagreement(curr_x, committee_fns)
+            optimized_candidates.append(
+                (ev_final["variance"], ev_final["sign_conflict"], curr_x)
+            )
+
+        optimized_candidates.sort(key=lambda item: item[0], reverse=True)
+        chosen = optimized_candidates[:num_synthetic]
+        synth_points = [item[2] for item in chosen]
+        synth_mean_dis = (
+            sum(item[0] for item in chosen) / float(max(1, len(chosen)))
+        )
+        crossings = sum(1 for item in chosen if item[1])
+        amp = synth_mean_dis / max(anchor_mean_dis, 1e-9)
+
+        return {
+            "synthetic_points": synth_points,
+            "anchor_mean_disagreement": round(anchor_mean_dis, 6),
+            "synthetic_mean_disagreement": round(synth_mean_dis, 6),
+            "disagreement_amplification": round(amp, 4),
+            "boundary_crossings_found": crossings,
+        }
+
+
+# ---------------------------------------------------------------------------
+# 18. SLEEP-DAG-RSI v5, v6 & v7 Parametric Continual Learning Exports
 # ---------------------------------------------------------------------------
 try:
     from sleep_dag_rsi import (  # type: ignore
+        AstPolicySafetyGate,
         CounterfactualDreamingEngine,
         DAGKnowledgeSeedingConsolidator,
         DeltaRuleFastMemory,
         ExpandableMoEMLP,
         ExpertFingerprintMeta,
+        LibraryPrimitive,
         LoRALinearWrapper,
         LowRankExpert,
+        NeuroSymbolicDistiller,
         SleepDAGConfig,
         SleepDAGRSIOrchestrator,
         SleepLanguageModel,
+        SymbolicLibrary,
+        UniversalNeuralSleepAdapter,
+        attach_sleep_dag_adapters,
         compute_r_abs,
         compute_r_sem_numpy,
         cross_entropy_loss_and_grad,
         generalized_jsd_loss_and_grad,
         levenshtein_distance,
+        numpy_lasso_coordinate_descent,
         softmax_np,
     )
 except ImportError:
     pass
+
 
