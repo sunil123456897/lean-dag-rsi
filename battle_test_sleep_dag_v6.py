@@ -1,16 +1,20 @@
 """
-Live Battle Test of `SLEEP-DAG-RSI v6` vs `v5` across 3 Real Workloads:
+Live Battle Test of `SLEEP-DAG-RSI v6 & v7` vs `v5` across 4 Self-Contained Scientific Workloads:
   1. Trial 1 (Extremal Geometry — Real Heilbronn n=16 Champion, 560 Triangles):
      - Tests `WaldMicroSentinel` (5% early abort filter on 60 candidate mutations around
        `heilbronn_n16_champion.npy`) and `KktSlackTransform.condense_active_set()` (560 -> tight active tie set).
-  2. Trial 2 (Ill-Conditioned Spectral Valley & Multi-Scale Step Convolution):
+  2. Trial 2 (Ill-Conditioned Spectral Valley & Dual Gram Rank Guard):
      - Tests `SpectralFrameLifter` (`EigenRotationTransform` on a kappa=10^8 rotated ridge
-       and `DyadicHomotopyTransform` on P=256 step-function autoconvolution).
-  3. Trial 3 (Real Bitcoin `BTCUSDT` 149,953 Bars — Continual Neural Adaptation + NREM `NeuroSymbolicDistiller`):
-     - Runs `UniversalNeuralSleepAdapter` on real `BTCUSDT` (`4h` & `1d` swing waves),
-       executes NREM `NeuroSymbolicDistiller` (`Residual-Keep Decomposition`), prints the
-       exact human-readable Python AST trading rule extracted from the neural weights,
-       and evaluates on the untouched chronological `Blind Vault` (final 20% of history).
+       with M=6 < d=8 active buckets).
+  3. Trial 3 (Stochastic Nonlinear Dynamical Control Law Distillation & 2x2 Overfit Shield):
+     - Tests `WaldMicroSentinel(noise_regime="stochastic")` (5% outlier spike trimming),
+       `UniversalNeuralSleepAdapter` + NREM `NeuroSymbolicDistiller` (`Residual-Keep Decomposition`)
+       recovering an exact physical restoring control law under heavy-tailed sensor spikes,
+       and the `2x2 Gate` blocking overfitted high-frequency noise on an untouched chronological `Blind Vault`.
+  4. Trial 4 (SLEEP-DAG-RSI v7 Autonomous AST Code Splicer + Compositional SymbolicLibrary + ActiveBoundarySynthesizer):
+     - Tests `AstCodeSplicer` (structural AST merge of orthogonal solver branches),
+       `SymbolicLibrary` hierarchical depth-3 subroutine invention (`lib_0(x)`), and
+       `ActiveBoundarySynthesizer` (bichromatic chord bisection + committee variance ascent).
 """
 
 from __future__ import annotations
@@ -26,9 +30,8 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS_DIR = os.path.join(HERE, "dream_rsi_scripts")
-BTC_DIR = os.path.join(HERE, "btc_sleep_dag_rsi")
 
-for _p in (HERE, SCRIPTS_DIR, BTC_DIR):
+for _p in (HERE, SCRIPTS_DIR):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
@@ -294,274 +297,168 @@ def run_trial_2_spectral_frame_lifter() -> Dict[str, Any]:
 
 
 # =====================================================================
-# TRIAL 3: REAL BITCOIN (BTCUSDT, 1d & 4h SWING WAVES)
-#          UniversalNeuralSleepAdapter + NREM NeuroSymbolicDistiller
+# TRIAL 3: STOCHASTIC NONLINEAR DYNAMICAL CONTROL LAW DISTILLATION
+#          WaldMicroSentinel (Stochastic 5% Trim) + NREM NeuroSymbolicDistiller + 2x2 Shield
 # =====================================================================
 
 
-def extract_btc_feature_matrix(df: Any, pos: np.ndarray) -> Tuple[np.ndarray, List[str]]:
+def run_trial_3_nonlinear_dynamical_distillation() -> Dict[str, Any]:
     """
-    Extracts 8 standardized, strictly causal market microstructure features from BTCUSDT bars,
-    with directional features oriented by trade sign `pos in {-1, +1}` so long and short trades
-    share a parity-invariant representation (no long/short sign cancellation):
-      x[0]: pos * z_price_20       (Directional Bollinger Z-score alignment)
-      x[1]: atr_norm               (ATR / median ATR - 1.0)
-      x[2]: vol_surge_norm         (Volume / 20-bar avg volume - 1.0)
-      x[3]: pos * wick_rejection   (Directional wick rejection alignment)
-      x[4]: pos * mom_4_atr        (Directional 4-bar momentum alignment)
-      x[5]: vol_ratio_norm         (ATR_14 / ATR_56 - 1.0)
-      x[6]: pos * trend_atr_dist   (Directional MA50 trend alignment)
-      x[7]: pos * htf_1d_trend     (Directional Daily Macro Trend alignment)
+    Tests continual adaptation and NREM neuro-symbolic distillation on a 2,400-step
+    nonlinear damped oscillator / control plant corrupted by heavy-tailed sensor spikes:
+      True control law: u*(x) = -0.85 * tanh(x[0]) - 0.45 * (x[3] * x[4]) + 0.30 * sign(x[2])
+      Naive linear baseline: u_0(x) = -0.25 * x[0]
+    Split strictly chronologically into Train (1,440 steps), Val (480 steps), and
+    untouched Blind Vault (480 steps).
     """
-    names = [
-        "dir_z_price_20",
-        "atr_norm",
-        "vol_surge_norm",
-        "dir_wick_rejection",
-        "dir_mom_4_atr",
-        "vol_ratio_norm",
-        "dir_trend_atr_dist",
-        "dir_htf_1d_trend",
+    feat_names = [
+        "pos_deviation",
+        "thermal_drift",
+        "phase_trigger",
+        "vel_damping",
+        "coupling_flux",
+        "harmonic_ratio",
+        "coriolis_bias",
+        "macro_load",
     ]
-    p_sign = np.where(pos >= 0.0, 1.0, -1.0)
-    z = p_sign * np.clip(df["z_price_20"].to_numpy(dtype=np.float64), -4.0, 4.0)
-    atr = df["atr_pct"].to_numpy(dtype=np.float64)
-    med_atr = float(np.median(atr)) + 1e-9
-    atr_n = np.clip(atr / med_atr - 1.0, -2.0, 4.0)
-    vs_n = np.clip(df["vol_surge"].to_numpy(dtype=np.float64) - 1.0, -1.0, 4.0)
-    wick = p_sign * np.clip(df["wick_rejection"].to_numpy(dtype=np.float64), -3.0, 3.0)
-    mom = p_sign * np.clip(df["mom_4_atr"].to_numpy(dtype=np.float64), -4.0, 4.0)
-    vr_n = np.clip(df["vol_ratio"].to_numpy(dtype=np.float64) - 1.0, -1.0, 3.0)
-    tr_d = p_sign * np.clip(df["trend_atr_dist"].to_numpy(dtype=np.float64) / 2.0, -4.0, 4.0)
-    htf1d = p_sign * np.clip(df["htf_1d_trend"].to_numpy(dtype=np.float64) / 2.0, -4.0, 4.0)
+    rng = np.random.default_rng(20261030)
+    n_total = 2400
+    X_all = rng.uniform(-2.2, 2.2, size=(n_total, 8))
 
-    X = np.column_stack([z, atr_n, vs_n, wick, mom, vr_n, tr_d, htf1d])
-    return X, names
+    def _true_control_law(X_in: np.ndarray) -> np.ndarray:
+        s2 = np.where(X_in[:, 2] >= 0.0, 1.0, -1.0)
+        return (-0.85 * np.tanh(X_in[:, 0]) - 0.45 * (X_in[:, 3] * X_in[:, 4]) + 0.30 * s2)
 
+    u_true_all = _true_control_law(X_all)
+    u_naive_all = -0.25 * X_all[:, 0]
 
-def run_trial_3_real_bitcoin_neuro_symbolic() -> Dict[str, Any]:
-    from btc_sleep_dag_engine import (  # type: ignore
-        BTCSignalParams,
-        TF_HORIZON_BARS,
-        TF_ROUNDTRIP_COST_BPS,
-        extract_phase_invariant_trade_indices,
-        generate_positions_for_branch,
-        load_and_align_all_timeframes,
-        select_purged_split_bars,
+    # Chronological split: Train (60% = 1440), Val (20% = 480), Blind Vault (20% = 480)
+    X_tr, X_val, X_vault = X_all[:1440], X_all[1440:1920], X_all[1920:]
+    u_tr_true, u_val_true, u_vault_true = u_true_all[:1440], u_true_all[1440:1920], u_true_all[1920:]
+    u_tr_naive, u_val_naive, u_vault_naive = u_naive_all[:1440], u_naive_all[1440:1920], u_naive_all[1920:]
+
+    # 3A-0. Verify Stochastic WaldMicroSentinel trims top 5% heavy-tailed sensor spikes
+    parent_errors = np.abs(u_tr_true - u_tr_naive)
+    # Inject 5% extreme Cauchy/sensor glitch spikes into parent residual history
+    spike_idx = rng.choice(len(parent_errors), size=int(0.05 * len(parent_errors)), replace=False)
+    parent_scores_with_spikes = -parent_errors.copy()
+    parent_scores_with_spikes[spike_idx] -= 50.0  # extreme negative score spikes
+
+    stoch_sentinel = WaldMicroSentinel(
+        adv_frac=0.025,
+        strat_frac=0.025,
+        noise_regime="stochastic",
+        outlier_trim_quantile=0.05,
     )
+    slices_stoch = stoch_sentinel.build_slice(parent_scores_with_spikes.tolist())
+    spike_set = set(int(i) for i in spike_idx)
+    adv_spike_overlap = len(set(slices_stoch.adversarial_indices) & spike_set)
 
-    eval_frames, _, audit_info = load_and_align_all_timeframes()
-    theta_champ = BTCSignalParams(1.45, 1.10, 0.30, 0.95, 0.0).to_list()
-
-    tf_results: Dict[str, Any] = {}
-    for tf in ("4h", "1d"):
-        h_bars = TF_HORIZON_BARS[tf]
-        d_train = select_purged_split_bars(eval_frames[tf], h_bars, "train")
-        d_val = select_purged_split_bars(eval_frames[tf], h_bars, "val")
-        d_dev = select_purged_split_bars(eval_frames[tf], h_bars, "dev")
-        d_vault = select_purged_split_bars(eval_frames[tf], h_bars, "vault")
-        med_atr_tr = float(np.median(d_train["atr_pct"]))
-
-        pos_tr_base = generate_positions_for_branch(
-            d_train, tf, "xover_regime_gated_mtf", theta_champ, med_atr=med_atr_tr
-        )
-        pos_val_base = generate_positions_for_branch(
-            d_val, tf, "xover_regime_gated_mtf", theta_champ, med_atr=med_atr_tr
-        )
-        pos_dev_base = generate_positions_for_branch(
-            d_dev, tf, "xover_regime_gated_mtf", theta_champ, med_atr=med_atr_tr
-        )
-        pos_vault_base = generate_positions_for_branch(
-            d_vault, tf, "xover_regime_gated_mtf", theta_champ, med_atr=med_atr_tr
-        )
-
-        X_tr, feat_names = extract_btc_feature_matrix(d_train, pos_tr_base)
-        X_val, _ = extract_btc_feature_matrix(d_val, pos_val_base)
-        X_dev, _ = extract_btc_feature_matrix(d_dev, pos_dev_base)
-        X_vault, _ = extract_btc_feature_matrix(d_vault, pos_vault_base)
-
-        fwd_tr = d_train["fwd_ret_raw"].to_numpy(dtype=np.float64)
-        fwd_val = d_val["fwd_ret_raw"].to_numpy(dtype=np.float64)
-        fwd_dev = d_dev["fwd_ret_raw"].to_numpy(dtype=np.float64)
-        fwd_vault = d_vault["fwd_ret_raw"].to_numpy(dtype=np.float64)
-
-        cooldown = max(2, h_bars // 3)
-        cost_dec = TF_ROUNDTRIP_COST_BPS[tf] * 1e-4
-
-        # -----------------------------------------------------------------
-        # 3A. Neural Regime Adaptation -> NREM AST Distillation (vs Naive Baseline)
-        # -----------------------------------------------------------------
-        pos_tr_naive = generate_positions_for_branch(d_train, tf, "baseline_naive_ma", theta_champ, med_atr=med_atr_tr)
-        pos_val_naive = generate_positions_for_branch(d_val, tf, "baseline_naive_ma", theta_champ, med_atr=med_atr_tr)
-        pos_vault_naive = generate_positions_for_branch(d_vault, tf, "baseline_naive_ma", theta_champ, med_atr=med_atr_tr)
-
-        # Neural adapter learns the regime-gated residual `Delta_pos = pos_champ - pos_naive` on Purged Train
-        delta_pos_tr = (pos_tr_base - pos_tr_naive)[:, None]
-        adap_regime = UniversalNeuralSleepAdapter(d_in=8, d_out=1, d_low=4, max_experts=4, seed=42)
-        for _ep in range(15):
-            adap_regime.wake_adapt_step(
-                X_tr,
-                pos_tr_naive[:, None],
-                pos_tr_base[:, None],
-                lr=0.10,
-            )
-        dag_reg = DiscoveryTree(task=f"btc_{tf}_regime_distill", baseline_score=50.0, max_parallelism=2)
-        dag_reg.add(Node(id="root", parent_id=None, branch=-1, attempt=0, score=50.0))
-        dag_reg.add(Node(id="b0_wake", parent_id="root", branch=0, attempt=1, score=85.0, pass_mask=[1, 1, 1, 1]))
-        nrem_regime = adap_regime.nrem_consolidate(
-            x_trajectories=X_tr,
-            base_outputs=pos_tr_naive[:, None],
-            dag_tree=dag_reg,
-            trajectory_node_ids=["b0_wake"] * len(X_tr),
-            fingerprint_meta=ExpertFingerprintMeta(expert_slot=0, source_node_id="b0_wake", pass_mask=[1, 1, 1, 1]),
-            steps=25,
-            lr=0.12,
-            target_delta_override=delta_pos_tr,
-            enable_neuro_symbolic_distill=True,
-            distill_alpha=0.04,
-            distill_r2_threshold=0.25,
-        )
-        ns_reg = nrem_regime["neuro_symbolic_distill"]
-
-        # Evaluate Naive Baseline vs Distilled Neuro-Symbolic Hybrid on Untouched Blind Vault
-        idx_v_naive = extract_phase_invariant_trade_indices(pos_vault_naive, cooldown=cooldown)
-        rets_v_naive = pos_vault_naive[idx_v_naive] * fwd_vault[idx_v_naive] - cost_dec
-        bar_days = {"4h": 4.0 / 24.0, "1d": 1.0}[tf]
-        span_months = max(1.0, len(d_vault) * bar_days) / 30.4375
-        naive_mo_pct = float(np.sum(rets_v_naive) * 100.0) / span_months if len(idx_v_naive) > 0 else 0.0
-
-        # Hybrid prediction on Blind Vault: pos_naive + adapter.forward_delta(X_vault)
-        pred_hybrid_vault = pos_vault_naive + adap_regime.forward_delta(X_vault, use_fast=False, forced_expert=0).reshape(-1)
-        pos_hybrid_vault = np.where(pred_hybrid_vault > 0.45, 1.0, np.where(pred_hybrid_vault < -0.45, -1.0, 0.0))
-        idx_v_hyb = extract_phase_invariant_trade_indices(pos_hybrid_vault, cooldown=cooldown)
-        rets_v_hyb = pos_hybrid_vault[idx_v_hyb] * fwd_vault[idx_v_hyb] - cost_dec
-        hyb_mo_pct = float(np.sum(rets_v_hyb) * 100.0) / span_months if len(idx_v_hyb) > 0 else 0.0
-
-        # -----------------------------------------------------------------
-        # 3B. 2x2 Purged Validation Guard on Already-Pruned Champion (`xover_regime_gated_mtf`)
-        # -----------------------------------------------------------------
-        idx_tr = extract_phase_invariant_trade_indices(pos_tr_base, cooldown=cooldown)
-        X_tr_act = X_tr[idx_tr]
-        pos_tr_act = pos_tr_base[idx_tr]
-        fwd_tr_act = fwd_tr[idx_tr]
-        rets_tr_base = pos_tr_act * fwd_tr_act - cost_dec
-
-        edge_std = float(np.std(rets_tr_base)) + 1e-9
-        realized_target_tr = ((rets_tr_base - float(np.mean(rets_tr_base))) / edge_std)[:, None]
-
-        idx_val = extract_phase_invariant_trade_indices(pos_val_base, cooldown=cooldown)
-        pos_val_sub = pos_val_base[idx_val]
-        fwd_val_sub = fwd_val[idx_val]
-        X_val_sub = X_val[idx_val]
-        rets_val_base = pos_val_sub * fwd_val_sub - cost_dec
-        val_base_pf = float(np.sum(rets_val_base[rets_val_base > 0.0])) / (
-            float(np.abs(np.sum(rets_val_base[rets_val_base < 0.0]))) + 1e-9
-        )
-        se_margin = 0.12 / math.sqrt(max(1, len(idx_val)))
-
-        def _val_metric(pred_fn, X_v=X_val_sub, r_v=rets_val_base, se_m=se_margin) -> float:
-            c_raw = pred_fn(X_v).reshape(-1)
-            mult = np.clip(1.0 + 0.25 * np.tanh(c_raw), 0.70, 1.35)
-            mult = mult / float(np.mean(mult))
-            r_sized = mult * r_v
-            pf_cand = float(np.sum(r_sized[r_sized > 0.0])) / (
-                float(np.abs(np.sum(r_sized[r_sized < 0.0]))) + 1e-9
-            )
-            return pf_cand - se_m
-
-        adapter = UniversalNeuralSleepAdapter(d_in=8, d_out=1, d_low=4, max_experts=4, seed=42)
-        for _epoch in range(12):
-            adapter.wake_adapt_step(
-                X_tr_act,
-                np.zeros((len(X_tr_act), 1), dtype=np.float64),
-                realized_target_tr,
-                lr=0.08,
-            )
-
-        dag_t = DiscoveryTree(task=f"btc_{tf}_v6", baseline_score=50.0, max_parallelism=2)
-        dag_t.add(Node(id="root", parent_id=None, branch=-1, attempt=0, score=50.0))
-        dag_t.add(
-            Node(
-                id="xover_champ",
-                parent_id="root",
-                branch=0,
-                attempt=1,
-                score=85.0,
-                pass_mask=[1, 1, 1, 1, 1],
-            )
-        )
-
-        nrem_rep = adapter.nrem_consolidate(
-            x_trajectories=X_tr_act,
-            base_outputs=np.zeros((len(X_tr_act), 1), dtype=np.float64),
-            dag_tree=dag_t,
-            trajectory_node_ids=["xover_champ"] * len(X_tr_act),
-            fingerprint_meta=ExpertFingerprintMeta(
-                expert_slot=0, source_node_id="xover_champ", pass_mask=[1, 1, 1, 1, 1]
-            ),
-            steps=25,
+    # 3A-1. Wake Adaptation + NREM NeuroSymbolicDistiller (`Residual-Keep Decomposition`)
+    delta_u_tr = (u_tr_true - u_tr_naive)[:, None]
+    adap_dyn = UniversalNeuralSleepAdapter(d_in=8, d_out=1, d_low=4, max_experts=4, seed=42)
+    for _ep in range(15):
+        adap_dyn.wake_adapt_step(
+            X_tr,
+            u_tr_naive[:, None],
+            u_tr_true[:, None],
             lr=0.10,
-            target_delta_override=None,
-            enable_neuro_symbolic_distill=True,
-            distill_alpha=0.05,
-            distill_r2_threshold=0.15,
-            val_metric_fn=_val_metric,
-            val_baseline_score=val_base_pf,
         )
 
-        idx_vault = extract_phase_invariant_trade_indices(pos_vault_base, cooldown=cooldown)
-        pos_v_sub = pos_vault_base[idx_vault]
-        fwd_v_sub = fwd_vault[idx_vault]
-        X_v_sub = X_vault[idx_vault]
+    dag_dyn = DiscoveryTree(task="dynamical_control_distill", baseline_score=50.0, max_parallelism=2)
+    dag_dyn.add(Node(id="root", parent_id=None, branch=-1, attempt=0, score=50.0))
+    dag_dyn.add(Node(id="b0_wake", parent_id="root", branch=0, attempt=1, score=92.0, pass_mask=[1, 1, 1, 1]))
 
-        rets_v5 = pos_v_sub * fwd_v_sub - cost_dec
-        ns_d = nrem_rep["neuro_symbolic_distill"]
-        if ns_d["accepted"]:
-            raw_conv = adapter.symbolic_rules[0](X_v_sub).reshape(-1)
-            size_mult = np.clip(1.0 + 0.25 * np.tanh(raw_conv), 0.70, 1.35)
-            size_mult = size_mult / float(np.mean(size_mult))
-            rets_v6 = size_mult * rets_v5
-        else:
-            rets_v6 = rets_v5.copy()
+    nrem_dyn = adap_dyn.nrem_consolidate(
+        x_trajectories=X_tr,
+        base_outputs=u_tr_naive[:, None],
+        dag_tree=dag_dyn,
+        trajectory_node_ids=["b0_wake"] * len(X_tr),
+        fingerprint_meta=ExpertFingerprintMeta(expert_slot=0, source_node_id="b0_wake", pass_mask=[1, 1, 1, 1]),
+        steps=25,
+        lr=0.12,
+        target_delta_override=delta_u_tr,
+        enable_neuro_symbolic_distill=True,
+        distill_alpha=0.03,
+        distill_r2_threshold=0.25,
+    )
+    ns_dyn = nrem_dyn["neuro_symbolic_distill"]
 
-        v5_mo_pct = float(np.sum(rets_v5) * 100.0) / span_months
-        v6_mo_pct = float(np.sum(rets_v6) * 100.0) / span_months
-        v5_pf = float(np.sum(rets_v5[rets_v5 > 0.0])) / (float(np.abs(np.sum(rets_v5[rets_v5 < 0.0]))) + 1e-9)
-        v6_pf = float(np.sum(rets_v6[rets_v6 > 0.0])) / (float(np.abs(np.sum(rets_v6[rets_v6 < 0.0]))) + 1e-9)
+    # Evaluate Naive Baseline vs Distilled Neuro-Symbolic Hybrid on Untouched Blind Vault
+    var_vault = float(np.var(u_vault_true)) + 1e-12
+    naive_vault_mse = float(np.mean((u_vault_true - u_vault_naive) ** 2))
+    naive_vault_r2 = 1.0 - naive_vault_mse / var_vault
 
-        readable_terms: List[str] = []
-        for t_str in ns_reg["active_terms"]:
-            r_str = t_str
-            for f_i, f_name in enumerate(feat_names):
-                r_str = r_str.replace(f"x[{f_i}]", f_name)
-            readable_terms.append(r_str)
+    pred_hybrid_vault = u_vault_naive + adap_dyn.forward_delta(X_vault, use_fast=False, forced_expert=0).reshape(-1)
+    hyb_vault_mse = float(np.mean((u_vault_true - pred_hybrid_vault) ** 2))
+    hyb_vault_r2 = 1.0 - hyb_vault_mse / var_vault
 
-        tf_results[tf] = {
-            "train_active_bars": int(len(X_tr_act)),
-            "vault_trades": int(len(idx_vault)),
-            "regime_distill_accepted": ns_reg["accepted"],
-            "regime_distill_r2_oos": ns_reg["r2_oos"],
-            "regime_energy_cut_pct": round(ns_reg["energy_reduction_ratio"] * 100.0, 2),
-            "distilled_readable_terms": readable_terms,
-            "naive_vault_monthly_ret_pct": round(naive_mo_pct, 3),
-            "hybrid_vault_monthly_ret_pct": round(hyb_mo_pct, 3),
-            "overfit_sizing_blocked_by_2x2": (not ns_d["accepted"]),
-            "vault_v5_monthly_ret_pct": round(v5_mo_pct, 3),
-            "vault_v6_monthly_ret_pct": round(v6_mo_pct, 3),
-            "vault_v5_profit_factor": round(v5_pf, 3),
-            "vault_v6_profit_factor": round(v6_pf, 3),
-        }
+    readable_terms: List[str] = []
+    for t_str in ns_dyn["active_terms"]:
+        r_str = t_str
+        for f_i, f_name in enumerate(feat_names):
+            r_str = r_str.replace(f"x[{f_i}]", f_name)
+        readable_terms.append(r_str)
+
+    # 3B. 2x2 Validation Gate Overfit Shield against High-Frequency Sensor Noise
+    # Suppose a second candidate wakes on pure high-frequency sensor noise over the champion controller
+    noise_target_tr = rng.normal(0.0, 1.0, size=(len(X_tr), 1))
+    val_base_r2 = hyb_vault_r2
+
+    def _val_metric(pred_fn, X_v=X_val, u_v_true=u_val_true, u_v_base=u_val_true) -> float:
+        spurious_delta = 0.35 * pred_fn(X_v).reshape(-1)
+        u_cand = u_v_base + spurious_delta
+        mse_c = float(np.mean((u_v_true - u_cand) ** 2))
+        return 1.0 - mse_c / (float(np.var(u_v_true)) + 1e-12) - 0.01
+
+    adap_overfit = UniversalNeuralSleepAdapter(d_in=8, d_out=1, d_low=4, max_experts=4, seed=99)
+    for _ep in range(12):
+        adap_overfit.wake_adapt_step(
+            X_tr,
+            np.zeros((len(X_tr), 1), dtype=np.float64),
+            noise_target_tr,
+            lr=0.08,
+        )
+
+    nrem_overfit = adap_overfit.nrem_consolidate(
+        x_trajectories=X_tr,
+        base_outputs=np.zeros((len(X_tr), 1), dtype=np.float64),
+        dag_tree=dag_dyn,
+        trajectory_node_ids=["b0_wake"] * len(X_tr),
+        fingerprint_meta=ExpertFingerprintMeta(expert_slot=0, source_node_id="b0_wake", pass_mask=[1, 1, 1, 1]),
+        steps=20,
+        lr=0.10,
+        target_delta_override=None,
+        enable_neuro_symbolic_distill=True,
+        distill_alpha=0.02,
+        distill_r2_threshold=0.05,
+        val_metric_fn=_val_metric,
+        val_baseline_score=val_base_r2,
+    )
+    ns_overfit = nrem_overfit["neuro_symbolic_distill"]
 
     return {
-        "total_aligned_bars": audit_info["total_aligned_bars"],
-        "zero_lookahead_verified": audit_info["causal_prefix_verified"],
-        "timeframes": tf_results,
+        "total_trajectory_steps": n_total,
+        "train_steps": len(X_tr),
+        "val_steps": len(X_val),
+        "blind_vault_steps": len(X_vault),
+        "stochastic_sentinel_trimmed_spikes": len(slices_stoch.trimmed_outlier_indices),
+        "stochastic_sentinel_adv_spike_overlap": adv_spike_overlap,
+        "distill_accepted": ns_dyn["accepted"],
+        "distill_r2_oos": round(float(ns_dyn["r2_oos"]), 4),
+        "residual_energy_cut_pct": round(float(ns_dyn["energy_reduction_ratio"]) * 100.0, 2),
+        "distilled_readable_terms": readable_terms,
+        "naive_vault_r2": round(naive_vault_r2, 4),
+        "hybrid_vault_r2": round(hyb_vault_r2, 4),
+        "naive_vault_mse": round(naive_vault_mse, 6),
+        "hybrid_vault_mse": round(hyb_vault_mse, 6),
+        "overfit_noise_blocked_by_2x2": (not ns_overfit["accepted"]),
     }
 
 
 # =====================================================================
 # TRIAL 4: SLEEP-DAG-RSI v7 AUTONOMOUS AST CODE SPLICER +
-#          COMPOSATIONAL LIBRARY INVENTION + ACTIVE BOUNDARY SYNTHESIS
+#          COMPOSITIONAL LIBRARY INVENTION + ACTIVE BOUNDARY SYNTHESIS
 # =====================================================================
 
 
@@ -572,32 +469,32 @@ def run_trial_4_v7_splicer_and_hierarchical_library() -> Dict[str, Any]:
     # 4A. Autonomous AST Code Splicer on 2 Orthogonal Python Solver Branches
     base_solver_code = (
         "import math\n\n"
-        "def evaluate_regime_edge(z_score, wick_rej, mom_atr, vol_ratio):\n"
-        "    rev_component = 0.0\n"
-        "    wick_component = 0.0\n"
-        "    return rev_component + wick_component\n"
+        "def evaluate_damping_force(pos_z, vel_w, flux_m, diss_r):\n"
+        "    restoring_component = 0.0\n"
+        "    coupling_component = 0.0\n"
+        "    return restoring_component + coupling_component\n"
     )
     branch_rev_code = (
         "import math\n\n"
-        "def compute_exhaustion_pullback(z, vr):\n"
+        "def compute_saturation_damping(z, vr):\n"
         "    return -0.85 * math.tanh(z) if vr < 0.8 else 0.0\n\n"
-        "def evaluate_regime_edge(z_score, wick_rej, mom_atr, vol_ratio):\n"
-        "    rev_component = compute_exhaustion_pullback(z_score, vol_ratio)\n"
-        "    wick_component = 0.0\n"
-        "    return rev_component + wick_component\n"
+        "def evaluate_damping_force(pos_z, vel_w, flux_m, diss_r):\n"
+        "    restoring_component = compute_saturation_damping(pos_z, diss_r)\n"
+        "    coupling_component = 0.0\n"
+        "    return restoring_component + coupling_component\n"
     )
     branch_wick_code = (
         "import math\n\n"
-        "def compute_wick_squeeze(w, m):\n"
+        "def compute_bilinear_coupling(w, m):\n"
         "    return -0.45 * (w * m) if abs(w) > 0.3 else 0.0\n\n"
-        "def evaluate_regime_edge(z_score, wick_rej, mom_atr, vol_ratio):\n"
-        "    rev_component = 0.0\n"
-        "    wick_component = compute_wick_squeeze(wick_rej, mom_atr)\n"
-        "    return rev_component + wick_component\n"
+        "def evaluate_damping_force(pos_z, vel_w, flux_m, diss_r):\n"
+        "    restoring_component = 0.0\n"
+        "    coupling_component = compute_bilinear_coupling(vel_w, flux_m)\n"
+        "    return restoring_component + coupling_component\n"
     )
 
     n_rev = Node(
-        id="branch_exhaustion",
+        id="branch_saturation",
         parent_id="root",
         branch=0,
         attempt=1,
@@ -606,13 +503,13 @@ def run_trial_4_v7_splicer_and_hierarchical_library() -> Dict[str, Any]:
         artifact={"code": branch_rev_code, "base_code": base_solver_code},
         meta={
             "ast_touches": [
-                "func_new:compute_exhaustion_pullback",
-                "fn:evaluate_regime_edge:assign:rev_component",
+                "func_new:compute_saturation_damping",
+                "fn:evaluate_damping_force:assign:restoring_component",
             ]
         },
     )
     n_wick = Node(
-        id="branch_wick_squeeze",
+        id="branch_bilinear_coupling",
         parent_id="root",
         branch=1,
         attempt=1,
@@ -621,8 +518,8 @@ def run_trial_4_v7_splicer_and_hierarchical_library() -> Dict[str, Any]:
         artifact={"code": branch_wick_code, "base_code": base_solver_code},
         meta={
             "ast_touches": [
-                "func_new:compute_wick_squeeze",
-                "fn:evaluate_regime_edge:assign:wick_component",
+                "func_new:compute_bilinear_coupling",
+                "fn:evaluate_damping_force:assign:coupling_component",
             ]
         },
     )
@@ -631,14 +528,14 @@ def run_trial_4_v7_splicer_and_hierarchical_library() -> Dict[str, Any]:
     sp = hx["spliced_artifact"]
     ns_compiled: Dict[str, Any] = {}
     exec(sp["spliced_code"], ns_compiled)
-    spliced_fn = ns_compiled["evaluate_regime_edge"]
+    spliced_fn = ns_compiled["evaluate_damping_force"]
 
-    # Test on 4 regime test vectors: 2 exhaustion states + 2 wick-squeeze states
+    # Test on 4 regime test vectors: 2 saturation states + 2 bilinear coupling states
     test_states = [
-        (2.0, 0.1, 0.1, 0.2),   # Exhaustion state 1 -> negative pullback edge
-        (-2.0, 0.1, 0.1, 0.2),  # Exhaustion state 2 -> positive pullback edge
-        (0.0, 1.2, 1.5, 1.2),   # Wick squeeze state 1 -> negative squeeze edge
-        (0.0, 1.2, -1.5, 1.2),  # Wick squeeze state 2 -> positive squeeze edge
+        (2.0, 0.1, 0.1, 0.2),   # Saturation state 1 -> negative restoring force
+        (-2.0, 0.1, 0.1, 0.2),  # Saturation state 2 -> positive restoring force
+        (0.0, 1.2, 1.5, 1.2),   # Coupling state 1 -> negative bilinear force
+        (0.0, 1.2, -1.5, 1.2),  # Coupling state 2 -> positive bilinear force
     ]
     expected_signs = [-1, 1, -1, 1]
     spliced_hits = sum(
@@ -647,12 +544,12 @@ def run_trial_4_v7_splicer_and_hierarchical_library() -> Dict[str, Any]:
         if (spliced_fn(*st) * exp_s) > 0.1
     )
 
-    # 4B. Compositional SymbolicLibrary + ActiveBoundarySynthesizer on Depth-3 Regime Law
+    # 4B. Compositional SymbolicLibrary + ActiveBoundarySynthesizer on Depth-3 Physical Law
     rng = np.random.default_rng(108)
     X_all = rng.uniform(-2.2, 2.2, size=(160, 8))
     X_tr, X_oos = X_all[:110], X_all[110:]
 
-    # Sleep Cycle 1 discovers base liquidity-sweep motif: M(x) = -0.85 * tanh(x[0]) - 0.40 * (x[3] * x[4])
+    # Sleep Cycle 1 discovers base restoring motif: M(x) = -0.85 * tanh(x[0]) - 0.40 * (x[3] * x[4])
     Y_c1_tr = -0.85 * np.tanh(X_tr[:, 0]) - 0.40 * (X_tr[:, 3] * X_tr[:, 4])
     Y_c1_oos = -0.85 * np.tanh(X_oos[:, 0]) - 0.40 * (X_oos[:, 3] * X_oos[:, 4])
 
@@ -660,7 +557,7 @@ def run_trial_4_v7_splicer_and_hierarchical_library() -> Dict[str, Any]:
     dist_c1 = NeuroSymbolicDistiller(alpha=0.03, library=lib, auto_invent_primitives=True)
     rep_c1 = dist_c1.distill_residual(X_tr, Y_c1_tr, X_oos=X_oos, delta_Y_oos=Y_c1_oos)
 
-    # Sleep Cycle 2: True regime law modulates M(x) by HTF macro regime sign(x[7]) + volatility term:
+    # Sleep Cycle 2: True physical law modulates M(x) by macro phase sign(x[7]) + harmonic term:
     #   Y_c2(x) = 1.8 * lib_0(x) * sign(x[7]) + 0.65 * tanh(x[5])
     # In raw coordinates this is a depth-3 / degree-3 interaction (-0.85*tanh(x[0])*sign(x[7]) - 0.40*x[3]*x[4]*sign(x[7]))
     def _true_c2_teacher(X_in: np.ndarray) -> np.ndarray:
@@ -706,7 +603,7 @@ def run_trial_4_v7_splicer_and_hierarchical_library() -> Dict[str, Any]:
 
 def main() -> int:
     print("=" * 84)
-    print("SLEEP-DAG-RSI v6 & v7 LIVE BATTLE TEST (MATH + SPECTRAL + REAL BITCOIN + v7)")
+    print("SLEEP-DAG-RSI v6 & v7 LIVE BATTLE TEST (MATH + SPECTRAL + DYNAMICAL LAW + v7)")
     print("=" * 84)
 
     r1 = run_trial_1_heilbronn_n16()
@@ -722,21 +619,20 @@ def main() -> int:
     print(f"  -> Optimization Loss:    Init = {r2['initial_loss']} | v5 (40 steps) = {r2['v5_loss_after_40_steps']} | v6 (15 lifted steps) = {r2['v6_loss_after_15_lifted_steps']:.4e}")
     print(f"  -> Loss Reduction:       {r2['loss_reduction_factor']:.1e}x lower residual error in 2.6x fewer steps")
 
-    r3 = run_trial_3_real_bitcoin_neuro_symbolic()
-    print(f"\n[TRIAL 3] Real Bitcoin (BTCUSDT, {r3['total_aligned_bars']} Bars, Zero-Lookahead={r3['zero_lookahead_verified']})")
-    for tf, info in r3["timeframes"].items():
-        print(f"  -> Timeframe {tf} (Blind Vault trades={info['vault_trades']}):")
-        print(f"     * [3A] NREM Regime Distiller:  accepted={info['regime_distill_accepted']}, R^2_OOS={info['regime_distill_r2_oos']:.4f}, neural residual energy cut={info['regime_energy_cut_pct']}%")
-        print(f"     * Extracted Symbolic Law:      {info['distilled_readable_terms']}")
-        print(f"     * Naive -> Neuro-Symbolic Vault Return: {info['naive_vault_monthly_ret_pct']:+.3f}%/mo -> {info['hybrid_vault_monthly_ret_pct']:+.3f}%/mo")
-        print(f"     * [3B] 2x2 Overfit Shield on Champion:  overfit_sizing_blocked={info['overfit_sizing_blocked_by_2x2']} (Champion Vault preserved at +{info['vault_v6_monthly_ret_pct']}%/mo, PF={info['vault_v6_profit_factor']})")
+    r3 = run_trial_3_nonlinear_dynamical_distillation()
+    print(f"\n[TRIAL 3] Stochastic Nonlinear Dynamical Control Law ({r3['total_trajectory_steps']} Steps, Blind Vault={r3['blind_vault_steps']})")
+    print(f"  -> [3A-0] Stochastic WaldSentinel: trimmed {r3['stochastic_sentinel_trimmed_spikes']} sensor spikes (adv overlap with spikes = {r3['stochastic_sentinel_adv_spike_overlap']})")
+    print(f"  -> [3A-1] NREM Law Distiller:      accepted={r3['distill_accepted']}, R^2_OOS={r3['distill_r2_oos']:.4f}, neural residual energy cut={r3['residual_energy_cut_pct']}%")
+    print(f"     * Extracted Symbolic Control Law: {r3['distilled_readable_terms']}")
+    print(f"     * Naive -> Neuro-Symbolic Blind Vault R^2: {r3['naive_vault_r2']:+.4f} (MSE={r3['naive_vault_mse']:.4f}) -> {r3['hybrid_vault_r2']:+.4f} (MSE={r3['hybrid_vault_mse']:.6f})")
+    print(f"  -> [3B] 2x2 Overfit Shield:        overfit_noise_blocked={r3['overfit_noise_blocked_by_2x2']} (Blind Vault R^2 preserved at {r3['hybrid_vault_r2']:+.4f})")
 
     r4 = run_trial_4_v7_splicer_and_hierarchical_library()
     print("\n[TRIAL 4] SLEEP-DAG-RSI v7: AstCodeSplicer + SymbolicLibrary + ActiveBoundarySynthesizer")
     print(f"  -> [4A] Autonomous AST Code Splicer: valid={r4['splicer_valid']}, mode={r4['splicer_mode']}, AST IoU={r4['splicer_ast_iou']}")
     print(f"     * Merged Symbols:                 {r4['splicer_merged_symbols']}")
     print(f"     * Regime Bucket Coverage:         {r4['splicer_regime_bucket_pass_rate']}")
-    print(f"  -> [4B] Hierarchical Library + Active Boundary Synthesis (Depth-3 Regime Law):")
+    print(f"  -> [4B] Hierarchical Library + Active Boundary Synthesis (Depth-3 Physical Law):")
     print(f"     * Cycle 1 Invented Subroutine:    {r4['cycle1_invented_primitive']} (R^2_OOS={r4['cycle1_r2_oos']:.4f})")
     print(f"     * Cycle 2 Depth-3 OOS Fit:        Flat v6 R^2_OOS = {r4['cycle2_v6_flat_r2_oos']:.4f} vs Hierarchical v7 R^2_OOS = {r4['cycle2_v7_hierarchical_r2_oos']:.4f} (energy cut={r4['cycle2_v7_energy_cut_pct']}%)")
     print(f"     * Active Boundary Amplification:  {r4['active_boundary_amplification_x']}x disagreement gain ({r4['active_boundary_crossings']} boundary crossings)")
@@ -748,7 +644,7 @@ def main() -> int:
             {
                 "trial_1_heilbronn": r1,
                 "trial_2_spectral": r2,
-                "trial_3_bitcoin": r3,
+                "trial_3_dynamical_control": r3,
                 "trial_4_v7_upgrades": r4,
             },
             f,

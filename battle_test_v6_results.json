@@ -6,9 +6,9 @@
     "v5_triangle_evals": 33600,
     "v6_triangle_evals": 5540,
     "triangle_eval_savings_pct": 83.51,
-    "v5_wall_ms": 9.26,
-    "v6_wall_ms": 6.99,
-    "speedup_x": 1.32,
+    "v5_wall_ms": 9.53,
+    "v6_wall_ms": 7.02,
+    "speedup_x": 1.36,
     "v6_aborted_candidates": 53,
     "v6_survivor_candidates": 7,
     "winner_agreement": true,
@@ -32,59 +32,36 @@
     "v6_loss_after_15_lifted_steps": 2.136843e-06,
     "loss_reduction_factor": 6108742.6
   },
-  "trial_3_bitcoin": {
-    "total_aligned_bars": 149953,
-    "zero_lookahead_verified": true,
-    "timeframes": {
-      "4h": {
-        "train_active_bars": 166,
-        "vault_trades": 91,
-        "regime_distill_accepted": true,
-        "regime_distill_r2_oos": 0.727784,
-        "regime_energy_cut_pct": 72.74,
-        "distilled_readable_terms": [
-          "out[0]: -0.838109 * math.tanh(dir_z_price_20)",
-          "out[0]: -0.349083 * (dir_wick_rejection * dir_mom_4_atr)"
-        ],
-        "naive_vault_monthly_ret_pct": -5.322,
-        "hybrid_vault_monthly_ret_pct": 1.431,
-        "overfit_sizing_blocked_by_2x2": true,
-        "vault_v5_monthly_ret_pct": 4.948,
-        "vault_v6_monthly_ret_pct": 4.948,
-        "vault_v5_profit_factor": 1.524,
-        "vault_v6_profit_factor": 1.524
-      },
-      "1d": {
-        "train_active_bars": 89,
-        "vault_trades": 46,
-        "regime_distill_accepted": true,
-        "regime_distill_r2_oos": 0.71786,
-        "regime_energy_cut_pct": 70.85,
-        "distilled_readable_terms": [
-          "out[0]: -0.793387 * math.tanh(dir_z_price_20)",
-          "out[0]: -0.091297 * (1.0 if dir_wick_rejection >= 0.0 else -1.0)",
-          "out[0]: -0.036254 * (1.0 if dir_mom_4_atr >= 0.0 else -1.0)",
-          "out[0]: -0.487656 * (dir_wick_rejection * dir_mom_4_atr)"
-        ],
-        "naive_vault_monthly_ret_pct": -3.474,
-        "hybrid_vault_monthly_ret_pct": 2.937,
-        "overfit_sizing_blocked_by_2x2": true,
-        "vault_v5_monthly_ret_pct": 3.573,
-        "vault_v6_monthly_ret_pct": 3.573,
-        "vault_v5_profit_factor": 1.696,
-        "vault_v6_profit_factor": 1.696
-      }
-    }
+  "trial_3_dynamical_control": {
+    "total_trajectory_steps": 2400,
+    "train_steps": 1440,
+    "val_steps": 480,
+    "blind_vault_steps": 480,
+    "stochastic_sentinel_trimmed_spikes": 72,
+    "stochastic_sentinel_adv_spike_overlap": 0,
+    "distill_accepted": true,
+    "distill_r2_oos": 0.9943,
+    "residual_energy_cut_pct": 99.39,
+    "distilled_readable_terms": [
+      "out[0]: -0.428615 * math.tanh(pos_deviation)",
+      "out[0]: +0.299609 * (1.0 if phase_trigger >= 0.0 else -1.0)",
+      "out[0]: -0.448881 * (vel_damping * coupling_flux)"
+    ],
+    "naive_vault_r2": 0.2844,
+    "hybrid_vault_r2": 0.9957,
+    "naive_vault_mse": 0.740118,
+    "hybrid_vault_mse": 0.004403,
+    "overfit_noise_blocked_by_2x2": true
   },
   "trial_4_v7_upgrades": {
     "splicer_valid": true,
     "splicer_mode": "structural_ast_merge",
     "splicer_ast_iou": 0.0,
     "splicer_merged_symbols": [
-      "branch_wick_squeeze:func:compute_wick_squeeze",
-      "branch_exhaustion:func:compute_exhaustion_pullback",
-      "branch_wick_squeeze:evaluate_regime_edge.assign:wick_component",
-      "branch_exhaustion:evaluate_regime_edge.assign:rev_component"
+      "branch_bilinear_coupling:func:compute_bilinear_coupling",
+      "branch_saturation:func:compute_saturation_damping",
+      "branch_bilinear_coupling:evaluate_damping_force.assign:coupling_component",
+      "branch_saturation:evaluate_damping_force.assign:restoring_component"
     ],
     "splicer_regime_bucket_pass_rate": "4/4 (100% vs 50% single parent)",
     "cycle1_invented_primitive": "lib_0",
