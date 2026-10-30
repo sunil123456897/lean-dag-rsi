@@ -3359,10 +3359,12 @@ def export_lean4_certificate(
 @dataclass
 class SentinelSlice:
     """
-    SLEEP-DAG-RSI v6 Multi-Fidelity Sentinel Slice (`S_sentinel = S_adv U S_strat`).
+    SLEEP-DAG-RSI v6/v7 Multi-Fidelity Sentinel Slice (`S_sentinel = S_adv U S_strat`).
     Holds the 2.5% parent adversarial failure indices and 2.5% uniform stratified
     anchor indices, with automatic exemption of `S_adv` for macro-innovations
-    (`crossover`, `frame_transform`, or high-temperature `beta >= 0.8`).
+    (`crossover`, `frame_transform`, or high-temperature `beta >= 0.8`), plus
+    optional Winsorized top-quantile outlier trimming (`outlier_trim_quantile > 0`)
+    for stochastic/noisy domains (e.g. financial time series).
     """
 
     domain_size: int
@@ -3371,14 +3373,21 @@ class SentinelSlice:
     combined_indices: List[int]
     exempt_adversarial: bool
     cost_fraction: float
+    trimmed_outlier_indices: List[int] = field(default_factory=list)
 
 
 class WaldMicroSentinel:
     """
-    Stage 1 of SLEEP-DAG-RSI v6: Sequential Lower-Confidence-Bound (LCB) Early Veto.
+    Stage 1 of SLEEP-DAG-RSI v6/v7: Sequential Lower-Confidence-Bound (LCB) Early Veto.
     Evaluates a candidate mutation on a ~5% sentinel slice first:
       - Standard mutations evaluate on `S_adv U S_strat` (catching regressions on
         the parent's fragile manifold plus global anchor points).
+      - In deterministic math (`noise_regime="deterministic"`, `outlier_trim_quantile=0.0`),
+        `S_adv` targets the worst 2.5% bottlenecks (`97.5%–100%` error quantile).
+      - In stochastic/noisy domains (`noise_regime="stochastic"` or `outlier_trim_quantile=0.05`),
+        `S_adv` trims the top 5% irreducible outlier spikes (e.g. flash crashes) and selects
+        from the informative high-error quantile band (`[1 - trim_q - adv_frac, 1 - trim_q]`),
+        preventing outlier overfitting.
       - Macro-innovations (`is_crossover`, `is_frame_transform`, `beta >= 0.8`)
         evaluate ONLY on `S_strat` so global reorganizations are not killed for
         trading off the parent's local error patch.
@@ -3394,11 +3403,18 @@ class WaldMicroSentinel:
         strat_frac: float = 0.025,
         gamma_lcb: float = 1.96,
         tol_margin: float = 0.01,
+        noise_regime: str = "deterministic",
+        outlier_trim_quantile: Optional[float] = None,
     ) -> None:
         self.adv_frac = adv_frac
         self.strat_frac = strat_frac
         self.gamma_lcb = gamma_lcb
         self.tol_margin = tol_margin
+        self.noise_regime = str(noise_regime).lower()
+        if outlier_trim_quantile is not None:
+            self.outlier_trim_quantile = max(0.0, min(0.40, float(outlier_trim_quantile)))
+        else:
+            self.outlier_trim_quantile = 0.05 if self.noise_regime == "stochastic" else 0.0
 
     def build_slice(
         self,
@@ -3410,19 +3426,27 @@ class WaldMicroSentinel:
     ) -> SentinelSlice:
         n_total = len(parent_scores_or_errors)
         if n_total == 0:
-            return SentinelSlice(0, [], [], [], True, 0.0)
+            return SentinelSlice(0, [], [], [], True, 0.0, [])
 
         k_adv = max(1, int(round(self.adv_frac * n_total)))
         k_strat = max(1, int(round(self.strat_frac * n_total)))
 
-        # Adversarial core: worst-performing indices of the parent
+        # Adversarial core: worst-performing indices of the parent (with optional outlier trimming)
         if higher_is_better:
             ranked_worst = sorted(range(n_total), key=lambda idx: float(parent_scores_or_errors[idx]))
         else:
             ranked_worst = sorted(
                 range(n_total), key=lambda idx: abs(float(parent_scores_or_errors[idx])), reverse=True
             )
-        adv_idx = sorted(ranked_worst[:k_adv])
+
+        trim_offset = 0
+        if self.outlier_trim_quantile > 0.0 and n_total > k_adv:
+            trim_offset = min(
+                n_total - k_adv,
+                max(0, int(round(self.outlier_trim_quantile * n_total))),
+            )
+        trimmed_outliers = sorted(ranked_worst[:trim_offset]) if trim_offset > 0 else []
+        adv_idx = sorted(ranked_worst[trim_offset : trim_offset + k_adv])
 
         # Deterministic uniform stratified anchor across the full domain
         stride = max(1, n_total // k_strat)
@@ -3445,6 +3469,7 @@ class WaldMicroSentinel:
             combined_indices=combined,
             exempt_adversarial=exempt,
             cost_fraction=cost_frac,
+            trimmed_outlier_indices=trimmed_outliers,
         )
 
     def evaluate_gate(
@@ -4152,12 +4177,89 @@ class AstCodeSplicer:
                     touches.add(f"mod_{k}")
         return touches
 
+    def _synthesize_input_routing_predicate(
+        self,
+        arg_name: str,
+        bucket_inputs: Sequence[Any],
+        parent_bucket_margins: Sequence[Sequence[float]],
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Synthesizes an Out-of-Sample input-space routing predicate (`if <pred>: return p_win(x) else: return p_alt(x)`)
+        by fitting a coordinate threshold or linear half-space boundary separating inputs where
+        Parent 0 outperforms Parent 1 from inputs where Parent 1 outperforms Parent 0.
+        Eliminates the need for an oracle `bucket_idx` at test time.
+        """
+        if len(parent_bucket_margins) < 2 or len(bucket_inputs) == 0:
+            return None
+        m0 = [float(v) for v in parent_bucket_margins[0]]
+        m1 = [float(v) for v in parent_bucket_margins[1]]
+        n_b = min(len(bucket_inputs), len(m0), len(m1))
+        if n_b < 2:
+            return None
+
+        is_scalar = isinstance(bucket_inputs[0], (int, float))
+        rows: List[List[float]] = []
+        for idx in range(n_b):
+            inp = bucket_inputs[idx]
+            if isinstance(inp, (int, float)):
+                rows.append([float(inp)])
+            else:
+                rows.append([float(v) for v in inp])
+        d_in = len(rows[0]) if rows else 0
+        if d_in == 0:
+            return None
+
+        best_gain = -float("inf")
+        best_expr: Optional[str] = None
+        best_p0_when_true = True
+        best_acc = 0.0
+
+        for c in range(d_in):
+            vals = sorted({rows[b][c] for b in range(n_b)})
+            if len(vals) < 2:
+                continue
+            thresholds = [0.5 * (vals[k] + vals[k + 1]) for k in range(len(vals) - 1)]
+            for tau in thresholds:
+                for p0_on_ge in (True, False):
+                    routed_sum = 0.0
+                    correct = 0
+                    informative = 0
+                    for b in range(n_b):
+                        cond = rows[b][c] >= tau
+                        use_p0 = cond if p0_on_ge else (not cond)
+                        routed_sum += m0[b] if use_p0 else m1[b]
+                        if abs(m0[b] - m1[b]) > 1e-9:
+                            informative += 1
+                            if (use_p0 and m0[b] > m1[b]) or ((not use_p0) and m1[b] > m0[b]):
+                                correct += 1
+                    routed_mean = routed_sum / float(n_b)
+                    acc = correct / float(max(1, informative))
+                    if routed_mean > best_gain + 1e-9:
+                        best_gain = routed_mean
+                        best_p0_when_true = p0_on_ge
+                        best_acc = acc
+                        lhs = arg_name if is_scalar else f"{arg_name}[{c}]"
+                        best_expr = f"{lhs} >= {round(tau, 6)}"
+
+        max_single_parent = max(sum(m0[:n_b]) / float(n_b), sum(m1[:n_b]) / float(n_b))
+        if best_expr is None or best_gain <= max_single_parent + 1e-6:
+            return None
+        return {
+            "predicate_expr": best_expr,
+            "p0_when_true": best_p0_when_true,
+            "routed_mean_score": round(best_gain, 6),
+            "routing_accuracy": round(best_acc, 6),
+        }
+
     def splice_parents(
         self,
         base_source: str,
         parent_sources: Sequence[Tuple[str, str]],
         combine_mode: str = "auto",
         entry_func: Optional[str] = None,
+        bucket_inputs: Optional[Sequence[Any]] = None,
+        parent_bucket_margins: Optional[Sequence[Sequence[float]]] = None,
+        routing_predicate_expr: Optional[str] = None,
     ) -> Dict[str, Any]:
         import ast
         import copy
@@ -4327,7 +4429,12 @@ class AstCodeSplicer:
                     stmt_slots["return"] = ast.parse(f"return {combined_ret_src}").body[0]
                     for pid_r, _ in modified_returns:
                         merged_symbols.append(f"{pid_r}:{fn_name}.return_delta")
-                elif combine_mode == "ensemble" or max_iou > 0.30:
+                elif (
+                    combine_mode == "ensemble"
+                    or max_iou > 0.30
+                    or routing_predicate_expr is not None
+                    or (bucket_inputs is not None and parent_bucket_margins is not None)
+                ):
                     return_collision_detected = True
                 else:
                     # Combine complementary return expressions according to combine_mode
@@ -4353,8 +4460,9 @@ class AstCodeSplicer:
             b_node.body = new_body
 
         splice_mode = "structural_ast_merge"
+        learned_routing: Optional[Dict[str, Any]] = None
         if return_collision_detected and target_fn_name is not None:
-            # Mode C: Full sub-function renaming & ensemble dispatch
+            # Mode C: Full sub-function renaming & ensemble/input-predicate dispatch
             splice_mode = "ensemble_dispatch_merge"
             helper_fn_names: List[str] = []
             ensemble_body_nodes: List[Any] = []
@@ -4371,9 +4479,34 @@ class AstCodeSplicer:
                 orig_fn = base_top_funcs[target_fn_name]
                 arg_names = [a.arg for a in orig_fn.args.args]
                 call_args = ", ".join(arg_names)
-                w = round(1.0 / float(len(helper_fn_names)), 6)
-                calls_expr = " + ".join(f"{w} * {h_name}({call_args})" for h_name in helper_fn_names)
-                wrapper_src = f"def {target_fn_name}({call_args}):\n    return {calls_expr}\n"
+                first_arg = arg_names[0] if arg_names else "x"
+                if (
+                    routing_predicate_expr is None
+                    and bucket_inputs is not None
+                    and parent_bucket_margins is not None
+                ):
+                    learned_routing = self._synthesize_input_routing_predicate(
+                        first_arg, bucket_inputs, parent_bucket_margins
+                    )
+                    if learned_routing is not None:
+                        routing_predicate_expr = str(learned_routing["predicate_expr"])
+
+                if routing_predicate_expr is not None and len(helper_fn_names) >= 2:
+                    p0_true = True if learned_routing is None else bool(learned_routing.get("p0_when_true", True))
+                    fn_true = helper_fn_names[0] if p0_true else helper_fn_names[1]
+                    fn_false = helper_fn_names[1] if p0_true else helper_fn_names[0]
+                    wrapper_src = (
+                        f"def {target_fn_name}({call_args}):\n"
+                        f"    if {routing_predicate_expr}:\n"
+                        f"        return {fn_true}({call_args})\n"
+                        f"    else:\n"
+                        f"        return {fn_false}({call_args})\n"
+                    )
+                    merged_symbols.append(f"oos_predicate:{routing_predicate_expr}")
+                else:
+                    w = round(1.0 / float(len(helper_fn_names)), 6)
+                    calls_expr = " + ".join(f"{w} * {h_name}({call_args})" for h_name in helper_fn_names)
+                    wrapper_src = f"def {target_fn_name}({call_args}):\n    return {calls_expr}\n"
                 wrapper_fn = ast.parse(wrapper_src).body[0]
                 merged_tree.body = new_top_nodes + ensemble_body_nodes + [wrapper_fn]
         else:
@@ -4404,8 +4537,43 @@ class AstCodeSplicer:
             "splice_mode": splice_mode,
             "merged_symbols": merged_symbols,
             "ast_collision_iou": round(max_iou, 6),
+            "routing_predicate": routing_predicate_expr,
+            "learned_routing": learned_routing,
             "violations": violations,
         }
+
+    def verify_spliced_epistasis(
+        self,
+        spliced_code: str,
+        entry_func: str,
+        eval_score_fn: Callable[[Callable[..., Any]], float],
+        parent_scores: Sequence[float],
+        tol: float = 1e-6,
+    ) -> Dict[str, Any]:
+        """
+        Post-Splice Epistasis Execution Gate:
+        Even when syntactic `ast_collision_iou == 0`, two merged statements can interact
+        nonlinearly via shared data-flow variables (semantic epistasis). This gate
+        compiles `spliced_code`, runs `eval_score_fn(fn)` on the sentinel/validation harness,
+        and verifies `spliced_score >= max(parent_scores) - tol`.
+        """
+        ns: Dict[str, Any] = {"math": math}
+        try:
+            exec(compile(spliced_code, "<ast_splice>", "exec"), ns)  # noqa: S102
+            fn = ns.get(entry_func)
+            if not callable(fn):
+                return {"passed": False, "reason": "missing_entry_func", "spliced_score": 0.0}
+            spliced_score = float(eval_score_fn(fn))
+            best_parent = max((float(s) for s in parent_scores), default=0.0)
+            passed = bool(spliced_score >= best_parent - tol)
+            return {
+                "passed": passed,
+                "spliced_score": round(spliced_score, 6),
+                "best_parent_score": round(best_parent, 6),
+                "synergy_gain": round(spliced_score - best_parent, 6),
+            }
+        except Exception as exc:
+            return {"passed": False, "reason": f"runtime_error:{exc}", "spliced_score": 0.0}
 
 
 class ActiveBoundarySynthesizer:

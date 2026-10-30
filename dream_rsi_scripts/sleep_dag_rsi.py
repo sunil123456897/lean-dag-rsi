@@ -1633,8 +1633,18 @@ class UniversalNeuralSleepAdapter:
                 teacher_delta,
                 val_metric_fn=val_metric_fn,
                 val_baseline_score=val_baseline_score,
+                reconstruct_uncorrupted_target=True,
             )
             if distill_rep["accepted"]:
+                if distill_rep.get("reconstructed_full_target"):
+                    # Supersede fragmented prior-cycle symbolic/neural approximations to avoid double-counting
+                    for prev_slot in range(slot_idx):
+                        if prev_slot in self.symbolic_rules:
+                            self.symbolic_rules.pop(prev_slot, None)
+                            self.slow_B[prev_slot].fill(0.0)
+                    self.replay_buffer = [
+                        (xa, da, sl) for (xa, da, sl) in self.replay_buffer if sl == slot_idx
+                    ]
                 self.symbolic_rules[slot_idx] = distill_rep["predict_fn"]
                 self.symbolic_reports[slot_idx] = distill_rep
                 residual_target = distill_rep["residual_rem"]
@@ -1656,6 +1666,7 @@ class UniversalNeuralSleepAdapter:
                                 "stage": "neuro_symbolic_distill",
                                 "r2_oos": distill_rep["r2_oos"],
                                 "neural_energy_reduction_ratio": distill_rep["energy_reduction_ratio"],
+                                "reconstructed_full_target": bool(distill_rep.get("reconstructed_full_target", False)),
                             },
                         )
                     )
@@ -1949,6 +1960,8 @@ class LibraryPrimitive:
     term_count: int
     ast_depth: int = 2
     reuse_count: int = 0
+    natural_scale: float = 1.0
+    mean_offset: float = 0.0
 
 
 class SymbolicLibrary:
@@ -1956,10 +1969,14 @@ class SymbolicLibrary:
     SLEEP-DAG-RSI v7 Wake-Sleep Compositional Library Learner (DreamCoder-style AST Abstraction):
     Breaks the flat depth-2 basis ceiling of `NeuroSymbolicDistiller`:
       1. Abstracts verified multi-term symbolic formulas into reusable primitives `lib_0(x), lib_1(x), ...`
-         standardized to unit scale on the training manifold.
+         standardized to unit scale on the training manifold, while recording `natural_scale` (`sigma_raw`)
+         for exact nonlinear link composition (e.g. `math.tanh(scale * lib_k(x))`).
       2. Enforces a strict Minimum Description Length (MDL) & Non-Collinearity gate
          (`|cos(lib_new, lib_old)| <= 0.80`, `term_count >= 2`, `r2_score >= min_r2`).
-      3. Emits standalone Python helper definitions (`def lib_0(x): return ...`) so
+      3. Tracks `prior_stage_predictors` so subsequent sleep cycles can perform Full-Target
+         Re-Consolidation (`Y_full = Y_prior_symbolic + Y_rem`), preventing greedy Cycle-1
+         linear residual subtraction from corrupting outer nonlinear link functions.
+      4. Emits standalone Python helper definitions (`def lib_0(x): return ...`) so
          hierarchical AST rules remain 100% self-contained and pass `AstPolicySafetyGate`.
     """
 
@@ -1967,6 +1984,7 @@ class SymbolicLibrary:
         self.max_primitives = max(1, int(max_primitives))
         self.max_collinearity = float(max_collinearity)
         self.primitives: List[LibraryPrimitive] = []
+        self.prior_stage_predictors: List[Callable[[np.ndarray], np.ndarray]] = []
 
     def register_primitive(
         self,
@@ -1977,6 +1995,7 @@ class SymbolicLibrary:
         X_sample: np.ndarray,
         ast_depth: int = 2,
         min_r2: float = 0.30,
+        natural_scale: Optional[float] = None,
     ) -> Optional[LibraryPrimitive]:
         if term_count < 2 or r2_score < min_r2:
             return None
@@ -1999,6 +2018,7 @@ class SymbolicLibrary:
         inv_std = round(1.0 / std_v, 6)
         mean_r = round(mean_v, 6)
         norm_expr = f"({inv_std} * (({expr_str}) - ({mean_r:+.6f})))"
+        nat_scale = round(float(natural_scale if natural_scale is not None else std_v), 6)
 
         def _norm_eval(arr: np.ndarray, fn=eval_fn, m=mean_v, s=std_v) -> np.ndarray:
             return (np.asarray(fn(arr), dtype=np.float64).reshape(-1) - m) / s
@@ -2014,6 +2034,8 @@ class SymbolicLibrary:
             term_count=int(term_count),
             ast_depth=int(ast_depth),
             reuse_count=0,
+            natural_scale=nat_scale,
+            mean_offset=mean_r,
         )
         if len(self.primitives) < self.max_primitives:
             self.primitives.append(prim)
@@ -2037,16 +2059,18 @@ class SymbolicLibrary:
 class NeuroSymbolicDistiller:
     """
     Stage 3 of SLEEP-DAG-RSI v6 & v7 (`MoE-to-AST Compiler` with `Residual-Keep Decomposition`,
-    `SymbolicLibrary` Subroutine Invention, and `ActiveBoundarySynthesizer` Querying):
+    `SymbolicLibrary` Subroutine Invention, `Full-Target Re-Consolidation`, and `ActiveBoundarySynthesizer`):
       1. Filters input dimensions by sensitivity/gradient norm (`d_active <= 8`).
       2. Constructs a bounded typed AST basis dictionary `Psi(X)` (`K <= 64`), automatically
-         expanding with hierarchical `SymbolicLibrary` subroutines (`lib_k(x)`, `lib_k(x) * x[i]`,
-         `lib_k(x) * sign(x[i])`) so depth-3/4 compositional laws can be distilled!
+         expanding with hierarchical `SymbolicLibrary` subroutines (`lib_k(x)`, `tanh(scale * lib_k(x))`,
+         `lib_k(x) * x[i]`, `lib_k(x) * sign(x[i])`) so depth-3/4 compositional laws can be distilled!
       3. Optionally queries `ActiveBoundarySynthesizer` against `active_teacher_fn` to enrich
          passive Wake states with high-disagreement decision-boundary counterexamples.
       4. Fits `numpy_lasso_coordinate_descent` per output channel and verifies via `AstPolicySafetyGate`.
-      5. Evaluates Out-of-Sample `R^2_OOS` and `accept_joint_2x2`. If accepted, abstracts new
-         multi-term motifs into `SymbolicLibrary` and returns `Delta_f_rem(x) = Delta_f(x) - f_AST(x)`.
+      5. When `reconstruct_uncorrupted_target=True` and prior-cycle symbolic predictors exist in
+         `SymbolicLibrary`, also evaluates against the reconstructed uncorrupted target
+         `Y_full(X) = delta_Y + sum_{prior} f_AST(X)` so greedy Cycle-1 linear approximations
+         of `tanh(z)` are cleanly replaced by the exact composite law `tanh(lib_k(x))`.
     """
 
     def __init__(
@@ -2095,8 +2119,9 @@ class NeuroSymbolicDistiller:
         """
         Builds bounded dictionary `Psi(X)` in R^{B x K} with K <= 64.
         When `self.library` has invented subroutines `lib_k(x)`, injects hierarchical
-        compositions (`lib_k(x)`, `tanh(lib_k(x))`, `lib_k(x) * x[i]`, `lib_k(x) * sign(x[i])`)
-        across all `active_inputs` before filling remaining slots with depth-2 raw pairwise interactions.
+        compositions (`lib_k(x)`, `tanh(lib_k(x))`, `tanh(scale * lib_k(x))`, `lib_k(x) * x[i]`,
+        `lib_k(x) * sign(x[i])`) across all `active_inputs` before filling remaining slots
+        with depth-2 raw pairwise interactions.
         """
         cols: List[np.ndarray] = []
         exprs: List[str] = []
@@ -2130,9 +2155,20 @@ class NeuroSymbolicDistiller:
                 evaluators.append(lambda arr, p_fn=prim.eval_fn: p_fn(arr))
 
                 if len(cols) < 64:
-                    cols.append(np.tanh(p_col))
-                    exprs.append(f"math.tanh({prim.name}(x))")
-                    evaluators.append(lambda arr, p_fn=prim.eval_fn: np.tanh(p_fn(arr)))
+                    sc = round(float(prim.natural_scale), 6)
+                    off = round(float(prim.mean_offset), 6)
+                    if abs(sc - 1.0) > 0.05 or abs(off) > 1e-4:
+                        cols.append(np.tanh(sc * p_col + off))
+                        exprs.append(f"math.tanh({sc} * {prim.name}(x) + ({off:+.6f}))")
+                        evaluators.append(
+                            lambda arr, p_fn=prim.eval_fn, s_val=sc, o_val=off: np.tanh(
+                                s_val * p_fn(arr) + o_val
+                            )
+                        )
+                    else:
+                        cols.append(np.tanh(p_col))
+                        exprs.append(f"math.tanh({prim.name}(x))")
+                        evaluators.append(lambda arr, p_fn=prim.eval_fn: np.tanh(p_fn(arr)))
 
                 for i in active_inputs:
                     if len(cols) < 64:
@@ -2164,36 +2200,131 @@ class NeuroSymbolicDistiller:
         Psi = np.column_stack(cols) if cols else np.zeros((X.shape[0], 0), dtype=np.float64)
         return Psi, exprs, evaluators
 
-    def distill_residual(
+    def _discover_nonlinear_inner_submotif(
         self,
-        X: np.ndarray,
-        delta_Y: np.ndarray,
-        X_oos: Optional[np.ndarray] = None,
-        delta_Y_oos: Optional[np.ndarray] = None,
-        val_metric_fn: Optional[Callable[[Callable[[np.ndarray], np.ndarray]], float]] = None,
-        val_baseline_score: float = 0.0,
-        active_teacher_fn: Optional[Callable[[np.ndarray], np.ndarray]] = None,
-        num_active_boundary_queries: int = 12,
+        Psi_tr: np.ndarray,
+        Y_tr_1d: np.ndarray,
+        w_linear: np.ndarray,
+        exprs: Sequence[str],
+        evaluators: Sequence[Callable[[np.ndarray], np.ndarray]],
+        X_full: np.ndarray,
+    ) -> Optional[LibraryPrimitive]:
+        """
+        When a Cycle-1 linear fit `w_linear` leaves a saturation residual (e.g. `y = tanh(z) + c*x_4`),
+        tests subsets `S` of the active linear support (`2 <= |S| <= m`) via 4 fast Gauss-Newton
+        steps on `a * tanh(Psi_S @ theta_S) + Psi_rest @ theta_rest + b`.
+        If a subset `S` reduces training SSE by > 50%, registers the polished inner argument
+        `Psi_S @ theta_S` into `self.library` along with its exact natural saturation scale `std(z_S)`.
+        """
+        if self.library is None:
+            return None
+        act_idx = [k for k in range(len(w_linear)) if abs(w_linear[k]) > 1e-5]
+        m = len(act_idx)
+        if m < 2 or m > 5:
+            return None
+
+        base_pred = Psi_tr[:, act_idx] @ w_linear[act_idx]
+        base_pred = base_pred + (float(np.mean(Y_tr_1d)) - float(np.mean(base_pred)))
+        base_sse = float(np.sum((Y_tr_1d - base_pred) ** 2))
+        tot_ss = float(np.sum((Y_tr_1d - float(np.mean(Y_tr_1d))) ** 2)) + 1e-12
+        if base_sse / tot_ss < 1e-4:
+            return None
+
+        from itertools import combinations
+
+        best_sse = base_sse
+        best_sub_indices: Optional[List[int]] = None
+        best_theta_s: Optional[np.ndarray] = None
+
+        n_tr = Psi_tr.shape[0]
+        ones_col = np.ones((n_tr, 1), dtype=np.float64)
+
+        for sz in range(2, m + 1):
+            for sub_tuple in combinations(act_idx, sz):
+                sub_list = list(sub_tuple)
+                rest_list = [k for k in act_idx if k not in sub_list]
+                Psi_s = Psi_tr[:, sub_list]
+                Psi_r = Psi_tr[:, rest_list] if rest_list else np.zeros((n_tr, 0), dtype=np.float64)
+
+                for scale_init in (1.2, 1.6):
+                    theta_s = w_linear[sub_list].copy() * scale_init
+                    a_val = 1.0
+                    theta_r = w_linear[rest_list].copy() if rest_list else np.zeros((0,), dtype=np.float64)
+                    b_val = 0.0
+
+                    for _gn in range(5):
+                        z_s = Psi_s @ theta_s
+                        t_z = np.tanh(z_s)
+                        sech2 = 1.0 - t_z * t_z
+                        pred = a_val * t_z + (Psi_r @ theta_r if rest_list else 0.0) + b_val
+                        res = Y_tr_1d - pred
+                        J_s = (a_val * sech2)[:, None] * Psi_s
+                        J_cols = [J_s, t_z[:, None]]
+                        if rest_list:
+                            J_cols.append(Psi_r)
+                        J_cols.append(ones_col)
+                        J = np.hstack(J_cols)
+                        p_dim = J.shape[1]
+                        step = np.linalg.solve(
+                            J.T @ J + 1e-4 * float(n_tr) * np.eye(p_dim),
+                            J.T @ res,
+                        )
+                        theta_s = theta_s + step[:sz]
+                        a_val = float(a_val + step[sz])
+                        if rest_list:
+                            theta_r = theta_r + step[sz + 1 : sz + 1 + len(rest_list)]
+                        b_val = float(b_val + step[-1])
+
+                    z_final = Psi_s @ theta_s
+                    pred_final = a_val * np.tanh(z_final) + (Psi_r @ theta_r if rest_list else 0.0) + b_val
+                    sse_final = float(np.sum((Y_tr_1d - pred_final) ** 2))
+                    if sse_final < best_sse * 0.45:
+                        best_sse = sse_final
+                        best_sub_indices = sub_list
+                        best_theta_s = theta_s.copy()
+
+        if best_sub_indices is None or best_theta_s is None:
+            return None
+
+        sub_terms = [
+            f"{best_theta_s[pos]:+.6f} * {exprs[k_idx]}"
+            for pos, k_idx in enumerate(best_sub_indices)
+        ]
+        sub_expr_str = " ".join(sub_terms)
+        sub_evs = [evaluators[k_idx] for k_idx in best_sub_indices]
+        th_snap = best_theta_s.copy()
+
+        def _sub_eval(arr: np.ndarray, ev_l=sub_evs, w_v=th_snap) -> np.ndarray:
+            p_mat = np.column_stack([fn(arr) for fn in ev_l])
+            return p_mat @ w_v
+
+        full_vals = _sub_eval(X_full)
+        nat_scale = float(np.std(full_vals))
+        r2_sub = max(0.0, 1.0 - best_sse / tot_ss)
+        return self.library.register_primitive(
+            expr_str=sub_expr_str,
+            eval_fn=_sub_eval,
+            term_count=len(best_sub_indices),
+            r2_score=r2_sub,
+            X_sample=X_full,
+            ast_depth=2,
+            natural_scale=nat_scale,
+        )
+
+    def _fit_single_target(
+        self,
+        X_arr: np.ndarray,
+        Y_arr: np.ndarray,
+        X_tr: np.ndarray,
+        Y_tr: np.ndarray,
+        X_val: np.ndarray,
+        Y_val: np.ndarray,
+        val_metric_fn: Optional[Callable[[Callable[[np.ndarray], np.ndarray]], float]],
+        val_baseline_score: float,
+        active_teacher_fn: Optional[Callable[[np.ndarray], np.ndarray]],
+        num_active_boundary_queries: int,
     ) -> Dict[str, Any]:
-        X_arr = np.asarray(X, dtype=np.float64)
-        Y_arr = np.asarray(delta_Y, dtype=np.float64)
-        if Y_arr.ndim == 1:
-            Y_arr = Y_arr[:, None]
-
-        n_total, d_out = Y_arr.shape
-        if X_oos is not None and delta_Y_oos is not None:
-            X_tr, Y_tr = X_arr, Y_arr
-            X_val = np.asarray(X_oos, dtype=np.float64)
-            Y_val = np.asarray(delta_Y_oos, dtype=np.float64)
-            if Y_val.ndim == 1:
-                Y_val = Y_val[:, None]
-        else:
-            split = max(4, int(round(0.75 * n_total)))
-            if split >= n_total:
-                split = max(1, n_total - 2)
-            X_tr, Y_tr = X_arr[:split], Y_arr[:split]
-            X_val, Y_val = X_arr[split:], Y_arr[split:]
-
+        d_out = Y_arr.shape[1]
         active_inputs = self.select_active_inputs(X_tr, Y_tr)
         Psi_tr, exprs, evaluators = self.build_basis_dictionary(X_tr, active_inputs)
 
@@ -2293,7 +2424,6 @@ class NeuroSymbolicDistiller:
             psi_mat = np.column_stack(psi_cols)
             return psi_mat @ W_mat + b_vec[None, :]
 
-        # 2x2 Acceptance Gate comparing baseline (0 symbolic distillation) vs neuro-symbolic split
         if val_metric_fn is not None:
             cand_val_score = float(val_metric_fn(_predict_fn))
             gate_2x2 = dream_engine.accept_joint_2x2(
@@ -2323,32 +2453,6 @@ class NeuroSymbolicDistiller:
             and gate_2x2["accepted_pair"] == ("theta_residual_keep", "psi_ast")
         )
 
-        # Track library reuse and optionally invent new primitive from accepted multi-term motif
-        invented_primitive_name: Optional[str] = None
-        if accepted and self.library is not None:
-            for p in self.library.primitives:
-                if any(f"{p.name}(x)" in t for t in active_terms):
-                    p.reuse_count += 1
-            if self.auto_invent_primitives and per_channel_term_counts and per_channel_term_counts[0] >= 2:
-                w0 = W_mat[:, 0].copy()
-                b0 = float(b_vec[0])
-                evs_snap = list(evaluators)
-
-                def _ch0_eval(arr: np.ndarray, w_v=w0, b_v=b0, ev_l=evs_snap) -> np.ndarray:
-                    p_mat = np.column_stack([fn(arr) for fn in ev_l])
-                    return p_mat @ w_v + b_v
-
-                new_prim = self.library.register_primitive(
-                    expr_str=channel_lines[0],
-                    eval_fn=_ch0_eval,
-                    term_count=per_channel_term_counts[0],
-                    r2_score=r2_oos,
-                    X_sample=X_arr,
-                    ast_depth=3 if any("lib_" in t for t in active_terms) else 2,
-                )
-                if new_prim is not None:
-                    invented_primitive_name = new_prim.name
-
         residual_rem = Y_arr - pred_full if accepted else Y_arr.copy()
         orig_energy = float(np.sum(Y_arr ** 2)) + 1e-12
         rem_energy = float(np.sum(residual_rem ** 2))
@@ -2365,10 +2469,176 @@ class NeuroSymbolicDistiller:
             "ast_safety_valid": safety_rep["valid"],
             "gate_2x2": gate_2x2,
             "energy_reduction_ratio": round(energy_reduction_ratio, 6),
-            "invented_primitive": invented_primitive_name,
             "boundary_report": boundary_report,
             "residual_rem": residual_rem,
+            "rem_energy": rem_energy,
             "predict_fn": _predict_fn,
+            "weights": W_mat,
+            "intercept": b_vec,
+            "channel_lines": channel_lines,
+            "per_channel_term_counts": per_channel_term_counts,
+            "evaluators": evaluators,
+            "exprs": exprs,
+            "Psi_tr": Psi_tr,
+            "Y_tr": Y_tr,
+        }
+
+    def distill_residual(
+        self,
+        X: np.ndarray,
+        delta_Y: np.ndarray,
+        X_oos: Optional[np.ndarray] = None,
+        delta_Y_oos: Optional[np.ndarray] = None,
+        val_metric_fn: Optional[Callable[[Callable[[np.ndarray], np.ndarray]], float]] = None,
+        val_baseline_score: float = 0.0,
+        active_teacher_fn: Optional[Callable[[np.ndarray], np.ndarray]] = None,
+        num_active_boundary_queries: int = 12,
+        reconstruct_uncorrupted_target: bool = True,
+    ) -> Dict[str, Any]:
+        X_arr = np.asarray(X, dtype=np.float64)
+        Y_arr = np.asarray(delta_Y, dtype=np.float64)
+        if Y_arr.ndim == 1:
+            Y_arr = Y_arr[:, None]
+
+        n_total, d_out = Y_arr.shape
+        if X_oos is not None and delta_Y_oos is not None:
+            X_tr, Y_tr = X_arr, Y_arr
+            X_val = np.asarray(X_oos, dtype=np.float64)
+            Y_val = np.asarray(delta_Y_oos, dtype=np.float64)
+            if Y_val.ndim == 1:
+                Y_val = Y_val[:, None]
+        else:
+            split = max(4, int(round(0.75 * n_total)))
+            if split >= n_total:
+                split = max(1, n_total - 2)
+            X_tr, Y_tr = X_arr[:split], Y_arr[:split]
+            X_val, Y_val = X_arr[split:], Y_arr[split:]
+
+        fit_direct = self._fit_single_target(
+            X_arr,
+            Y_arr,
+            X_tr,
+            Y_tr,
+            X_val,
+            Y_val,
+            val_metric_fn=val_metric_fn,
+            val_baseline_score=val_baseline_score,
+            active_teacher_fn=active_teacher_fn,
+            num_active_boundary_queries=num_active_boundary_queries,
+        )
+        chosen = fit_direct
+        reconstructed_full = False
+
+        # Full-Target Multi-Cycle Re-Consolidation:
+        # If `delta_Y` is a corrupted residual `Y_orig - Y_prior_symbolic` (e.g. `tanh(z) - c*z`),
+        # reconstruct `Y_recon = delta_Y + Y_prior_symbolic` and test whether composing the newly
+        # invented `SymbolicLibrary` primitives explains the full uncorrupted target with strictly
+        # lower residual energy!
+        if (
+            reconstruct_uncorrupted_target
+            and self.library is not None
+            and self.library.primitives
+            and self.library.prior_stage_predictors
+        ):
+            prior_full = np.zeros_like(Y_arr)
+            prior_tr = np.zeros_like(Y_tr)
+            prior_val = np.zeros_like(Y_val)
+            for p_fn in self.library.prior_stage_predictors:
+                prior_full = prior_full + np.asarray(p_fn(X_arr), dtype=np.float64).reshape(Y_arr.shape)
+                prior_tr = prior_tr + np.asarray(p_fn(X_tr), dtype=np.float64).reshape(Y_tr.shape)
+                prior_val = prior_val + np.asarray(p_fn(X_val), dtype=np.float64).reshape(Y_val.shape)
+
+            fit_recon = self._fit_single_target(
+                X_arr,
+                Y_arr + prior_full,
+                X_tr,
+                Y_tr + prior_tr,
+                X_val,
+                Y_val + prior_val,
+                val_metric_fn=val_metric_fn,
+                val_baseline_score=val_baseline_score,
+                active_teacher_fn=active_teacher_fn,
+                num_active_boundary_queries=num_active_boundary_queries,
+            )
+            if (
+                fit_recon["accepted"]
+                and fit_recon["rem_energy"] < fit_direct["rem_energy"] * 0.50
+                and fit_recon["r2_oos"] > fit_direct["r2_oos"] + 0.02
+            ):
+                chosen = fit_recon
+                reconstructed_full = True
+
+        accepted = chosen["accepted"]
+        active_terms = chosen["active_terms"]
+        per_channel_term_counts = chosen["per_channel_term_counts"]
+        W_mat = chosen["weights"]
+        b_vec = chosen["intercept"]
+        evaluators = chosen["evaluators"]
+        exprs = chosen["exprs"]
+        channel_lines = chosen["channel_lines"]
+        r2_oos = chosen["r2_oos"]
+
+        # Track library reuse and optionally invent new primitive(s) from accepted multi-term motif
+        invented_primitive_name: Optional[str] = None
+        if accepted and self.library is not None:
+            for p in self.library.primitives:
+                if any(f"{p.name}(x)" in t for t in active_terms):
+                    p.reuse_count += 1
+
+            if self.auto_invent_primitives and per_channel_term_counts and per_channel_term_counts[0] >= 2:
+                # 1. Check if a subset of active terms forms the inner argument of a nonlinear saturation (e.g. tanh)
+                sub_prim = self._discover_nonlinear_inner_submotif(
+                    Psi_tr=chosen["Psi_tr"],
+                    Y_tr_1d=chosen["Y_tr"][:, 0],
+                    w_linear=W_mat[:, 0],
+                    exprs=exprs,
+                    evaluators=evaluators,
+                    X_full=X_arr,
+                )
+                if sub_prim is not None:
+                    invented_primitive_name = sub_prim.name
+
+                # 2. Also register the full channel-0 multi-term linear combination
+                w0 = W_mat[:, 0].copy()
+                b0 = float(b_vec[0])
+                evs_snap = list(evaluators)
+
+                def _ch0_eval(arr: np.ndarray, w_v=w0, b_v=b0, ev_l=evs_snap) -> np.ndarray:
+                    p_mat = np.column_stack([fn(arr) for fn in ev_l])
+                    return p_mat @ w_v + b_v
+
+                new_prim = self.library.register_primitive(
+                    expr_str=channel_lines[0],
+                    eval_fn=_ch0_eval,
+                    term_count=per_channel_term_counts[0],
+                    r2_score=r2_oos,
+                    X_sample=X_arr,
+                    ast_depth=3 if any("lib_" in t for t in active_terms) else 2,
+                )
+                if new_prim is not None and invented_primitive_name is None:
+                    invented_primitive_name = new_prim.name
+
+            if reconstructed_full:
+                self.library.prior_stage_predictors = [chosen["predict_fn"]]
+            else:
+                self.library.prior_stage_predictors.append(chosen["predict_fn"])
+
+        return {
+            "accepted": accepted,
+            "r2_train": chosen["r2_train"],
+            "r2_oos": r2_oos,
+            "active_inputs": chosen["active_inputs"],
+            "dictionary_size": chosen["dictionary_size"],
+            "active_terms": active_terms,
+            "ast_code": chosen["ast_code"],
+            "ast_safety_valid": chosen["ast_safety_valid"],
+            "gate_2x2": chosen["gate_2x2"],
+            "energy_reduction_ratio": chosen["energy_reduction_ratio"],
+            "invented_primitive": invented_primitive_name,
+            "reconstructed_full_target": reconstructed_full,
+            "boundary_report": chosen["boundary_report"],
+            "residual_rem": chosen["residual_rem"],
+            "predict_fn": chosen["predict_fn"],
             "weights": W_mat,
             "intercept": b_vec,
         }

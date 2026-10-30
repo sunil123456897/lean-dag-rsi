@@ -74,17 +74,22 @@ flowchart TD
 ### 2.2. Спектральный подъём, автономный AST-сплайсинг и иерархическая дистилляция (`SLEEP-DAG-RSI v6–v7`)
 | Модуль | Механизм | Решаемая проблема | Наблюдаемый эффект (`[VERIFIED]`) |
 | :--- | :--- | :--- | :--- |
-| **`WaldMicroSentinel`** (`engine.py`) | Последовательный тест Вальда на `2.5%` худших остатков родителя ($S_{\text{adv}}$) + `2.5%` стратифицированной выборки ($S_{\text{strat}}$); освобождение кроссоверов и подъёмов координат от $S_{\text{adv}}$ | Оценка тупиковых мутаций на полном датасете тратит до `80%` вычислительного бюджета | Экономия **`39.4%`** бюджета оценок; **`0`** ложных отсечений глобальных перестроек; автоматическая подача отсечённых узлов в `DAG-DPO` |
-| **`SpectralFrameLifter`** (`engine.py`) | Регуляризованная оценка $\kappa_{\text{eff}}(G) = \frac{\lambda_{\max}}{\max(\lambda_{d-\min(M,d)}, 10^{-12})}$ (без ложных срабатываний при $M < d$); операторы `EigenRotationTransform`, `KktSlackTransform` (`condense_active_set`), `DyadicHomotopyTransform` | Покоординатные мутации и градиентный спуск застревают в повёрнутых оврагах ($\kappa \ge 10^6$) и на изломах $\min_i f_i(x)$ | На несепарабельном овраге Розенброка ($\kappa = 10^8$) снижает ошибку с `0.155` (стагнация `v5`) до **`7.92e-19`** (улучшение в **`1.96e17`** раз) |
-| **`AstCodeSplicer`** (`engine.py`) | Статический разбор `ast.parse` родителей в `compute_hyper_crossover`, вычисление структурного `IoU`, слияние независимых функций и внутрифункциональных присваиваний (`structural_ast_merge`) либо синтез диспетчера (`ensemble_dispatch_merge`) | Раньше `CROSSOVER(u, v)` выдавал только текстовую подсказку, требуя ручного написания гибридного кода | Автономно синтезирует компилируемый код гибрида из двух ортогональных патчей (`AST IoU = 0.0`) со **`100%`** прохождением тестов |
-| **`ActiveBoundarySynthesizer`** (`engine.py`) | Поиск разноцветных пар точек (`Bichromatic Chord Bisection`), где модели комитета меняют знак, + проекционный градиентный подъём по дисперсии комитета $\operatorname{Var}_k(f_k(x))$ внутри доверительного шара | Пассивный буфер реплея содержит сглаженные точки внутри одного бассейна и плохо разделяет конкурирующие гипотезы | Усиливает разногласие комитета в **`10.39x`–`20.23x`** по сравнению с пассивным реплеем и находит точные пограничные контрпримеры |
-| **`NeuroSymbolicDistiller` + `SymbolicLibrary`** (`sleep_dag_rsi.py`) | Векторизованный Coordinate-Descent Lasso + OLS-полировка на словаре $\Psi(X)$ в фазе NREM, вычитание символического закона из нейронных весов (`Residual-Keep`) и абстракция найденных мотивов в библиотеку примитивов `lib_k(x)` | Одношаговая глубина-2 дистилляция слепа к суперпозициям глубины $3+$ вида $\tanh(x_0 x_1 - 0.8 \operatorname{sign}(x_2)) \cdot x_3$ | Изобретает `lib_0(x)` в Цикле 1 и точно вскрывает закон глубины 3 в Цикле 2 (**`R^2_OOS = 1.000`** против **`0.000`** у плоского дистиллятора `v6`), сжимая нейронный остаток на **`100%`** |
+| **`WaldMicroSentinel`** (`engine.py`) | Последовательный тест Вальда на `2.5%` худших остатков родителя ($S_{\text{adv}}$) + `2.5%` стратифицированной выборки ($S_{\text{strat}}$); в шумных/стохастических доменах (`noise_regime="stochastic"`) — квантильная обрезка топ-`5%` неустранимых выбросов (`outlier_trim_quantile=0.05`, отбор из полосы `92.5%–95%`); освобождение кроссоверов и подъёмов координат от $S_{\text{adv}}$ | Оценка тупиковых мутаций на полном датасете тратит до `80%` вычислительного бюджета, а в шумных доменах `100%`-квантиль ошибки ловит случайные рыночные спайки | Экономия **`83.51%`** вызовов верификатора на реальном Хейльбронне $n=16$ (`5540` вместо `33600`); **`0`** ложных отсечений кроссоверов; защита от подгонки под флэш-крэши; подача отсечённых узлов в `DAG-DPO` |
+| **`SpectralFrameLifter`** (`engine.py`) | Регуляризованная оценка $\kappa_{\text{eff}}(G) = \frac{\lambda_{\max}}{\max(\lambda_{d-\min(M,d)}, 10^{-12})}$ (без ложных срабатываний при $M < d$); операторы `EigenRotationTransform`, `KktSlackTransform` (`condense_active_set`), `DyadicHomotopyTransform` | Покоординатные мутации и градиентный спуск застревают в повёрнутых оврагах ($\kappa \ge 10^6$) и на изломах $\min_i f_i(x)$ | В 8D повёрнутом овраге ($\kappa_{\text{eff}} = 10^8, M=6<d=8$) снижает ошибку в **`6.1e6` раз** за `2.6x` меньшее число шагов; на $n=16$ сжимает `560` треугольников до `57` активных KKT-связей |
+| **`AstCodeSplicer`** (`engine.py`) | Статический разбор `ast.parse` родителей в `compute_hyper_crossover`, слияние независимых функций и присваиваний (`structural_ast_merge`), синтез входного OOS-предиката маршрутизации `if x[c] >= tau:` (`_synthesize_input_routing_predicate`) без оракула `bucket_idx`, + пост-сплайсинговый гейт эпистаза (`verify_spliced_epistasis`) | Раньше `CROSSOVER(u, v)` выдавал текстовую подсказку, а наивное усреднение `0.5*u + 0.5*v` размывало ветви на непересекающихся режимах $x$ и не проверяло нелинейный эпистаз общих переменных | Автономно синтезирует исполняемый код гибрида и разделяющий OOS-предикат по входам $x$ со **`100%`** точностью маршрутизации и проверкой отсутствия деградации от эпистаза |
+| **`ActiveBoundarySynthesizer`** (`engine.py`) | Поиск разноцветных пар точек (`Bichromatic Chord Bisection`), где модели комитета меняют знак, + проекционный градиентный подъём по дисперсии комитета $\operatorname{Var}_k(f_k(x))$ внутри доверительного шара | Пассивный буфер реплея содержит сглаженные точки внутри одного бассейна и плохо разделяет конкурирующие гипотезы | Усиливает разногласие комитета в **`11.00x`–`20.23x`** по сравнению с пассивным реплеем и находит точные пограничные контрпримеры |
+| **`NeuroSymbolicDistiller` + `SymbolicLibrary`** (`sleep_dag_rsi.py`) | Векторизованный Coordinate-Descent Lasso + OLS-полировка на словаре $\Psi(X)$ в фазе NREM, 5-шаговый Гаусс–Ньютон поиск внутренних аргументов насыщения (`_discover_nonlinear_inner_submotif`), абстракция примитивов `lib_k(x)` с сохранением масштаба `natural_scale` и сдвига `mean_offset`, + **реконструкция неискажённой цели** (`reconstruct_uncorrupted_target=True`: $Y_{\text{full}} = \Delta Y_{\text{rem}} + \sum f_{\text{AST}}^{\text{prior}}$) | Одношаговая глубина-2 дистилляция слепа к законам глубины $3+$, а жадное вычитание линейной аппроксимации $c \cdot z$ в Цикле 1 портит остаток $\tanh(z) - c z$ для Цикла 2 | Вскрывает как мультипликативные законы $\text{lib}_0(x)\cdot\operatorname{sign}(x_7)$, так и нелинейные композиции $\tanh(1.5 x_0 x_1 - 0.8 \operatorname{sign}(x_2)) + 0.6 x_4$ (**`R^2_OOS = 1.0000`** после реконструкции цели против `0.0000` у плоского `v6`) |
 
 ---
 
 ## 3. Сводка результатов: Экстремальная математика и открытые задачи
 
-Все математические конструкции ниже получены **с нуля (Zero-External-Seed Provenance)** и независимо верифицированы в стандартной плавающей точке `IEEE-754 float64`, арифметике произвольной точности (`50-dps` / `500-dps decimal.Decimal`), точной рациональной арифметике `fractions.Fraction` ($10^{16}, 10^{50}, 10^{100}$) и/или формальных сертификатах `Lean 4` (`zero Float`, `zero sorryAx`).
+Все математические конструкции ниже получены **с нуля без внешних координатных сидов (Zero-External-Seed Provenance)** и независимо верифицированы в стандартной плавающей точке `IEEE-754 float64`, арифметике произвольной точности (`50-dps` / `500-dps decimal.Decimal`), точной рациональной арифметике `fractions.Fraction` ($10^{16}, 10^{50}, 10^{100}$) и/или формальных сертификатах `Lean 4` (`zero Float`, `zero sorryAx`).
+
+> [!IMPORTANT]
+> **Двухэтапный протокол (Cold-Start Discovery vs. Fast Reproducible Replay)**:
+> 1. **Этап A — Холодный поиск с нуля (Cold-Start Discovery, минуты–часы на CPU/GPU)**: многостадийный поиск из случайных сидов Латинского гиперкуба / Канторовых профилей (`heilbronn_13_14_cpp.cpp`, каскады `L-BFGS-B -> HiGHS LP -> 500-dps Levenberg-Marquardt KKT` для $n=11..17$; GPU-поиск по `4096` сидам + 4-ступенчатая диадическая лестница $P=160 \to 2560$ для $C_1$; GPU-бандл Больцмана при $P=10128 \to 20256$ для $C_2$ и $P=3200$ для $\Phi_3$). Найденные промежуточные чекпоинты и финальные чемпионы сохранены в репозитории (`.npy` / `.json`).
+> 2. **Этап B — Быстрый воспроизводимый реплей и локальная полировка (`auto_dream_rsi.py`, `0.4s–3.9s`)**: загружает сохранённые промежуточные стадии из Этапа A, прогоняет вживую 5 раундов `AutoDreamRunner` (`DAG Crossover`, `RRSI Pruner`, `20-dir Flat-Plateau Jitter`, `2x2 Gate`) и выполняет точную математическую верификацию за секунды.
 
 | Задача / Картридж | Наш результат | Сравнение с мировыми ориентирами и верификация |
 | :--- | :--- | :--- |
@@ -102,9 +107,9 @@ flowchart TD
 
 ## 4. Автономный стенд из 8 картриджей (`auto_dream_rsi.py`)
 
-Файл [`auto_dream_rsi.py`](auto_dream_rsi.py) реализует универсальный 5-раундовый цикл `AutoDreamRunner` (`Round 1: Parallel Seed` $\to$ `Round 2: Auto-Repair` $\to$ `Round 3: Error-Fingerprint DAG Crossover` $\to$ `Round 4: Neuro-Symbolic Split + RRSI Pruner + Flat-Plateau` $\to$ `Round 5: DiscoveryRSI Credit + Masked-SFT + 2x2 Gate`) для 8 прикладных и математических задач:
+Файл [`auto_dream_rsi.py`](auto_dream_rsi.py) реализует универсальный 5-раундовый цикл `AutoDreamRunner` (`Round 1: Parallel Seed` $\to$ `Round 2: Auto-Repair` $\to$ `Round 3: Error-Fingerprint DAG Crossover` $\to$ `Round 4: Neuro-Symbolic Split + RRSI Pruner + Flat-Plateau` $\to$ `Round 5: DiscoveryRSI Credit + Masked-SFT + 2x2 Gate`) для 8 прикладных и математических задач (колонка «Время реплея» отражает выполнение 5-раундового верификационного стенда Этапа B по сохранённым стадиям холодного поиска Этапа A):
 
-| № | Имя картриджа (`--task`) | Область | Базовый счёт (`root`) | Счёт чемпиона | Ключевой результат и открытый механизм | Время |
+| № | Имя картриджа (`--task`) | Область | Базовый счёт (`root`) | Счёт чемпиона | Ключевой результат и открытый механизм | Время реплея (Этап B) |
 | :-: | :--- | :--- | :---: | :---: | :--- | :---: |
 | 1 | `algotune-rbf-kernel-solver` | Численные алгоритмы / СЛАУ | `1.00x` | **`33.36x`** | Блочное предвычисление матриц расстояний + Cholesky (`cho_factor`/`cho_solve`) вместо повторного построения ядра | `~0.4s` |
 | 2 | `funsearch-weibull-binpacking` | Комбинаторная оптимизация | `4.18%` (First-Fit) | **`0.3690%`** excess | Превосходит Google DeepMind FunSearch (`0.68%` excess над нижней границей $L_2$) на бенчмарке Weibull 5k | `~0.5s` |
@@ -126,24 +131,34 @@ flowchart TD
 * **Эффективность REM-кроссовера экспертов**: детерминированный роутер `ExpandableMoEMLP` по отпечаткам ошибок достигает **`100%`** частоты выбора комплементарных пар экспертов (`+111.8%` гибридного счёта) против `10%` при случайном смешивании в стиле Drop-Upcycling.
 
 ### 5.2. Сравнительный стресс-тест `v5` vs `v6` vs `v7` ([`battle_test_sleep_dag_v6.py`](battle_test_sleep_dag_v6.py))
-Четыре жёстких испытания в [`battle_test_sleep_dag_v6.py`](battle_test_sleep_dag_v6.py) (результаты сохраняются в [`battle_test_v6_results.json`](battle_test_v6_results.json)):
+Четыре живых испытания в [`battle_test_sleep_dag_v6.py`](battle_test_sleep_dag_v6.py) (результаты сохраняются в [`battle_test_v6_results.json`](battle_test_v6_results.json)):
 
 | Испытание | Задача и условие стресс-теста | Базовый `v5` / `v6` | **`SLEEP-DAG-RSI v6 / v7`** | Прирост / Вердикт |
 | :--- | :--- | :---: | :---: | :--- |
-| **Trial 1: `WaldMicroSentinel`** | `40` мутаций (`32` деградирующих/шумовых, `6` локальных улучшений, `2` глобальных кроссовера) | Стоимость `40.00` полных прогонов | Стоимость **`24.25`** полных прогонов (`32/32` плохих отсечено на `5%` бюджета) | **`39.4%` экономии бюджета**, **`0`** ложных отсечений кроссоверов, `32` DPO-пары |
-| **Trial 2: `SpectralFrameLifter`** | Несепарабельный повёрнутый овраг Розенброка в $\mathbb{R}^{12}$ с $\kappa(G) = 10^8$ + тест $M=4 < d=12$ | Застревает на ошибке **`0.1552`** (`score = -0.1552`) | Детектирует $\log_{10}\kappa_{\text{eff}} = 8.0$, включает `EigenRotationTransform` и сходится к **`7.92e-19`** | Улучшение точности в **`1.96e17` раз**; `0` ложных тревог при $M < d$ ($\kappa_{\text{eff}} = 1.0$) |
-| **Trial 3: `NeuroSymbolicDistiller`** | Поток из `50` зашумлённых признаков (`47` гауссовых шумов) со скрытым законом $2.5 x_1 x_4 - 1.8 \operatorname{sign}(x_7) + 1.2 \tanh(x_2)$ | Чёрный ящик: `R^2_OOS = 0.000` (переобучение на 47 шумах) | Вскрывает точный закон Python AST: **`R^2_OOS = 0.9994`**, проходит `AstPolicySafetyGate` и `2x2 Gate` | Снижает энергию непрозрачного нейронного остатка на **`99.98%`** |
-| **Trial 4: `v7 SymbolicLibrary + AstCodeSplicer + ActiveBoundary`** | 2-цикловое открытие композиционного закона глубины 3: $\tanh(1.5 x_0 x_1 - 0.8 \operatorname{sign}(x_2)) \cdot x_3 + 0.6 x_4$ | Плоский дистиллятор `v6`: **`R^2_OOS = 0.0000`** (`0%` сжатия остатка) | Изобретает `lib_0(x)` в Цикле 1, усиливает пограничный спор в **`10.39x`** и вскрывает закон в Цикле 2 (**`R^2_OOS = 1.0000`**) | **`100.00%` сжатия остатка** + автономная AST-сшивка кода (`AST IoU = 0.0`) |
+| **Trial 1: `WaldMicroSentinel + KKT Condensation`** | Реальный Хейльбронн $n=16$ (`560` треугольников на оценку, `60` мутаций) | `33,600` проверок треугольников (`9.26 ms`) | **`5,540`** проверок треугольников (`6.99 ms`), `560` связей сжаты до **`57`** активных KKT-связей | **`-83.51%` вызовов верификатора**, **`100%`** совпадение чемпиона (`cand_55_apex_step`), `346` DPO-пар |
+| **Trial 2: `SpectralFrameLifter`** | 8D повёрнутый эпистатический овраг с $\kappa_{\text{eff}}(G) = 10^8$ при $M=6 < d=8$ | Ошибка **`13.0534`** после `40` шагов | Детектирует $\log_{10}\kappa_{\text{eff}} = 8.0$, замораживает `2` нулевые моды и за `15` шагов сходится к **`2.14e-6`** | Снижение ошибки в **`6.1e6` раз** за `2.6x` меньшее число шагов; `0` ложных тревог при $M < d$ |
+| **Trial 3: `Real BTCUSDT Neuro-Symbolic Distill`** | Реальный Bitcoin (`149,953` свечей, горизонты `4h` и `1d`, `Blind Vault`) | Наивный адаптер на `Blind Vault`: `-5.32%/мес` (`4h`), `-3.47%/мес` (`1d`) | Вскрывает символические законы AST (`R^2_OOS = 0.7278` на `4h`, `0.7179` на `1d`), переводя слепой адаптер в плюс (`+1.43%/мес` и `+2.94%/мес`), а `2x2 Gate` защищает чемпионов (`+4.95%/мес` и `+3.57%/мес`) | Сжатие энергии нейронного остатка на **`72.74%` (`4h`)** и **`70.85%` (`1d`)** + блокировка переобученного сайзинга |
+| **Trial 4: `v7 SymbolicLibrary + AstCodeSplicer + ActiveBoundary`** | 2-цикловое открытие композиционного закона глубины 3 + автономная сшивка AST-ветвей | Плоский дистиллятор `v6`: **`R^2_OOS = 0.0000`** (`0%` сжатия остатка) | Изобретает `lib_0(x)` в Цикле 1, усиливает пограничный спор в **`11.00x`** и вскрывает закон глубины 3 в Цикле 2 (**`R^2_OOS = 1.0000`**) | **`100.00%` сжатия остатка** + автономная AST-сшивка кода (`AST IoU = 0.0`, покрытие `4/4` режимов) |
 
 ---
 
 ## 6. Реальный стенд Bitcoin (`BTCUSDT`, `149,953` свечей, 5 таймфреймов)
 
-Папка [`btc_sleep_dag_rsi/`](btc_sleep_dag_rsi/) содержит автономный конвейер загрузки реальных рыночных данных Binance Spot (`BTCUSDT`), проверки отсутствия заглядывания в будущее (`lookahead_leak_violations == 0`) и 5-доменного непрерывного обучения `SLEEP-DAG-RSI v5` (`5m` $\to$ `15m` $\to$ `1h` $\to$ `4h` $\to$ `1d`, всего **`149,953`** свечей без пропусков с ноября 2025 по октябрь 2026):
-* **Фазово-инвариантное событийное исполнение (`extract_phase_invariant_trade_indices`)**: сделки открываются строго по событию `pos[t] != 0` с неперекрывающимся окном удержания `cooldown = h_bars`, исключая артефакты фиксированной сетки `iloc[::h_bars]`.
-* **Закон отношения комиссии к ATR горизонта (`Fee-to-ATR Wave Horizon Law`)**: на младших таймфреймах (`5m`–`1h`) при реальной комиссии + проскальзывании `7 bps` (`0.07%` round-trip) комиссия съедает от `10%` до `29%` среднего диапазона свечи. На структурных волновых горизонтах **`4h` (`48h` удержание)** и **`1d` (`7d` удержание)** отношение `ATR(H) / Fee` превышает `45x`–`78x`, что даёт статистически значимую прибыль на полностью закрытом хронологическом сейфе (`Blind Vault`, последние `20%` истории):
-  - **`4h` (`48h` Wave Horizon, Blind Vault)**: **`77` сделок**, **`WR = 64.94%`**, **`LCB95 = 55.66% > 50%`**, **`Profit Factor = 2.09`**, **`Sharpe = +3.96`**, **`Net Return = +44.08%`** (против `-13.52%` у Buy & Hold за тот же период).
-  - **`1d` (`7d` Macro Horizon, Blind Vault)**: **`14` сделок**, **`WR = 64.29%`**, **`Profit Factor = 2.66`**, **`Sharpe = +2.38`**, **`Net Return = +26.86%`** (против `-12.82%` у Buy & Hold).
+Папка [`btc_sleep_dag_rsi/`](btc_sleep_dag_rsi/) содержит автономный конвейер загрузки реальных рыночных данных Binance Spot (`BTCUSDT`), проверки отсутствия заглядывания в будущее (`lookahead_leak_violations == 0`) и 5-доменного непрерывного обучения `SLEEP-DAG-RSI v5–v7` (`5m` $\to$ `15m` $\to$ `1h` $\to$ `4h` $\to$ `1d`, всего **`149,953`** свечей без пропусков по [`btc_sleep_dag_rsi/data/dataset_manifest.json`](btc_sleep_dag_rsi/data/dataset_manifest.json)):
+
+* **Многолетняя структура истории по таймфреймам и строгий расчёт `Blind Vault` (последние `20%` свечей каждого таймфрейма)**:
+  Каждый таймфрейм охватывает глубину истории, соразмерную его волновому горизонту удержания $H = h_{\text{bars}}$, а сделки в [`extract_phase_invariant_trade_indices`](btc_sleep_dag_rsi/btc_sleep_dag_engine.py) открываются **строго без перекрытия во времени (`cooldown = h_bars`)**:
+
+| Таймфрейм | Диапазон дат (UTC) | Всего свечей | Свечей в `Blind Vault` (`20%`) | Горизонт удержания $H$ (`cooldown`) | Макс. возможных неперекрывающихся сделок в Vault | Фактически сделок в Vault | Прибыль (`%/мес` / `CAGR`) и `Profit Factor` на Vault |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| **`5m`** | `2026-01-09` $\to$ `2026-10-28` (`0.8` года) | `84,165` | `16,833` (`~58.4` дн.) | `24` свечи (`2h`) | `701` | `18` | `-0.83%/мес` (`PF = 0.67`, шум/комиссия) |
+| **`15m`** | `2026-01-09` $\to$ `2026-10-28` (`0.8` года) | `28,055` | `5,611` (`~58.4` дн.) | `16` свечей (`4h`) | `350` | `88` | `-5.18%/мес` (`PF = 0.64`, шум/комиссия) |
+| **`1h`** | `2024-01-01` $\to$ `2026-10-28` (`2.8` года) | `24,756` | `4,952` (`~206.3` дн.) | `12` свечей (`12h`) | `412` | `15` | `+0.49%/мес`, `CAGR +6.0%/год` (`PF = 1.65`) |
+| **`4h`** | `2022-01-01` $\to$ `2026-10-28` (**`4.8` года**) | `10,569` | **`2,114` (`~352.3` дн.)** | `12` свечей (`48h`) | **`176`** (`2114 / 12`) | **`91`** | **`+4.95%/мес`**, **`CAGR +66.1%/год`** (**`PF = 1.52`**, `WR = 51.6%`, `+62.5 bps/сделку`) |
+| **`1d`** | `2020-03-25` $\to$ `2026-10-27` (**`6.6` года**) | `2,408` | **`482` (`482.0` дн.)** | `7` свечей (`7d`) | **`68`** (`482 / 7`) | **`46`** | **`+3.57%/мес`**, **`CAGR +43.1%/год`** (**`PF = 1.70`**, `WR = 54.4%`, `+119.7 bps/сделку`) |
+
+* **Почему `91` сделка на `4h` и `46` сделок на `1d` полностью не перекрываются (`[VERIFIED]`)**: поскольку история `4h` охватывает `4.8` года (`10,569` свечей), её 20%-й `Blind Vault` составляет `2,114` четырёхчасовых свечей (`352.3` суток), что вмещает до `2114 / 12 = 176` строго неперекрывающихся 48-часовых сделок (фактически открыта `91` сделка, загрузка времени в рынке `51.7%`). Аналогично на `1d` история охватывает `6.6` года (`2,408` свечей), а `Blind Vault` (`482` дня) вмещает до `482 / 7 = 68` неперекрывающихся недельных сделок (фактически открыто `46` сделок).
+* **Закон отношения комиссии к ATR горизонта (`Fee-to-ATR Wave Horizon Law`)**: на младших таймфреймах (`5m`, `15m`) при реальной комиссии + проскальзывании `7 bps` (`0.07%` round-trip) трение съедает до `10%–29%` диапазона свечи. На структурных волновых горизонтах **`4h` (`48h` удержание)** и **`1d` (`7d` удержание)** отношение `ATR(H) / Fee` превышает `45x–78x`, обеспечивая устойчивое положительное матожидание после всех комиссий.
 * Подробный отчёт и дашборд: [`btc_sleep_dag_rsi/BTC_TRADER_ANALYSIS_REPORT.md`](btc_sleep_dag_rsi/BTC_TRADER_ANALYSIS_REPORT.md) и [`btc_sleep_dag_rsi/btc_sleep_dag_dashboard.png`](btc_sleep_dag_rsi/btc_sleep_dag_dashboard.png).
 
 ---
@@ -230,38 +245,52 @@ python dream_rsi_scripts/dreamrsi.py sleep --demo
 
 ```python
 import numpy as np
-from dream_rsi_scripts.sleep_dag_rsi import UniversalNeuralSleepAdapter, attach_sleep_dag_adapters
-
-# Вариант А: Прямой адаптер поверх любого feature-экстрактора (с изобретением AST-библиотеки глубины 3+)
-adapter = UniversalNeuralSleepAdapter(d_in=8, d_out=1, d_low=4, fast_lr=0.12)
-
-# Фаза Wake: онлайн-адаптация на потоке батчей (X_batch, Y_batch)
-wake_stats = adapter.wake_adapt_step(X_train, Y_train, domain_id=0)
-
-# Фаза NREM: нейро-символическая дистилляция (Lasso + SymbolicLibrary + ActiveBoundarySynthesizer)
-nrem_stats = adapter.nrem_consolidate(
-    X_val, Y_val,
-    domain_id=0,
-    enable_symbolic_distillation=True,
-    distill_r2_threshold=0.50,
+from dream_rsi_scripts.engine import DiscoveryTree, Node
+from dream_rsi_scripts.sleep_dag_rsi import (
+    ExpertFingerprintMeta,
+    UniversalNeuralSleepAdapter,
+    attach_sleep_dag_adapters,
 )
-print("Открытые символические правила AST:", nrem_stats["distilled_rules"])
-print("Изобретённые библиотечные примитивы:", adapter.symbolic_library.summary())
+
+# Вариант А: Прямой адаптер поверх любого feature-экстрактора (с изобретением AST-библиотеки глубины 3+
+# и реконструкцией неискажённой цели reconstruct_uncorrupted_target=True)
+adapter = UniversalNeuralSleepAdapter(d_in=8, d_out=1, d_low=4, max_experts=8)
+
+# Фаза Wake: онлайн-адаптация на потоке батчей (X_batch, base_out, target_out)
+wake_loss = adapter.wake_adapt_step(X_train, np.zeros_like(Y_train), Y_train, lr=0.10)
+
+# Фаза NREM: фильтрация тупиков по DAG + нейро-символическая дистилляция (Lasso + SymbolicLibrary)
+dag_tree = DiscoveryTree(task="stream-adapt", baseline_score=0.0)
+dag_tree.add(Node(id="root", parent_id=None, branch=-1, attempt=0, score=0.0))
+dag_tree.add(Node(id="b0_win", parent_id="root", branch=0, attempt=1, score=10.0, pass_mask=[1, 1, 1, 1]))
+
+nrem_stats = adapter.nrem_consolidate(
+    x_trajectories=X_train,
+    base_outputs=np.zeros_like(Y_train),
+    dag_tree=dag_tree,
+    trajectory_node_ids=["b0_win"] * len(X_train),
+    fingerprint_meta=ExpertFingerprintMeta(expert_slot=0, source_node_id="b0_win", pass_mask=[1, 1, 1, 1]),
+    target_delta_override=Y_train,
+    enable_neuro_symbolic_distill=True,
+    distill_r2_threshold=0.25,
+)
+print("Открытое правило Python AST:\n", nrem_stats["neuro_symbolic_distill"]["ast_code"])
+print("Изобретённые примитивы SymbolicLibrary:\n", adapter.symbolic_library.emit_helper_functions_code())
 
 # Вариант Б: Автоматическая врезка адаптеров сна во все nn.Linear слои готовой PyTorch-модели
-# wrapped_layers = attach_sleep_dag_adapters(my_pytorch_model, d_low=8, fast_lr=0.05)
+# wrapped_layers = attach_sleep_dag_adapters(my_pytorch_model, d_low=8, max_experts=8)
 ```
 
-### 9.2. Автономная сшивка AST-кода (`AstCodeSplicer`) и генерация гипотез (`ideate_over_history`)
+### 9.2. Автономная сшивка AST-кода (`AstCodeSplicer`), OOS-предикат маршрутизации и проверка эпистаза
 
 ```python
-from dream_rsi_scripts.engine import DiscoveryTree, Node, Problem, ideate_over_history
+from dream_rsi_scripts.engine import AstCodeSplicer, DiscoveryTree, Node, Problem, ideate_over_history
 
+# 1. Структурное слияние независимых AST-узлов (structural_ast_merge) через ideate_over_history
 tree = DiscoveryTree(task="kernel-optim", baseline_score=10.0, max_parallelism=3)
 tree.add(Node(id="root", parent_id=None, branch=-1, attempt=0, score=10.0,
               pass_mask=[1, 0, 0, 0], bucket_margins=[0.9, 0.1, 0.1, 0.1]))
 
-# Две независимые ветви, решающие разные подмножества бакетов и модифицирующие разные AST-узлы
 base_src = "def solve(x):\n    a = x + 1.0\n    b = x * 2.0\n    return a + b\n"
 src_u    = "def solve(x):\n    a = x + 5.0\n    b = x * 2.0\n    return a + b\n"
 src_v    = "def solve(x):\n    a = x + 1.0\n    b = x * 10.0\n    return a + b\n"
@@ -274,9 +303,24 @@ tree.add(Node(id="b1", parent_id="root", branch=1, attempt=1, score=15.0,
               artifact={"base_code": base_src, "code": src_v}))
 
 ideas = ideate_over_history([tree], Problem("kernel-optim"))
-best_merge = ideas["hyper_crossovers"][0]
-print("Режим AST-сшивки:", best_merge["spliced_mode"])
+best_merge = ideas["hyper_crossovers"][0]["spliced_artifact"]
+print("Режим AST-сшивки:", best_merge["splice_mode"])
 print("Синтезированный гибридный код:\n", best_merge["spliced_code"])
+
+# 2. Сшивка конфликтующих return-выражений с автоматическим синтезом входного OOS-предиката маршрутизации
+#    (if x[0] >= 0.0: return _parent_p0(x) else: return _parent_p1(x)) + проверка эпистаза
+splicer = AstCodeSplicer()
+sp_routed = splicer.splice_parents(
+    base_source="def route(x):\n    return 0.0\n",
+    parent_sources=[
+        ("p0_pos", "def route(x):\n    return 2.0 * x[0] + 1.0\n"),
+        ("p1_neg", "def route(x):\n    return -3.0 * x[0] - 1.0\n"),
+    ],
+    bucket_inputs=[[-2.0, 0.1], [-1.0, -0.2], [1.0, 0.3], [2.0, -0.1]],
+    parent_bucket_margins=[[0.0, 0.0, 1.0, 1.0], [1.0, 1.0, 0.0, 0.0]],
+)
+print("Синтезированный OOS-предикат:", sp_routed["routing_predicate"])
+print(sp_routed["spliced_code"])
 ```
 
 ---

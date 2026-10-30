@@ -1577,6 +1577,63 @@ def main() -> int:
         f"v6_flat_r2={rep_v6_flat['r2_oos']:.4f} vs v7_hier_r2={rep_v7_hier['r2_oos']:.4f} invented={rep_c1['invented_primitive']} reuse={lib_v7.primitives[0].reuse_count}",
     )
 
+    # 18d. Reviewer Hardening Suite: Stochastic Quantile-Trimmed Sentinel, OOS Input-Predicate AST Splicing,
+    #      and Full-Target Multi-Cycle Re-Consolidation on Corrupted Nonlinear Link Residuals
+    stoch_sentinel = WaldMicroSentinel(adv_frac=0.025, strat_frac=0.025, noise_regime="stochastic")
+    # Indices 0..9 are extreme -100.0 flash-crash outliers (top 5% of 200); 10..14 are informative -5.0 errors
+    noisy_parent_pts = [-100.0 if i < 10 else (-5.0 if i < 15 else 1.0) for i in range(200)]
+    stoch_slice = stoch_sentinel.build_slice(noisy_parent_pts, higher_is_better=True)
+
+    splicer_oos = AstCodeSplicer()
+    base_disp = "def route_model(x):\n    return 0.0\n"
+    p0_disp = "def route_model(x):\n    return 2.0 * x[0] + 1.0\n"
+    p1_disp = "def route_model(x):\n    return -3.0 * x[0] - 1.0\n"
+    b_inputs = [[-2.0, 0.1], [-1.0, -0.2], [1.0, 0.3], [2.0, -0.1]]
+    p_margins = [[0.0, 0.0, 1.0, 1.0], [1.0, 1.0, 0.0, 0.0]]
+    sp_oos = splicer_oos.splice_parents(
+        base_source=base_disp,
+        parent_sources=[("p0_pos", p0_disp), ("p1_neg", p1_disp)],
+        bucket_inputs=b_inputs,
+        parent_bucket_margins=p_margins,
+    )
+    ep_gate = splicer_oos.verify_spliced_epistasis(
+        spliced_code=sp_oos["spliced_code"],
+        entry_func="route_model",
+        eval_score_fn=lambda fn: sum(
+            1.0
+            for x_in in ([-1.5, 0.0], [-0.5, 0.0], [0.5, 0.0], [1.5, 0.0])
+            if abs(fn(x_in) - ((2.0 * x_in[0] + 1.0) if x_in[0] >= 0.0 else (-3.0 * x_in[0] - 1.0))) < 1e-9
+        )
+        / 4.0,
+        parent_scores=[0.5, 0.5],
+    )
+
+    # Full-Target Multi-Cycle Re-Consolidation on y = tanh(1.5*x0*x1 - 0.8*sign(x2)) + 0.6*x4
+    X_tanh = rng_v7.uniform(-2.0, 2.0, size=(120, 6))
+    z_inner = 1.5 * (X_tanh[:, 0] * X_tanh[:, 1]) - 0.8 * np.where(X_tanh[:, 2] >= 0.0, 1.0, -1.0)
+    Y_tanh_true = np.tanh(z_inner) + 0.6 * X_tanh[:, 4]
+    lib_tanh = SymbolicLibrary()
+    dist_tanh = NeuroSymbolicDistiller(alpha=0.02, library=lib_tanh, auto_invent_primitives=True)
+    # Cycle 1: fits linear approximation c*z_inner + 0.6*x4 and subtracts it, leaving corrupted residual tanh(z) - c*z
+    rep_tanh_c1 = dist_tanh.distill_residual(X_tanh, Y_tanh_true)
+    corrupted_rem_c1 = rep_tanh_c1["residual_rem"]
+    # Cycle 2: given ONLY the corrupted residual `corrupted_rem_c1`, reconstructs Y_full and recovers exact tanh(scale*lib) + 0.6*x4!
+    rep_tanh_c2 = dist_tanh.distill_residual(X_tanh, corrupted_rem_c1, reconstruct_uncorrupted_target=True)
+
+    check(
+        "Stochastic WaldMicroSentinel trims top-5% outliers, AstCodeSplicer synthesizes OOS input routing predicate, and Full-Target Re-Consolidation cracks corrupted tanh(z) residual (R^2_OOS>=0.995)",
+        stoch_slice.trimmed_outlier_indices == list(range(10))
+        and stoch_slice.adversarial_indices == list(range(10, 15))
+        and sp_oos["valid"] is True
+        and sp_oos["routing_predicate"] == "x[0] >= 0.0"
+        and ep_gate["passed"] is True
+        and ep_gate["spliced_score"] == 1.0
+        and rep_tanh_c2["accepted"] is True
+        and rep_tanh_c2["reconstructed_full_target"] is True
+        and rep_tanh_c2["r2_oos"] >= 0.995,
+        f"trimmed={len(stoch_slice.trimmed_outlier_indices)} pred='{sp_oos['routing_predicate']}' c1_r2={rep_tanh_c1['r2_oos']:.4f}->c2_recon_r2={rep_tanh_c2['r2_oos']:.4f}",
+    )
+
     print()
     if FAILURES:
         print(f"RESULT: {len(FAILURES)} FAILED -> {FAILURES}")
