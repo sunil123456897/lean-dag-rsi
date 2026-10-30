@@ -1,4 +1,4 @@
-"""
+﻿"""
 Live Battle Test of `SLEEP-DAG-RSI v6 & v7` vs `v5` across 4 Self-Contained Scientific Workloads:
   1. Trial 1 (Extremal Geometry — Real Heilbronn n=16 Champion, 560 Triangles):
      - Tests `WaldMicroSentinel` (5% early abort filter on 60 candidate mutations around
@@ -601,9 +601,202 @@ def run_trial_4_v7_splicer_and_hierarchical_library() -> Dict[str, Any]:
     }
 
 
+def run_trial_5_v8_upgrades() -> Dict[str, Any]:
+    """
+    Trial 5 (SLEEP-DAG-RSI v8 Live Battle Test):
+      1. TTT-Discover Max-Tilted Objective (`compute_max_tilted_objective` & `LeanDAGPortfolio`)
+      2. BES + LADDER Backward Sub-Goal Decomposition (`BackwardSubGoalDecomposer`)
+      3. SDPO Feedback-Conditioned Self-Teacher on Dead-Ends (`FeedbackConditionedSelfTeacher`)
+      4. MutableSkillState (`SKILL.state`) 50-round bounded memory vs append-only bloat
+      5. VeriHarness Dual-Head Verification (`Disagreement Resolver + Consensus Challenger`)
+      6. FALCON-2 Prefix-Aligned NLMS Fast-Weight Update under 10^3x activation spikes
+    """
+    # 1. TTT-Discover Max-Tilted Objective
+    scores = [51.0, 52.0, 52.5, 53.0, 96.5]
+    tilt_mean = dream_engine.compute_max_tilted_objective(scores, tau=0.0)
+    tilt_ext = dream_engine.compute_max_tilted_objective(scores, tau=6.0)
+
+    # 2. BES + LADDER Backward Sub-Goal Decomposition on Dead Bucket b*=2
+    t_bes = dream_engine.DiscoveryTree(task="v8-bes", baseline_score=50.0, max_parallelism=3)
+    t_bes.add(dream_engine.Node(id="root", parent_id=None, branch=-1, attempt=0, score=50.0))
+    t_bes.add(
+        dream_engine.Node(
+            id="b0", parent_id="root", branch=0, attempt=1, score=72.0, bucket_scores=[0.50, -0.15, -0.80]
+        )
+    )
+    t_bes.add(
+        dream_engine.Node(
+            id="b1", parent_id="root", branch=1, attempt=1, score=76.0, bucket_scores=[-0.10, 0.60, -0.40]
+        )
+    )
+    decomposer = dream_engine.BackwardSubGoalDecomposer(ladder_fractions=(0.5, 0.25, 0.0))
+    bes_rep = decomposer.decompose([t_bes])
+    sub_b2 = bes_rep["stepping_stone_subgoals"][0]
+    cand_step = dream_engine.Node(
+        id="b1_step_seed", parent_id="b1", branch=1, attempt=2, score=81.0, bucket_scores=[0.10, 0.65, -0.12]
+    )
+    promo_rep = decomposer.select_stepping_stone_seed(2, [cand_step], sub_b2)
+
+    # 3. SDPO Feedback-Conditioned Self-Teacher on 100%-Dead-End Batch
+    rng = np.random.default_rng(202608)
+    X_dead = rng.uniform(-1.5, 1.5, size=(32, 4))
+    W_true = np.array([[2.0], [-1.5], [0.5], [0.0]], dtype=np.float64)
+    Y_true = X_dead @ W_true
+    wrong_delta = -0.6 * Y_true
+    verifier_residual = Y_true - wrong_delta
+
+    t_dead = dream_engine.DiscoveryTree(task="v8-sdpo", baseline_score=50.0, max_parallelism=2)
+    t_dead.add(dream_engine.Node(id="root", parent_id=None, branch=-1, attempt=0, score=50.0))
+    t_dead.add(
+        dream_engine.Node(id="fail_0", parent_id="root", branch=0, attempt=1, score=30.0, fail_class="algorithmic_failure")
+    )
+    dead_ids = ["fail_0"] * 32
+
+    ad_base = UniversalNeuralSleepAdapter(d_in=4, d_out=1, d_low=4, seed=88)
+    ad_base.nrem_consolidate(
+        x_trajectories=X_dead,
+        base_outputs=np.zeros_like(Y_true),
+        dag_tree=t_dead,
+        trajectory_node_ids=dead_ids,
+        fingerprint_meta=ExpertFingerprintMeta(expert_slot=0, source_node_id="fail_0", pass_mask=[0]),
+        steps=25,
+        lr=0.12,
+        target_delta_override=wrong_delta,
+        enable_neuro_symbolic_distill=False,
+    )
+    mse_without_sdpo = float(np.mean((ad_base.forward_delta(X_dead, use_fast=False) - Y_true) ** 2))
+
+    ad_sdpo = UniversalNeuralSleepAdapter(d_in=4, d_out=1, d_low=4, seed=88)
+    sdpo_rep = ad_sdpo.nrem_consolidate(
+        x_trajectories=X_dead,
+        base_outputs=np.zeros_like(Y_true),
+        dag_tree=t_dead,
+        trajectory_node_ids=dead_ids,
+        fingerprint_meta=ExpertFingerprintMeta(expert_slot=0, source_node_id="fail_0", pass_mask=[0]),
+        steps=25,
+        lr=0.12,
+        target_delta_override=wrong_delta,
+        enable_neuro_symbolic_distill=False,
+        verifier_feedback_deltas=verifier_residual,
+    )
+    mse_with_sdpo = float(np.mean((ad_sdpo.forward_delta(X_dead, use_fast=False) - Y_true) ** 2))
+
+    # 4. MutableSkillState (`SKILL.state`) over 50 rounds
+    skill_state = dream_engine.MutableSkillState(
+        task="v8-state-bench", max_invariants=4, max_dead_ends=6, max_unsolved_buckets=8, max_primitives=4
+    )
+    append_log = []
+    for r_i in range(50):
+        tr = dream_engine.DiscoveryTree(task="v8-state-bench", baseline_score=50.0, max_parallelism=2)
+        tr.add(dream_engine.Node(id="root", parent_id=None, branch=-1, attempt=0, score=50.0))
+        tr.add(
+            dream_engine.Node(
+                id=f"w_{r_i}",
+                parent_id="root",
+                branch=0,
+                attempt=1,
+                score=60.0 + r_i * 0.4,
+                bucket_scores=[0.5, -0.2, 0.3 if r_i >= 30 else -0.4],
+                tunable_params={"k": round(0.1 * r_i, 3)},
+                line_hotspots=[{"line_no": 10, "pct_time": 90.0, "code": "y = x * x" * 20}],
+            )
+        )
+        tr.add(
+            dream_engine.Node(
+                id=f"f_{r_i}",
+                parent_id="root",
+                branch=1,
+                attempt=1,
+                score=25.0,
+                fail_class="algorithmic_failure",
+                error="DivergenceError on bucket 1",
+                pass_mask=[1, 0, 0],
+            )
+        )
+        skill_state.commit_cycle(tr)
+        append_log.append(tr.to_dict())
+    state_bytes = skill_state.serialized_byte_size()
+    append_bytes = len(json.dumps(append_log).encode("utf-8"))
+
+    # 5. VeriHarness Dual-Head Verification (Consensus Challenger)
+    unanimous_fns = [
+        lambda x: x[0] + x[1] - 0.10,
+        lambda x: (x[0] + x[1] - 0.10) * 1.0001,
+        lambda x: (x[0] + x[1] - 0.10) * 0.9999,
+    ]
+    synth = dream_engine.ActiveBoundarySynthesizer(trust_radius_sigma=1.2, ascent_steps=8, step_lr=0.25)
+    dual_veri = synth.synthesize_dual_head_verification(
+        anchor_points=[[0.08, 0.08], [0.50, 0.50], [0.80, 0.80], [-0.60, -0.60]],
+        committee_fns=unanimous_fns,
+        num_disagreement=2,
+        num_consensus_challengers=2,
+    )
+
+    # 6. FALCON-2 Prefix-Aligned NLMS under 10^3x spike (including opposite-sign cancellation spike)
+    ad_f2 = UniversalNeuralSleepAdapter(d_in=4, d_out=2, d_low=4, seed=99)
+    ad_f2.fast_B = np.full((4, 2), 0.25, dtype=np.float64)
+    x_sp = np.array([[500.0, -500.0, 500.0, -500.0], [1000.0, 1000.0, -1000.0, -1000.0]], dtype=np.float64)
+    f2_rep = ad_f2.wake_adapt_step_falcon2(
+        x_sp, np.zeros((2, 2)), np.array([[1.0, -1.0], [0.5, -0.5]]), lr=0.50, nlms_lambda=0.10
+    )
+    v_opp = np.array([1.0, -0.5, 0.8, -0.2], dtype=np.float64)
+    x_opp = np.vstack([1000.0 * v_opp, -330.0 * v_opp])
+    f2_opp_rep = ad_f2.wake_adapt_step_falcon2(
+        x_opp, np.zeros((2, 2)), np.array([[1.0, -1.0], [-0.33, 0.33]]), lr=0.45, prefix_shift_alpha=0.25
+    )
+
+    # 7. Adversarial SDPO IRLS/MAD Outlier Rejection (10/32 sign-flipped residuals) + Sibling TTT-Discover Tilt
+    noisy_residual = verifier_residual.copy()
+    noisy_residual[:10] = -3.0 * verifier_residual[:10]
+    ad_sdpo_noisy = UniversalNeuralSleepAdapter(d_in=4, d_out=1, d_low=4, seed=88)
+    sdpo_noisy_rep = ad_sdpo_noisy.nrem_consolidate(
+        x_trajectories=X_dead,
+        base_outputs=np.zeros_like(Y_true),
+        dag_tree=t_dead,
+        trajectory_node_ids=dead_ids,
+        fingerprint_meta=ExpertFingerprintMeta(expert_slot=0, source_node_id="fail_0", pass_mask=[0]),
+        steps=25,
+        lr=0.12,
+        target_delta_override=wrong_delta,
+        enable_neuro_symbolic_distill=False,
+        verifier_feedback_deltas=noisy_residual,
+    )
+    mse_noisy_sdpo = float(np.mean((ad_sdpo_noisy.forward_delta(X_dead, use_fast=False) - Y_true) ** 2))
+
+    assert f2_rep["post_update_loss"] < f2_rep["loss"]
+    assert f2_opp_rep["post_update_loss"] <= f2_opp_rep["loss"]
+    assert sdpo_noisy_rep["sdpo_rejected_noisy_count"] == 10
+    assert mse_noisy_sdpo < 0.25
+
+    return {
+        "ttt_discover_mean_j": round(tilt_mean["j_tau_expectation"], 4),
+        "ttt_discover_tilted_j": round(tilt_ext["j_tau_expectation"], 4),
+        "ttt_discover_champion_weight": round(tilt_ext["champion_weight"], 6),
+        "bes_dead_buckets": bes_rep["dead_buckets"],
+        "bes_stepping_stone_target": sub_b2["target_margin"],
+        "bes_promoted_root_seed": promo_rep["promoted_root_seed_id"],
+        "sdpo_reclaimed_dead_ends": sdpo_rep["sdpo_reclaimed_count"],
+        "sdpo_mse_before": round(mse_without_sdpo, 4),
+        "sdpo_mse_after": round(mse_with_sdpo, 4),
+        "sdpo_mse_reduction_x": round(mse_without_sdpo / max(mse_with_sdpo, 1e-9), 2),
+        "sdpo_noisy_30pct_rejected_count": sdpo_noisy_rep["sdpo_rejected_noisy_count"],
+        "sdpo_noisy_mse_after": round(mse_noisy_sdpo, 4),
+        "skill_state_bytes_50_rounds": state_bytes,
+        "append_only_bytes_50_rounds": append_bytes,
+        "skill_state_compression_pct": round((1.0 - state_bytes / float(append_bytes)) * 100.0, 2),
+        "veriharness_disagreement_crossings": dual_veri["total_boundary_crossings"],
+        "veriharness_consensus_blind_spots": dual_veri["collective_blind_spots_found"],
+        "veriharness_unanimous_flips": dual_veri["unanimous_flips_found"],
+        "falcon2_spike_loss_before": round(f2_rep["loss"], 2),
+        "falcon2_spike_loss_after": round(f2_rep["post_update_loss"], 2),
+        "falcon2_opposite_spike_loss_before": round(f2_opp_rep["loss"], 2),
+        "falcon2_opposite_spike_loss_after": round(f2_opp_rep["post_update_loss"], 2),
+    }
+
+
 def main() -> int:
     print("=" * 84)
-    print("SLEEP-DAG-RSI v6 & v7 LIVE BATTLE TEST (MATH + SPECTRAL + DYNAMICAL LAW + v7)")
+    print("SLEEP-DAG-RSI v6, v7 & v8 LIVE BATTLE TEST (MATH + SPECTRAL + DYNAMICAL + v7 + v8)")
     print("=" * 84)
 
     r1 = run_trial_1_heilbronn_n16()
@@ -638,6 +831,15 @@ def main() -> int:
     print(f"     * Active Boundary Amplification:  {r4['active_boundary_amplification_x']}x disagreement gain ({r4['active_boundary_crossings']} boundary crossings)")
     print(f"     * Discovered Depth-3 Law:         {r4['cycle2_v7_active_terms']}")
 
+    r5 = run_trial_5_v8_upgrades()
+    print("\n[TRIAL 5] SLEEP-DAG-RSI v8: TTT-Discover + BES/LADDER + SDPO + SKILL.state + VeriHarness + FALCON-2")
+    print(f"  -> [5A] TTT-Discover Max-Tilt:     J_tau(0)={r5['ttt_discover_mean_j']} -> J_tau(6)={r5['ttt_discover_tilted_j']} (champion share={r5['ttt_discover_champion_weight']})")
+    print(f"  -> [5B] BES/LADDER Dead Buckets:   dead={r5['bes_dead_buckets']}, stepping_stone={r5['bes_stepping_stone_target']}, promoted_seed={r5['bes_promoted_root_seed']}")
+    print(f"  -> [5C] SDPO Dead-End Self-Teacher:reclaimed={r5['sdpo_reclaimed_dead_ends']}/32, MSE {r5['sdpo_mse_before']} -> {r5['sdpo_mse_after']} ({r5['sdpo_mse_reduction_x']}x reduction)")
+    print(f"  -> [5D] MutableSkillState (50 rds):{r5['skill_state_bytes_50_rounds']} B vs append-only {r5['append_only_bytes_50_rounds']} B (-{r5['skill_state_compression_pct']}% bloat)")
+    print(f"  -> [5E] VeriHarness Dual-Head:     disagreement_crossings={r5['veriharness_disagreement_crossings']}, consensus_blind_spots={r5['veriharness_consensus_blind_spots']} (flips={r5['veriharness_unanimous_flips']})")
+    print(f"  -> [5F] FALCON-2 Prefix NLMS:      10^3x spike loss {r5['falcon2_spike_loss_before']} -> {r5['falcon2_spike_loss_after']}")
+
     out_path = os.path.join(HERE, "battle_test_v6_results.json")
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(
@@ -646,6 +848,7 @@ def main() -> int:
                 "trial_2_spectral": r2,
                 "trial_3_dynamical_control": r3,
                 "trial_4_v7_upgrades": r4,
+                "trial_5_v8_upgrades": r5,
             },
             f,
             indent=2,

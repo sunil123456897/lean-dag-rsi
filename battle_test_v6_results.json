@@ -6,9 +6,9 @@
     "v5_triangle_evals": 33600,
     "v6_triangle_evals": 5540,
     "triangle_eval_savings_pct": 83.51,
-    "v5_wall_ms": 9.53,
-    "v6_wall_ms": 7.02,
-    "speedup_x": 1.36,
+    "v5_wall_ms": 9.71,
+    "v6_wall_ms": 6.41,
+    "speedup_x": 1.52,
     "v6_aborted_candidates": 53,
     "v6_survivor_candidates": 7,
     "winner_agreement": true,
@@ -75,5 +75,31 @@
     ],
     "active_boundary_amplification_x": 10.9976,
     "active_boundary_crossings": 0
+  },
+  "trial_5_v8_upgrades": {
+    "ttt_discover_mean_j": 61.0,
+    "ttt_discover_tilted_j": 96.2318,
+    "ttt_discover_champion_weight": 1.0,
+    "bes_dead_buckets": [
+      2
+    ],
+    "bes_stepping_stone_target": -0.2,
+    "bes_promoted_root_seed": "b1_step_seed",
+    "sdpo_reclaimed_dead_ends": 32,
+    "sdpo_mse_before": 15.8726,
+    "sdpo_mse_after": 0.0985,
+    "sdpo_mse_reduction_x": 161.15,
+    "sdpo_noisy_30pct_rejected_count": 10,
+    "sdpo_noisy_mse_after": 0.1061,
+    "skill_state_bytes_50_rounds": 1348,
+    "append_only_bytes_50_rounds": 74820,
+    "skill_state_compression_pct": 98.2,
+    "veriharness_disagreement_crossings": 0,
+    "veriharness_consensus_blind_spots": 2,
+    "veriharness_unanimous_flips": 2,
+    "falcon2_spike_loss_before": 98228.58,
+    "falcon2_spike_loss_after": 61376.91,
+    "falcon2_opposite_spike_loss_before": 7372.4,
+    "falcon2_opposite_spike_loss_after": 4465.51
   }
 }

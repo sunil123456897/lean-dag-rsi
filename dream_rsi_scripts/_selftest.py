@@ -1,4 +1,4 @@
-"""
+﻿"""
 Self-test for the Dream-RSI universal engine.
 
 Proves, with assertions rather than prose:
@@ -1691,6 +1691,427 @@ def main() -> int:
         and tf_dual.active_dim == m_dual
         and dual_inv_err < 1e-9,
         f"xor_pred='{sp_xor['routing_predicate']}' dual_kappa={diag_dual['kappa_eff']:.2f} vs prim_kappa={diag_prim['kappa_eff']:.2f} active_dim={tf_dual.active_dim} inv_err={dual_inv_err:.2e}",
+    )
+
+    print(
+        "\n19. SLEEP-DAG-RSI v8 upgrades: TTT-Discover Max-Tilt, BES/LADDER Backward Subgoals, SDPO Self-Teacher, SKILL.state, VeriHarness Consensus Challenger, and FALCON-2 NLMS"
+    )
+    from engine import (
+        BackwardSubGoalDecomposer,
+        FeedbackConditionedSelfTeacher,
+        LeanDAGPortfolio,
+        MutableSkillState,
+        compute_max_tilted_objective,
+        decompose_dead_buckets,
+    )
+
+    # 19a. TTT-Discover Extremal Max-Tilted Objective & LeanDAGPortfolio parent ranking (Tier S #7)
+    skewed_scores = [52.0, 52.5, 53.0, 53.5, 95.0]
+    tilt_t0 = compute_max_tilted_objective(skewed_scores, tau=0.0)
+    tilt_t1 = compute_max_tilted_objective(skewed_scores, tau=0.2)
+    tilt_t5 = compute_max_tilted_objective(skewed_scores, tau=2.0)
+    tilt_t100 = compute_max_tilted_objective(skewed_scores, tau=100.0)
+
+    t_tilt = DiscoveryTree(task="tilt-test", baseline_score=50.0, max_parallelism=3)
+    t_tilt.add(Node(id="root", parent_id=None, branch=-1, attempt=0, score=50.0))
+    t_tilt.add(Node(id="b0_med", parent_id="root", branch=0, attempt=1, score=55.0))
+    t_tilt.add(Node(id="b0_c", parent_id="b0_med", branch=0, attempt=2, score=56.0))
+    t_tilt.add(Node(id="b1_med", parent_id="root", branch=1, attempt=1, score=56.0))
+    t_tilt.add(Node(id="b1_c", parent_id="b1_med", branch=1, attempt=2, score=57.0))
+    t_tilt.add(Node(id="b2_spike", parent_id="root", branch=2, attempt=1, score=92.0))
+    t_tilt.add(Node(id="b2_c", parent_id="b2_spike", branch=2, attempt=2, score=95.0))
+    w_tilt = LeanDAGWorld(t_tilt)
+    w_tilt.probe(["root", "root", "root"])
+    pol_tilt = LeanDAGPortfolio(beta=0.6, entropic_tau=6.0)
+    rank_tilt = pol_tilt.rank_parents_max_tilted(w_tilt)
+    rebuilt_tilt = build_policy(policy_spec(pol_tilt))
+    check(
+        "19a. TTT-Discover compute_max_tilted_objective is monotone in tau, overflow-safe at tau=100, and concentrates LeanDAGPortfolio weight on record spike",
+        tilt_t0["j_tau_expectation"] < tilt_t1["j_tau_expectation"] < tilt_t5["j_tau_expectation"] <= tilt_t100["j_tau_expectation"]
+        and abs(tilt_t100["j_tau_expectation"] - 95.0) < 0.1
+        and tilt_t5["champion_weight"] > 0.99
+        and rank_tilt["champion_frontier"] == "b2_spike"
+        and rank_tilt["champion_weight"] > 0.90
+        and getattr(rebuilt_tilt, "entropic_tau", 0.0) == 6.0,
+        f"J_tau_exp={tilt_t0['j_tau_expectation']:.2f}->{tilt_t1['j_tau_expectation']:.2f}->{tilt_t5['j_tau_expectation']:.2f}->{tilt_t100['j_tau_expectation']:.2f} champ_w={rank_tilt['champion_weight']:.4f}",
+    )
+
+    # 19b. BES + LADDER Backward Sub-Goal Decomposition of Dead Buckets (Tier S #6 & Tier A #12)
+    t_bes = DiscoveryTree(task="bes-dead-bucket", baseline_score=50.0, max_parallelism=3)
+    t_bes.add(Node(id="root", parent_id=None, branch=-1, attempt=0, score=50.0))
+    t_bes.add(
+        Node(
+            id="b0_sol0",
+            parent_id="root",
+            branch=0,
+            attempt=1,
+            score=70.0,
+            bucket_scores=[0.45, -0.20, -0.80],
+        )
+    )
+    t_bes.add(
+        Node(
+            id="b1_sol1",
+            parent_id="root",
+            branch=1,
+            attempt=1,
+            score=74.0,
+            bucket_scores=[-0.10, 0.55, -0.40],
+        )
+    )
+    t_bes.add(
+        Node(
+            id="b2_weak",
+            parent_id="root",
+            branch=2,
+            attempt=1,
+            score=62.0,
+            bucket_scores=[0.10, 0.05, -0.60],
+        )
+    )
+    decomposer = BackwardSubGoalDecomposer(ladder_fractions=(0.5, 0.25, 0.0))
+    bes_rep = decomposer.decompose(
+        [t_bes],
+        bucket_specs=[
+            {"name": "easy_b0", "scale_N": 64, "tol_eps": 1e-4},
+            {"name": "med_b1", "scale_N": 64, "tol_eps": 1e-4},
+            {"name": "hard_b2", "scale_N": 128, "tol_eps": 1e-5},
+        ],
+    )
+    sub_b2 = bes_rep["stepping_stone_subgoals"][0]
+    cand_step_fail = Node(
+        id="c_fail", parent_id="b1_sol1", branch=1, attempt=2, score=74.5, bucket_scores=[-0.05, 0.60, -0.32]
+    )
+    cand_step_pass = Node(
+        id="c_step_win", parent_id="b1_sol1", branch=1, attempt=3, score=78.0, bucket_scores=[0.05, 0.65, -0.15]
+    )
+    seed_promo = decomposer.select_stepping_stone_seed(
+        dead_bucket=2,
+        candidate_nodes=[cand_step_fail, cand_step_pass],
+        subgoal=sub_b2,
+    )
+    ideas_bes = ideate_over_history([t_bes])
+    check(
+        "19b. BackwardSubGoalDecomposer detects dead bucket b*=2 (all margins<=0), synthesizes half-deficit stepping stone (-0.20), and promotes c_step_win as root_seed",
+        bes_rep["dead_buckets"] == [2]
+        and bes_rep["solved_buckets"] == [0, 1]
+        and sub_b2["anchor_node_id"] == "b1_sol1"
+        and abs(sub_b2["target_margin"] - (-0.20)) < 1e-6
+        and sub_b2["relaxed_scale_N"] < 128
+        and sub_b2["relaxed_tol_eps"] > 1e-5
+        and seed_promo["subgoal_cleared"] is True
+        and seed_promo["promoted_root_seed_id"] == "c_step_win"
+        and ideas_bes["backward_subgoals"]["dead_buckets"] == [2],
+        f"dead={bes_rep['dead_buckets']} target={sub_b2['target_margin']} promoted={seed_promo['promoted_root_seed_id']}",
+    )
+
+    # 19c. SDPO Feedback-Conditioned Self-Teacher on Dead-Ends (Tier S #8)
+    import numpy as np
+
+    rng_v8 = np.random.default_rng(1908)
+    X_sdpo = rng_v8.uniform(-1.5, 1.5, size=(24, 4))
+    true_W_sdpo = np.array([[1.8], [-1.2], [0.0], [0.0]], dtype=np.float64)
+    Y_true_sdpo = X_sdpo @ true_W_sdpo
+    base_zeros = np.zeros_like(Y_true_sdpo)
+
+    # All 3 DAG attempts in this batch fail (score <= baseline 50.0 -> loss_mask = 0 for 100% of nodes!)
+    t_all_dead = DiscoveryTree(task="sdpo-rescue", baseline_score=50.0, max_parallelism=3)
+    t_all_dead.add(Node(id="root", parent_id=None, branch=-1, attempt=0, score=50.0))
+    t_all_dead.add(Node(id="d0", parent_id="root", branch=0, attempt=1, score=35.0, fail_class="algorithmic_failure"))
+    t_all_dead.add(Node(id="d1", parent_id="root", branch=1, attempt=1, score=40.0, fail_class="algorithmic_failure"))
+    node_ids_dead = ["d0" if i % 2 == 0 else "d1" for i in range(24)]
+
+    # Without SDPO feedback: adapter consolidates the wrong fast output (-Y_true_sdpo)
+    ad_no_sdpo = UniversalNeuralSleepAdapter(d_in=4, d_out=1, d_low=4, seed=77)
+    wrong_fast_delta = -0.5 * Y_true_sdpo
+    ad_no_sdpo.nrem_consolidate(
+        x_trajectories=X_sdpo,
+        base_outputs=base_zeros,
+        dag_tree=t_all_dead,
+        trajectory_node_ids=node_ids_dead,
+        fingerprint_meta=ExpertFingerprintMeta(expert_slot=0, source_node_id="d0", pass_mask=[0, 0]),
+        steps=25,
+        lr=0.12,
+        target_delta_override=wrong_fast_delta,
+        enable_neuro_symbolic_distill=False,
+    )
+    mse_no_sdpo = float(np.mean((ad_no_sdpo.forward_delta(X_sdpo, use_fast=False) - Y_true_sdpo) ** 2))
+
+    # With SDPO FeedbackConditionedSelfTeacher: verifier diagnosis supplies residual (Y_true - wrong_fast_delta)
+    ad_with_sdpo = UniversalNeuralSleepAdapter(d_in=4, d_out=1, d_low=4, seed=77)
+    verifier_diag_delta = Y_true_sdpo - wrong_fast_delta
+    rep_sdpo = ad_with_sdpo.nrem_consolidate(
+        x_trajectories=X_sdpo,
+        base_outputs=base_zeros,
+        dag_tree=t_all_dead,
+        trajectory_node_ids=node_ids_dead,
+        fingerprint_meta=ExpertFingerprintMeta(expert_slot=0, source_node_id="d0", pass_mask=[0, 0]),
+        steps=25,
+        lr=0.12,
+        target_delta_override=wrong_fast_delta,
+        enable_neuro_symbolic_distill=False,
+        verifier_feedback_deltas=verifier_diag_delta,
+    )
+    mse_with_sdpo = float(np.mean((ad_with_sdpo.forward_delta(X_sdpo, use_fast=False) - Y_true_sdpo) ** 2))
+    check(
+        "19c. SDPO FeedbackConditionedSelfTeacher rescues 100%-dead-end batch (24/24 reclaimed) and slashes slow-expert MSE by >10x",
+        rep_sdpo["sdpo_reclaimed_count"] == 24
+        and mse_with_sdpo < mse_no_sdpo * 0.08
+        and mse_with_sdpo < 0.15,
+        f"reclaimed={rep_sdpo['sdpo_reclaimed_count']}/24 mse_no_sdpo={mse_no_sdpo:.4f} -> mse_with_sdpo={mse_with_sdpo:.4f}",
+    )
+
+    # 19d. MutableSkillState (`SKILL.state`, Tier A #1): bounded byte size & bucket eviction across 40 rounds
+    skill_state = MutableSkillState(
+        task="long-horizon-search",
+        max_invariants=4,
+        max_dead_ends=6,
+        max_unsolved_buckets=8,
+        max_primitives=4,
+    )
+    append_only_log: List[Dict[str, Any]] = []
+    for r_idx in range(40):
+        t_r = DiscoveryTree(task="long-horizon-search", baseline_score=50.0, max_parallelism=2)
+        t_r.add(Node(id="root", parent_id=None, branch=-1, attempt=0, score=50.0))
+        # Solve bucket 2 starting at round 25 so we verify automatic eviction from unsolved_buckets
+        b2_margin = -0.35 if r_idx < 25 else 0.40
+        t_r.add(
+            Node(
+                id=f"win_r{r_idx}",
+                parent_id="root",
+                branch=0,
+                attempt=1,
+                score=60.0 + 0.5 * r_idx,
+                bucket_scores=[0.50, -0.25, b2_margin],
+                tunable_params={"alpha": round(0.1 + 0.01 * r_idx, 4)},
+                line_hotspots=[{"line_no": 12, "pct_time": 88.0, "code": "x = x * x" * 20}],
+            )
+        )
+        t_r.add(
+            Node(
+                id=f"dead_r{r_idx}",
+                parent_id="root",
+                branch=1,
+                attempt=1,
+                score=20.0,
+                fail_class="algorithmic_failure",
+                error="SingularMatrixError: rank deficiency on bucket 1",
+                pass_mask=[1, 0, 0],
+            )
+        )
+        skill_state.commit_cycle(
+            t_r,
+            library_primitives=[{"name": f"lib_{r_idx % 6}", "arity": 1, "expr": "math.tanh(x[0])", "compression_gain": 1.2 + 0.1 * (r_idx % 6)}],
+        )
+        append_only_log.append(t_r.to_dict())
+        if r_idx == 10:
+            unsolved_at_r10 = [u["bucket_id"] for u in skill_state.unsolved_buckets]
+
+    schema_rep = skill_state.validate_schema()
+    append_only_bytes = len(json.dumps(append_only_log).encode("utf-8"))
+    state_bytes = skill_state.serialized_byte_size()
+    unsolved_at_r40 = [u["bucket_id"] for u in skill_state.unsolved_buckets]
+    roundtrip_state = MutableSkillState.from_dict(skill_state.to_dict())
+    check(
+        "19d. MutableSkillState stays strictly bounded over 40 rounds (<15% of append-only size), deduplicates dead-ends, and evicts newly solved bucket 2",
+        schema_rep["valid"] is True
+        and state_bytes < 4096
+        and state_bytes < append_only_bytes * 0.15
+        and skill_state.dead_end_fingerprints[0]["occurrences"] == 40
+        and 2 in unsolved_at_r10
+        and 2 not in unsolved_at_r40
+        and unsolved_at_r40 == [1]
+        and roundtrip_state.serialized_byte_size() == state_bytes,
+        f"state_bytes={state_bytes} vs append_only={append_only_bytes} unsolved_r10={unsolved_at_r10}->r40={unsolved_at_r40} dead_occ={skill_state.dead_end_fingerprints[0]['occurrences']}",
+    )
+
+    # 19e. VeriHarness Dual-Head Verification: Disagreement Resolver + Consensus Challenger (Tier A #8)
+    # 3 models that unanimously agree everywhere (zero disagreement variance!), but sit near a shared cliff x0 + x1 = 0.10
+    unanimous_committee = [
+        lambda x: x[0] + x[1] - 0.10,
+        lambda x: (x[0] + x[1] - 0.10) * 1.0001,
+        lambda x: (x[0] + x[1] - 0.10) * 0.9999,
+    ]
+    consensus_anchors = [[0.08, 0.08], [0.50, 0.50], [0.80, 0.80], [-0.60, -0.60]]
+    veri_synth = ActiveBoundarySynthesizer(trust_radius_sigma=1.2, ascent_steps=8, step_lr=0.25)
+    dual_rep = veri_synth.synthesize_dual_head_verification(
+        anchor_points=consensus_anchors,
+        committee_fns=unanimous_committee,
+        num_disagreement=2,
+        num_consensus_challengers=2,
+    )
+    check(
+        "19e. VeriHarness Consensus Challenger exposes unanimous collective blind-spot flip where Disagreement Resolver sees ~0 variance",
+        dual_rep["disagreement_head"]["boundary_crossings_found"] == 0
+        and dual_rep["collective_blind_spots_found"] >= 1
+        and dual_rep["unanimous_flips_found"] >= 1,
+        f"disagreement_crossings={dual_rep['disagreement_head']['boundary_crossings_found']} consensus_blind_spots={dual_rep['collective_blind_spots_found']} flips={dual_rep['unanimous_flips_found']}",
+    )
+
+    # 19f. FALCON-2 Prefix-Aligned NLMS Fast-Weight Update under 10^3x input norm spikes (Tier S #12)
+    ad_gd = UniversalNeuralSleepAdapter(d_in=4, d_out=2, d_low=4, seed=99)
+    ad_falcon = UniversalNeuralSleepAdapter(d_in=4, d_out=2, d_low=4, seed=99)
+    # Seed non-zero fast_B so fast_A/fast_B gradients are active on the spike step
+    ad_gd.fast_B = np.full((4, 2), 0.25, dtype=np.float64)
+    ad_falcon.fast_B = np.full((4, 2), 0.25, dtype=np.float64)
+
+    x_spike = np.array([[500.0, -500.0, 500.0, -500.0], [1000.0, 1000.0, -1000.0, -1000.0]], dtype=np.float64)
+    base_sp = np.zeros((2, 2), dtype=np.float64)
+    targ_sp = np.array([[1.0, -1.0], [0.5, -0.5]], dtype=np.float64)
+
+    # Unnormalized raw gradient update explodes on 10^3x spike
+    pred_gd_0 = ad_gd.forward_delta(x_spike, use_fast=True)
+    err_gd_0 = pred_gd_0 - targ_sp
+    loss_gd_before = float(0.5 * np.mean(err_gd_0 * err_gd_0))
+    h_gd = x_spike @ ad_gd.fast_A
+    ad_gd.fast_B -= 0.08 * (h_gd.T @ err_gd_0) / 2.0
+    pred_gd_1 = ad_gd.forward_delta(x_spike, use_fast=True)
+    loss_gd_after = float(0.5 * np.mean((pred_gd_1 - targ_sp) ** 2))
+
+    # FALCON-2 NLMS update shrinks error monotonically on the exact same 10^3x spike
+    falcon_rep = ad_falcon.wake_adapt_step_falcon2(
+        x_spike, base_sp, targ_sp, lr=0.50, nlms_lambda=0.10, prefix_shift_alpha=0.25
+    )
+    # Also test DeltaRuleFastMemory.forward_falcon2 stability on 10^3x sequence spike
+    fast_mem_v8 = DeltaRuleFastMemory(d_model=8, rng=np.random.default_rng(123))
+    seq_spike = rng_v8.normal(0.0, 1000.0, size=(2, 6, 8))
+    out_f2, M_f2, errs_f2 = fast_mem_v8.forward(seq_spike, use_falcon2_nlms=True)
+    check(
+        "19f. FALCON-2 Prefix-Aligned NLMS converges monotonically under 10^3x input norm spikes while raw GD explodes",
+        falcon_rep["post_update_loss"] < falcon_rep["loss"] * 0.65
+        and loss_gd_after > loss_gd_before * 1e4
+        and np.all(np.isfinite(out_f2))
+        and np.all(np.isfinite(M_f2))
+        and float(np.linalg.norm(M_f2)) < 50.0,
+        f"falcon_loss={falcon_rep['loss']:.2f}->{falcon_rep['post_update_loss']:.2f} vs raw_gd={loss_gd_before:.2f}->{loss_gd_after:.2e} ||M_f2||={float(np.linalg.norm(M_f2)):.2f}",
+    )
+
+    # 19g. Reviewer Hardening Suite for v8: N_active != N_dead SDPO broadcast, opposite-sign FALCON-2 spike,
+    #      -inf/NaN strict JSON serialization, IRLS/MAD noisy residual & zero-residual filtering, and sibling TTT-Discover tilt
+    from sleep_dag_rsi import DAGKnowledgeSeedingConsolidator, SleepDAGConfig, SleepLanguageModel
+
+    cfg_19g = SleepDAGConfig(vocab_size=16, d_model=16, d_ff=32, d_low=4, consolidation_steps=2)
+    mod_19g = SleepLanguageModel(cfg_19g, seed=7)
+    cons_19g = DAGKnowledgeSeedingConsolidator(cfg_19g)
+    t_19g = DiscoveryTree(baseline_score=50.0)
+    t_19g.add(Node(id="w1", parent_id="root", branch=0, attempt=1, score=75.0, pass_mask=[1, 1]))
+    t_19g.add(Node(id="w2", parent_id="w1", branch=0, attempt=2, score=85.0, pass_mask=[1, 1]))
+    t_19g.add(Node(id="d1", parent_id="root", branch=1, attempt=1, score=20.0, pass_mask=[0, 0], fail_class="bad"))
+    t_19g.add(Node(id="d2", parent_id="root", branch=2, attempt=1, score=25.0, pass_mask=[0, 0], fail_class="bad"))
+    seqs_19g = np.random.default_rng(1).integers(0, 16, size=(5, 9))
+    rep_seq_sdpo = cons_19g.consolidate_between_blocks(
+        model=mod_19g,
+        fast_block_idx=0,
+        slow_block_idx=1,
+        wake_trajectories=seqs_19g,
+        dag_tree=t_19g,
+        trajectory_node_ids=["w1", "w2", "d1", "d2", "d1"],
+    )
+
+    # Opposite-sign spike [1000*v, -330*v] where naive (1-0.25)*x_t + 0.25*x_{t-1} flips sign and cancels norm
+    v_opp = np.array([1.0, -0.5, 0.8, -0.2], dtype=np.float64)
+    x_opp_spike = np.vstack([1000.0 * v_opp, -330.0 * v_opp])
+    rep_opp_f2 = ad_falcon.wake_adapt_step_falcon2(
+        x_opp_spike,
+        np.zeros((2, 2), dtype=np.float64),
+        np.array([[1.0, -1.0], [-0.33, 0.33]], dtype=np.float64),
+        lr=0.45,
+        prefix_shift_alpha=0.25,
+    )
+
+    # -inf/NaN bucket_scores & scores in BackwardSubGoalDecomposer, MutableSkillState, and compute_max_tilted_objective
+    t_inf_19g = DiscoveryTree(baseline_score=50.0)
+    t_inf_19g.add(
+        Node(
+            id="n_ok",
+            parent_id="root",
+            branch=0,
+            attempt=1,
+            score=60.0,
+            pass_mask=[1, 0, 0],
+            bucket_scores=[0.5, float("-inf"), float("nan")],
+        )
+    )
+    st_inf_19g = MutableSkillState()
+    st_inf_19g.commit_cycle(t_inf_19g)
+    strict_json_19g = json.dumps(st_inf_19g.to_dict(), allow_nan=False)
+    mt_inf_19g = compute_max_tilted_objective([float("-inf"), 10.0, 20.0, 20.0], tau=5.0)
+
+    # IRLS/MAD outlier rejection on 10/32 sign-flipped verifier residuals + zero-residual rejection
+    noisy_diag_delta = verifier_diag_delta.copy()
+    noisy_diag_delta[:7] = -3.0 * verifier_diag_delta[:7]
+    ad_noisy_sdpo = UniversalNeuralSleepAdapter(d_in=4, d_out=1, d_low=4, seed=77)
+    rep_noisy_sdpo = ad_noisy_sdpo.nrem_consolidate(
+        x_trajectories=X_sdpo,
+        base_outputs=base_zeros,
+        dag_tree=t_all_dead,
+        trajectory_node_ids=node_ids_dead,
+        fingerprint_meta=ExpertFingerprintMeta(expert_slot=0, source_node_id="d0", pass_mask=[0, 0]),
+        steps=25,
+        lr=0.12,
+        target_delta_override=wrong_fast_delta,
+        enable_neuro_symbolic_distill=False,
+        verifier_feedback_deltas=noisy_diag_delta,
+    )
+    mse_noisy_sdpo = float(np.mean((ad_noisy_sdpo.forward_delta(X_sdpo, use_fast=False) - Y_true_sdpo) ** 2))
+    ad_zero_sdpo = UniversalNeuralSleepAdapter(d_in=4, d_out=1, d_low=4, seed=77)
+    rep_zero_sdpo = ad_zero_sdpo.nrem_consolidate(
+        x_trajectories=X_sdpo,
+        base_outputs=base_zeros,
+        dag_tree=t_all_dead,
+        trajectory_node_ids=node_ids_dead,
+        fingerprint_meta=ExpertFingerprintMeta(expert_slot=0, source_node_id="d0", pass_mask=[0, 0]),
+        steps=25,
+        lr=0.12,
+        target_delta_override=wrong_fast_delta,
+        enable_neuro_symbolic_distill=False,
+        verifier_feedback_deltas=np.zeros_like(wrong_fast_delta),
+    )
+
+    # Sibling above-baseline branches under entropic_tau=0 vs entropic_tau=6
+    t_sib_19g = DiscoveryTree(baseline_score=50.0)
+    t_sib_19g.add(Node(id="b0_med", parent_id="root", branch=0, attempt=1, score=55.0, pass_mask=[1, 0]))
+    t_sib_19g.add(Node(id="b1_med", parent_id="root", branch=1, attempt=1, score=58.0, pass_mask=[1, 0]))
+    t_sib_19g.add(Node(id="b2_champ", parent_id="root", branch=2, attempt=1, score=95.0, pass_mask=[1, 1]))
+    t_sib_19g.add(Node(id="d0_fail", parent_id="root", branch=3, attempt=1, score=30.0, pass_mask=[0, 0], fail_class="fail"))
+    nids_sib_19g = ["b0_med"] * 6 + ["b1_med"] * 6 + ["b2_champ"] * 6 + ["d0_fail"] * 6
+    ad_sib_t0 = UniversalNeuralSleepAdapter(d_in=4, d_out=1, d_low=4, seed=11)
+    rep_sib_t0 = ad_sib_t0.nrem_consolidate(
+        X_sdpo,
+        base_zeros,
+        t_sib_19g,
+        nids_sib_19g,
+        ExpertFingerprintMeta(expert_slot=0, source_node_id="b2_champ", pass_mask=[1, 1]),
+        target_delta_override=Y_true_sdpo,
+        enable_neuro_symbolic_distill=False,
+        entropic_tau=0.0,
+    )
+    ad_sib_t6 = UniversalNeuralSleepAdapter(d_in=4, d_out=1, d_low=4, seed=11)
+    rep_sib_t6 = ad_sib_t6.nrem_consolidate(
+        X_sdpo,
+        base_zeros,
+        t_sib_19g,
+        nids_sib_19g,
+        ExpertFingerprintMeta(expert_slot=0, source_node_id="b2_champ", pass_mask=[1, 1]),
+        target_delta_override=Y_true_sdpo,
+        enable_neuro_symbolic_distill=False,
+        entropic_tau=6.0,
+    )
+    check(
+        "19g. Reviewer Hardening Suite: N_active!=N_dead SDPO broadcast, opposite-sign FALCON-2 spike, -inf/NaN strict JSON, IRLS noisy residual rejection, and sibling TTT-Discover tilt",
+        rep_seq_sdpo["supervised_trajectories"] == 2
+        and rep_seq_sdpo["sdpo_reclaimed_dead_ends"] == 3
+        and rep_opp_f2["post_update_loss"] <= rep_opp_f2["loss"]
+        and len(strict_json_19g) > 100
+        and math.isfinite(mt_inf_19g["j_tau"])
+        and abs(mt_inf_19g["champion_weight"] - 1.0) < 1e-6
+        and rep_noisy_sdpo["sdpo_rejected_noisy_count"] >= 6
+        and rep_noisy_sdpo["sdpo_reclaimed_count"] >= 17
+        and mse_noisy_sdpo < 0.25
+        and rep_zero_sdpo["sdpo_reclaimed_count"] == 0
+        and rep_sib_t6["j_tau_expectation"] > rep_sib_t0["j_tau_expectation"] + 20.0
+        and rep_sib_t6["champion_tilt_share"] > 0.95,
+        f"opp_f2={rep_opp_f2['loss']:.1f}->{rep_opp_f2['post_update_loss']:.1f} noisy_rej={rep_noisy_sdpo['sdpo_rejected_noisy_count']}/7 mse={mse_noisy_sdpo:.4f} sib_tau0={rep_sib_t0['j_tau_expectation']:.1f}->tau6={rep_sib_t6['j_tau_expectation']:.1f}",
     )
 
     print()

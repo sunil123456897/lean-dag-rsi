@@ -22,7 +22,9 @@ Thumbs.db
 .idea/
 из чата/
 
-# Local private/domain sandboxes (kept on local disk, excluded from public repo)
+# Local private/domain sandboxes & large local PDF libraries (kept on local disk, excluded from public repo)
 btc_sleep_dag_rsi/
+Статьи_RSI_и_Самосовершенствование/
+
 
 

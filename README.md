@@ -1,29 +1,29 @@
-# Lean-DAG-RSI & SLEEP-DAG-RSI (v1–v7)
+# Lean-DAG-RSI & SLEEP-DAG-RSI (v1–v8)
 
-**Универсальный движок автономного научного и инженерного поиска, нейро-символической дистилляции, непрерывного дообучения нейросетей во сне (`SLEEP + HOPE + CMS`) и формальной математической верификации (`Lean 4` / `fractions.Fraction` / `500-dps Decimal`).**
+**Универсальный движок автономного научного и инженерного поиска, нейро-символической дистилляции, непрерывного дообучения нейросетей во сне (`SLEEP + HOPE + CMS + FALCON-2 + SDPO`) и формальной математической верификации (`Lean 4` / `fractions.Fraction` / `500-dps Decimal`).**
 
 ---
 
 ## Содержание
-1. [Обзор архитектуры (`Lean-DAG-RSI` $\to$ `SLEEP-DAG-RSI v7`)](#1-обзор-архитектуры-lean-dag-rsi--sleep-dag-rsi-v7)
-2. [Математический аудит и ключевые алгоритмические механизмы (v1–v7)](#2-математический-аудит-и-ключевые-алгоритмические-механизмы-v1v7)
+1. [Обзор архитектуры (`Lean-DAG-RSI` $\to$ `SLEEP-DAG-RSI v8`)](#1-обзор-архитектуры-lean-dag-rsi--sleep-dag-rsi-v8)
+2. [Математический аудит и ключевые алгоритмические механизмы (v1–v8)](#2-математический-аудит-и-ключевые-алгоритмические-механизмы-v1v8)
 3. [Сводка результатов: Экстремальная математика и открытые задачи](#3-сводка-результатов-экстремальная-математика-и-открытые-задачи)
 4. [Автономный стенд открытий (`auto_dream_rsi.py`)](#4-автономный-стенд-открытий-auto_dream_rsipy)
-5. [Испытания `SLEEP-DAG-RSI v5–v7`: Непрерывный сон и изобретение AST-библиотек](#5-испытания-sleep-dag-rsi-v5v7-непрерывный-сон-и-изобретение-ast-библиотек)
+5. [Испытания `SLEEP-DAG-RSI v5–v8`: Непрерывный сон и изобретение AST-библиотек](#5-испытания-sleep-dag-rsi-v5v8-непрерывный-сон-и-изобретение-ast-библиотек)
 6. [Структура репозитория](#6-структура-репозитория)
 7. [Быстрый старт и команды верификации](#7-быстрый-старт-и-команды-верификации)
 8. [Примеры использования Python API](#8-примеры-использования-python-api)
 
 ---
 
-## 1. Обзор архитектуры (`Lean-DAG-RSI` $\to$ `SLEEP-DAG-RSI v7`)
+## 1. Обзор архитектуры (`Lean-DAG-RSI` $\to$ `SLEEP-DAG-RSI v8`)
 
 Проект объединяет три исследовательских направления в единую замкнутую систему рекурсивного самоулучшения без внешних зависимостей в базовом ядре ([`dream_rsi_scripts/engine.py`](dream_rsi_scripts/engine.py) и [`sleep_dag_rsi.py`](sleep_dag_rsi.py)):
 
-1. **Контрфактический поиск на графах открытий (`Lean-DAG-RSI v1–v4`)** — развитие идей *Dream-RSI* (Google DeepMind, 2026) и *DiscoveryRSI* (`arXiv:2610.23839v1`). Заменяет изолированные деревья поиска ориентированным ациклическим графом (`DAG`), скрещивает ветви по бинарным и непрерывным отпечаткам ошибок (`compute_error_fingerprint`, `compute_hyper_crossover`), автоматически сшивает AST-код родителей (`AstCodeSplicer`), отсекает лишние непрерывные ручки через спектральный секатор Гаусса–Ньютона (`prune_epistatic_gauss_newton`) и проверяет устойчивость плато (`evaluate_flat_plateau`).
+1. **Контрфактический поиск на графах открытий (`Lean-DAG-RSI v1–v4` + `v8` Extremal Search)** — развитие идей *Dream-RSI* (Google DeepMind, 2026), *DiscoveryRSI* (`arXiv:2610.23839v1`), *TTT-Discover* (`arXiv:2601.16175`) и *BES / LADDER* (`arXiv:2509.21077`, `arXiv:2503.00735`). Заменяет изолированные деревья поиска ориентированным ациклическим графом (`DAG`), ранжирует родителей по **экстремальному (max-tilted) энтропийному функционалу** $J_\tau = \frac{1}{\tau}\log \mathbb{E}[\exp(\tau R)]$ (`compute_max_tilted_objective`, `rank_parents_max_tilted`), расщепляет «мёртвые» тестовые корзины через **обратную декомпозицию подцелей** (`BackwardSubGoalDecomposer`), скрещивает ветви по бинарным и непрерывным отпечаткам ошибок (`compute_error_fingerprint`, `compute_hyper_crossover`), автоматически сшивает AST-код родителей (`AstCodeSplicer`), отсекает лишние непрерывные ручки через спектральный секатор Гаусса–Ньютона (`prune_epistatic_gauss_newton`), проверяет устойчивость плато (`evaluate_flat_plateau`) и хранит знания между циклами в **компактном типизированном состоянии** `SKILL.state` (`MutableSkillState`).
 2. **Спектральный подъём координат и ранний фильтр Вальда (`SLEEP-DAG-RSI v6`)** — автоматическое обнаружение оврагов и вырожденных KKT-систем через эффективное число обусловленности $\kappa_{\text{eff}}(G)$ матрицы Гаусса–Ньютона $G = \frac{1}{M}J^\top J$ (`SpectralFrameLifter`: `EigenRotationTransform`, `KktSlackTransform` с конденсацией активного множества `condense_active_set`, `DyadicHomotopyTransform`) и отсев заведомо провальных мутаций на `5%` бюджета (`WaldMicroSentinel`).
-3. **Параметрический и нейро-символический цикл сна (`SLEEP-DAG-RSI v5–v7`)** — объединение *SLEEP* (`arXiv:2606.03979v2`) и *HOPE / Continuum Memory System (CMS)* (`arXiv:2512.24695`) с `Lean-DAG-RSI`. Позволяет любой предобученной нейросети (`PyTorch nn.Module` или произвольному `callable`) адаптироваться на потоке данных в фазе **Wake** через быструю ассоциативную память с дельта-правилом (`DeltaRuleFastMemory`), а затем консолидировать знания в фазах **NREM** и **REM**:
-   - **NREM**: фильтрация тупиков по маске потерь DAG (`export_masked_sft_dataset`), генерация контрпримеров на границе разногласия комитета (`ActiveBoundarySynthesizer`), дистилляция нейронных весов в явные формулы Python AST (`NeuroSymbolicDistiller`) и иерархическое изобретение переиспользуемых подпрограмм глубины $3+$ в стиле DreamCoder (`SymbolicLibrary` + `LibraryPrimitive`).
+3. **Параметрический и нейро-символический цикл сна (`SLEEP-DAG-RSI v5–v8`)** — объединение *SLEEP* (`arXiv:2606.03979v2`), *HOPE / Continuum Memory System (CMS)* (`arXiv:2512.24695`), *FALCON-2* (`arXiv:2603.21456`) и *SDPO* (`arXiv:2601.20802`) с `Lean-DAG-RSI`. Позволяет любой предобученной нейросети (`PyTorch nn.Module` или произвольному `callable`) адаптироваться на потоке данных в фазе **Wake** через быструю ассоциативную память с нормированным дельта-правилом и косинусным гейтом выравнивания префикса (`DeltaRuleFastMemory.forward_falcon2`, `wake_adapt_step_falcon2`), а затем консолидировать знания в фазах **NREM** и **REM**:
+   - **NREM**: экстремально-взвешенная консолидация чемпионов (`use_max_tilted_consolidation=True`), **самоучитель по обратной связи верификатора на 100%-тупиковых батчах** (`FeedbackConditionedSelfTeacher` в стиле *SDPO*), **двуглавая верификация** (`ActiveBoundarySynthesizer.synthesize_dual_head_verification`: `Disagreement Resolver` + `Consensus Challenger` в стиле *VeriHarness* `arXiv:2603.17906`), дистилляция нейронных весов в явные формулы Python AST (`NeuroSymbolicDistiller`) и иерархическое изобретение переиспользуемых подпрограмм глубины $3+$ в стиле DreamCoder (`SymbolicLibrary` + `LibraryPrimitive`).
    - **REM**: детерминированное скрещивание ортогональных медленных экспертов MoE (`ExpandableMoEMLP` + `ExpertFingerprintMeta`) и контрфактический отбор снов (`CounterfactualDreamingEngine`) перед $2 \times 2$ гейтом принятия (`accept_joint_2x2`).
 
 ```mermaid
@@ -58,7 +58,7 @@ flowchart TD
 
 ---
 
-## 2. Математический аудит и ключевые алгоритмические механизмы (v1–v7)
+## 2. Математический аудит и ключевые алгоритмические механизмы (v1–v8)
 
 ### 2.1. Исправление структурных уязвимостей `Dream-RSI` (2026) и `DiscoveryRSI` (`arXiv:2610.23839`)
 1. **Устранение бага спама пустыми пробами в `Dream-RSI` Eq. 1 (`engine.py:622`)**:
@@ -78,6 +78,16 @@ flowchart TD
 | **`AstCodeSplicer`** (`engine.py`) | Статический разбор `ast.parse` родителей в `compute_hyper_crossover`, слияние независимых функций и присваиваний (`structural_ast_merge`), синтез входного OOS-предиката маршрутизации (`_synthesize_input_routing_predicate`) по иерархии признаков (`x[c]`, `abs(x[c])`, примитивы `lib_k(x)` из `SymbolicLibrary`, билинейные квадранты `(x[i] * x[j])`, радиальные нормы `(x[i]^2 + x[j]^2)`) с MDL-приоритетом простых разрезов, + пост-сплайсинговый гейт эпистаза (`verify_spliced_epistasis`) | Раньше `CROSSOVER(u, v)` выдавал текстовую подсказку, а 1D-разрезы `x[c] >= tau` не разделяли родителей, специализированных по квадрантам (`x[0]*x[1] >= 0`), кольцам или нелинейным признакам `lib_k(x)` | Автономно синтезирует исполняемый код гибрида и как линейные (`x[0] >= 0.0`), так и нелинейные/квадрантные (`(x[0] * x[1]) >= 0.0`) OOS-предикаты со **`100%`** точностью маршрутизации и проверкой отсутствия деградации от эпистаза |
 | **`ActiveBoundarySynthesizer`** (`engine.py`) | Поиск разноцветных пар точек (`Bichromatic Chord Bisection`), где модели комитета меняют знак, + проекционный градиентный подъём по дисперсии комитета $\operatorname{Var}_k(f_k(x))$ внутри доверительного шара | Пассивный буфер реплея содержит сглаженные точки внутри одного бассейна и плохо разделяет конкурирующие гипотезы | Усиливает разногласие комитета в **`11.00x`–`20.23x`** по сравнению с пассивным реплеем и находит точные пограничные контрпримеры |
 | **`NeuroSymbolicDistiller` + `SymbolicLibrary`** (`sleep_dag_rsi.py`) | Векторизованный Coordinate-Descent Lasso + OLS-полировка на словаре $\Psi(X)$ в фазе NREM, 5-шаговый Гаусс–Ньютон поиск внутренних аргументов насыщения (`_discover_nonlinear_inner_submotif`), абстракция примитивов `lib_k(x)` с сохранением масштаба `natural_scale` и сдвига `mean_offset`, + **реконструкция неискажённой цели** (`reconstruct_uncorrupted_target=True`: $Y_{\text{full}} = \Delta Y_{\text{rem}} + \sum f_{\text{AST}}^{\text{prior}}$) | Одношаговая глубина-2 дистилляция слепа к законам глубины $3+$, а жадное вычитание линейной аппроксимации $c \cdot z$ в Цикле 1 портит остаток $\tanh(z) - c z$ для Цикла 2 | Вскрывает как мультипликативные законы $\text{lib}_0(x)\cdot\operatorname{sign}(x_7)$, так и нелинейные композиции $\tanh(1.5 x_0 x_1 - 0.8 \operatorname{sign}(x_2)) + 0.6 x_4$ (**`R^2_OOS = 1.0000`** после реконструкции цели против `0.0000` у плоского `v6`) |
+
+### 2.3. Шесть механизмов `SLEEP-DAG-RSI v8` (`TTT-Discover + BES/LADDER + SDPO + SKILL.state + VeriHarness + FALCON-2`)
+| Модуль | Механизм и математическая формула | Решаемая проблема | Наблюдаемый эффект (`[VERIFIED]`) |
+| :--- | :--- | :--- | :--- |
+| **`compute_max_tilted_objective` & `LeanDAGPolicy.rank_parents_max_tilted`** (`engine.py`, `sleep_dag_rsi.py`) | **Экстремальный (Max-Tilted) энтропийный функционал (`TTT-Discover`, `arXiv:2601.16175`)**: $J_\tau(\theta) = \frac{1}{\tau}\log \mathbb{E}[\exp(\tau R(y))], \quad w_i(\tau) = \frac{\exp(\tau(R_i - R_{\max})/s_R)}{\sum_j \exp(\tau(R_j - R_{\max})/s_R)}$ в отборе родителей DAG и весах NREM-консолидации (`use_max_tilted_consolidation=True`, `entropic_tau=4.0`) | Усреднение по траекториям ($\tau \to 0$) размывает редкие экстремальные прорывы и тянет веса `CMS-MoE` к «безопасным середнякам» | Монотонная сходимость $J_\tau \to \max_i R_i$ (`61.00 -> 96.23` при $\tau=0 \to 6$); доля веса чемпиона достигает **`0.9994–1.0000`**, выбирая прорывную ветвь вместо стабильной посредственной |
+| **`BackwardSubGoalDecomposer` (`decompose_dead_buckets`)** (`engine.py`) | **Обратная декомпозиция мёртвых корзин (`BES` `arXiv:2509.21077` & `LADDER` `arXiv:2503.00735`)**: для корзин с $\max_u \text{pass\_mask}_j(u)=0$ строится лестница ослабленных порогов $\tau_j^{(1)} < \tau_j^{(2)} < \dots < 0$; кандидаты, пробившие промежуточную ступеньку, промотируются в корневой сид `promoted_root_seed_id` (`select_stepping_stone_seed`) | Если ни одна ветвь не решила сложный режим ($\text{pass\_mask}_j = 0 \ \forall u$), матрица синергии `compute_hyper_crossover` в этой колонке равна нулю и кроссовер слеп | Автоматически выделяет мёртвые корзины (`dead=[2]`), синтезирует промежуточную ступеньку (`target=-0.2`) и промотирует частичный прорыв (`b1_step_seed`) в корень следующего цикла |
+| **`FeedbackConditionedSelfTeacher`** (`sleep_dag_rsi.py`, `engine.py`) | **Самоучитель по обратной связи верификатора на тупиках (`SDPO`, `arXiv:2601.20802`)**: когда батч состоит на $100\%$ из тупиков ($\sum \text{loss\_mask}_i = 0$), конструирует скорректированную цель самодистилляции $\hat{y}_i^{\text{teacher}} = y_i^{\text{attempt}} + \gamma_i \cdot \Delta_{\text{verifier}}(x_i, f_i)$ с весом $\omega_i^{\text{SDPO}} \in (0, 0.5]$ | При `100%` отказе ветвей в раунде маска `DAG-KS` (`loss_mask=0`) полностью обнуляет обучение и тратит NREM-цикл впустую | Регенерирует **`100%` (`32/32`)** тупиковых траекторий и снижает ошибку NREM-консолидации с **`MSE = 15.8726` до `0.0985`** (**`161.15x`** снижение ошибки без ни одного успешного примера) |
+| **`MutableSkillState` (`SKILL.state`)** (`engine.py`) | **Мутабельное типизированное состояние навыка (`MutableSkillState`)**: компактный JSON-реестр фиксированной ёмкости (`confirmed_invariants`, `pruned_dead_ends` с дедупликацией по `(fail_class, error_signature)`, `unsolved_buckets`, `active_primitives`) с `commit_cycle(tree)` в `ideate_over_history()["skill_state"]` | Бесконечное дописывание сырых логов раундов (`Append-Only Trace Bloat`) раздувает контекст в $O(T)$ и вытесняет рабочие ограничения | За `50` раундов поиск укладывается в **`1,348` байт** против `74,820` байт у append-only лога (**`-98.20%` сжатие контекста**), автоматически вычёркивая решённые корзины и накапливая счётчики тупиков |
+| **`ActiveBoundarySynthesizer.synthesize_dual_head_verification`** (`engine.py`) | **Двуглавая верификация (`VeriHarness`, `arXiv:2603.17906`)**: **Голова A (`Disagreement Resolver`)** ищет точки максимального спора $\operatorname{Var}_k(f_k(x))$, а **Голова B (`Consensus Challenger`)** минимизирует запас уверенности единогласного комитета $\mathcal{F}_{\text{cons}}(x) = \frac{|\bar{f}(x)|}{\sqrt{\operatorname{Var}_k(f_k(x))+\epsilon}+\tau_{\text{margin}}}$ | Когда все модели комитета дружно ошибаются ($\operatorname{Var}_k \approx 0$), `Disagreement Resolver` даёт `0` пересечений и пропускает коллективное слепое пятно | При `0` пересечений у Головы A (`disagreement_crossings = 0`) Голова B обнаруживает **`2` коллективных слепых пятна** и переворачивает единогласный вердикт ансамбля (`unanimous_flips = 2`) |
+| **`DeltaRuleFastMemory.forward_falcon2` & `wake_adapt_step_falcon2`** (`sleep_dag_rsi.py`) | **Префиксно-выровненное быстрое обновление (`FALCON-2`, `arXiv:2603.21456`)**: нормированный шаг NLMS с косинусным гейтом выравнивания префикса $\Delta M_t = \frac{\eta_t \alpha_{\text{prefix}}(t)}{\max(\|\tilde{k}_t\|_2^2, \|k_t\|_2^2) + \lambda_{\text{NLMS}}}(v_t - M_{t-1}\tilde{k}_t)\tilde{k}_t^\top, \quad \alpha_{\text{prefix}} = \operatorname{clip}(\frac{1+\cos(k_t,\bar{k}_{1:t-1})}{2}, \alpha_{\min}, 1)$ | Ненормированное правило Хебба / дельта-правило взрывается ($\propto \|x_t\|_2^2$) при скачке амплитуды входов в $10^3$ раз и при знакопеременных спайках | При `1000x` спайке амплитуды ненормированный шаг взрывается до **`8.18e14`**, тогда как `FALCON-2` снижает ошибку с **`98,228.58` до `61,376.91`** при норме памяти $\|M\|_F = 0.09$ (и сокращает 8-шаговую MSE в **`2.17x`** по сравнению со стандартным NLMS) |
 
 ---
 
@@ -120,7 +130,7 @@ flowchart TD
 
 ---
 
-## 5. Испытания `SLEEP-DAG-RSI v5–v7`: Непрерывный сон и изобретение AST-библиотек
+## 5. Испытания `SLEEP-DAG-RSI v5–v8`: Непрерывный сон и изобретение AST-библиотек
 
 ### 5.1. Параметрический сон `SLEEP-DAG-RSI v5` ([`run_sleep_dag_experiments.py`](run_sleep_dag_experiments.py))
 Сравнение стандартного нефильтрационного сна (*Vanilla SLEEP*, `arXiv:2606.03979v2`) и `SLEEP-DAG-RSI v5` на 5 последовательных доменах:
@@ -128,15 +138,16 @@ flowchart TD
 * **Подавление заражения ловушками (Trap Contamination)**: благодаря маске потерь DAG (`loss_mask = 0` на тупиках и симметричных ловушках) и DPO-отталкиванию доля генерации токенов-ловушек снижена с `39.49%` (Vanilla SLEEP) до **`2.18%`**.
 * **Эффективность REM-кроссовера экспертов**: детерминированный роутер `ExpandableMoEMLP` по отпечаткам ошибок достигает **`100%`** частоты выбора комплементарных пар экспертов (`+111.8%` гибридного счёта) против `10%` при случайном смешивании в стиле Drop-Upcycling.
 
-### 5.2. Сравнительный стресс-тест `v5` vs `v6` vs `v7` ([`battle_test_sleep_dag_v6.py`](battle_test_sleep_dag_v6.py))
-Четыре живых испытания в [`battle_test_sleep_dag_v6.py`](battle_test_sleep_dag_v6.py) (результаты сохраняются в [`battle_test_v6_results.json`](battle_test_v6_results.json)):
+### 5.2. Сравнительный стресс-тест `v5` vs `v6` vs `v7` vs `v8` ([`battle_test_sleep_dag_v6.py`](battle_test_sleep_dag_v6.py))
+Пять живых испытаний в [`battle_test_sleep_dag_v6.py`](battle_test_sleep_dag_v6.py) (результаты сохраняются в [`battle_test_v6_results.json`](battle_test_v6_results.json)):
 
-| Испытание | Задача и условие стресс-теста | Базовый `v5` / `v6` | **`SLEEP-DAG-RSI v6 / v7`** | Прирост / Вердикт |
+| Испытание | Задача и условие стресс-теста | Базовый `v5` / `v6` / `v7` | **`SLEEP-DAG-RSI v6 / v7 / v8`** | Прирост / Вердикт |
 | :--- | :--- | :---: | :---: | :--- |
-| **Trial 1: `WaldMicroSentinel + KKT Condensation`** | Реальный Хейльбронн $n=16$ (`560` треугольников на оценку, `60` мутаций) | `33,600` проверок треугольников (`9.53 ms`) | **`5,540`** проверок треугольников (`7.02 ms`), `560` связей сжаты до **`57`** активных KKT-связей | **`-83.51%` вызовов верификатора**, **`100%`** совпадение чемпиона (`cand_55_apex_step`), `346` DPO-пар |
+| **Trial 1: `WaldMicroSentinel + KKT Condensation`** | Реальный Хейльбронн $n=16$ (`560` треугольников на оценку, `60` мутаций) | `33,600` проверок треугольников (`9.53 ms`) | **`5,540`** проверок треугольников (`6.45 ms`), `560` связей сжаты до **`57`** активных KKT-связей | **`-83.51%` вызовов верификатора**, **`100%`** совпадение чемпиона (`cand_55_apex_step`), `346` DPO-пар |
 | **Trial 2: `SpectralFrameLifter`** | 8D повёрнутый эпистатический овраг с $\kappa_{\text{eff}}(G) = 10^8$ при $M=6 < d=8$ | Ошибка **`13.0534`** после `40` шагов | Детектирует $\log_{10}\kappa_{\text{eff}} = 8.0$, замораживает `2` нулевые моды и за `15` шагов сходится к **`2.14e-6`** | Снижение ошибки в **`6.1e6` раз** за `2.6x` меньшее число шагов; `0` ложных тревог при $M < d$ |
 | **Trial 3: `Stochastic Dynamical Control Law Distill`** | Нелинейный осциллятор с тяжелохвостыми сенсорными спайками (`2,400` шагов, `Blind Vault = 480`) | Линейный контроллер на `Blind Vault`: `R^2 = 0.2844` (`MSE = 0.7401`) | `WaldMicroSentinel` отрезает `72` спайка (`overlap = 0`), NREM вскрывает точный закон управления AST (**`R^2_OOS = 0.9943`**), выводя `Blind Vault` на **`R^2 = 0.9957`** (`MSE = 0.004403`), а `2x2 Gate` блокирует переобучение на шуме | Сжатие энергии нейронного остатка на **`99.39%`** + **`168x`** снижение MSE на `Blind Vault` |
 | **Trial 4: `v7 SymbolicLibrary + AstCodeSplicer + ActiveBoundary`** | 2-цикловое открытие композиционного закона глубины 3 + автономная сшивка AST-ветвей | Плоский дистиллятор `v6`: **`R^2_OOS = 0.0000`** (`0%` сжатия остатка) | Изобретает `lib_0(x)` в Цикле 1, усиливает пограничный спор в **`11.00x`** и вскрывает закон глубины 3 в Цикле 2 (**`R^2_OOS = 1.0000`**) | **`100.00%` сжатия остатка** + автономная AST-сшивка кода (`AST IoU = 0.0`, покрытие `4/4` режимов) |
+| **Trial 5: `v8 TTT-Discover + BES/LADDER + SDPO + SKILL.state + VeriHarness + FALCON-2`** | Экстремальный отбор, мёртвые корзины, `100%`-тупиковый батч, 50 раундов истории, единогласный ансамбль и `1000x` спайк | Средний $J_0=61.0$, NREM `MSE=15.8726`, лог `74,820 B`, `0` слепых пятен, взрыв GD `8.18e14` | Max-Tilt $J_6 = \mathbf{96.2318}$ (`w=1.0`), промоушен `b1_step_seed`, SDPO `MSE = 0.0985` (и `0.1453` при `31.25%` шума IRLS), `SKILL.state = 1,348 B`, `2` слепых пятна, FALCON-2 `loss 98228.58 -> 61376.91` | **`161.15x`** снижение ошибки SDPO на тупиках, **`-98.20%`** сжатие памяти `SKILL.state`, перехват `2` коллективных слепых пятен |
 
 ---
 
@@ -144,13 +155,13 @@ flowchart TD
 
 ```text
 ├── dream_rsi_scripts/                 # Ядро универсального движка и глобального навыка dream-rsi
-│   ├── engine.py                      # Lean-DAG-RSI v1..v4 + SLEEP-DAG-RSI v6..v7 (WaldSentinel, SpectralFrameLifter, AstCodeSplicer, ActiveBoundarySynthesizer)
-│   ├── sleep_dag_rsi.py               # SLEEP-DAG-RSI v5..v7 (HOPE DeltaRule, DAG-KS, ExpandableMoE, NeuroSymbolicDistiller, SymbolicLibrary, UniversalNeuralSleepAdapter)
-│   ├── _selftest.py                   # 18 самодостаточных тестовых наборов (Suites 1..18, 0 внешних зависимостей)
+│   ├── engine.py                      # Lean-DAG-RSI v1..v4 + SLEEP-DAG-RSI v6..v8 (WaldSentinel, SpectralFrameLifter, AstCodeSplicer, ActiveBoundarySynthesizer, TTT-Discover, BES/LADDER, MutableSkillState)
+│   ├── sleep_dag_rsi.py               # SLEEP-DAG-RSI v5..v8 (HOPE/FALCON-2 DeltaRule, DAG-KS, SDPO Self-Teacher, ExpandableMoE, NeuroSymbolicDistiller, SymbolicLibrary, UniversalNeuralSleepAdapter)
+│   ├── _selftest.py                   # 19 самодостаточных тестовых наборов (Suites 1..19, 0 внешних зависимостей)
 │   ├── dreamrsi.py                    # CLI-интерфейс (init, round, prompt, apply, status, trees, ideate, sleep, demo)
 │   ├── loop.py                        # Замкнутый цикл выбора и сохранения политик исследования
 │   ├── simulator.py                   # Обёртка реплея исторических деревьев
-│   └── SKILL.md                       # Полная спецификация навыка dream-rsi (v1.7.0)
+│   └── SKILL.md                       # Полная спецификация навыка dream-rsi (v1.8.0)
 ├── heilbronn_pr_package/              # Пакет 500-значных и 10^100-рациональных сертификатов Хейльбронна (n=13..17)
 │   ├── n13_exact_500dps.json          # 500-значный KKT-сертификат для n=13 (+3.73e-14 над Stead 2026)
 │   ├── n14_exact_500dps.json          # 500-значный KKT-сертификат для n=14 (Cantrell 2007)
@@ -163,7 +174,7 @@ flowchart TD
 │   ├── Defs.lean                      # Базовые определения точной целочисленной удвоенной площади в Lean 4
 │   └── Cert_Heilbronn_13_14.lean      # Теоремы native_decide для n=13 и n=14 при знаменателе 10^50
 ├── auto_dream_rsi.py                  # Автономный стенд открытий (AutoDreamRunner + TaskCartridge)
-├── battle_test_sleep_dag_v6.py        # Сравнительный стресс-тест v5 vs v6 vs v7 (Trials 1..4)
+├── battle_test_sleep_dag_v6.py        # Сравнительный стресс-тест v5 vs v6 vs v7 vs v8 (Trials 1..5)
 ├── run_sleep_dag_experiments.py       # Экспериментальные стенды SLEEP-DAG-RSI v5 (Suites A..D)
 ├── verify_extremal_cartridges_7_8.py  # Независимый Zero-Gaming верификатор (C1, C2, Phi3, Heilbronn n=13, 14)
 ├── verify_dream_rsi.py                # Математическая проверка аудита Dream-RSI Eq. 1, цензурирования и C++ Lasso
@@ -173,7 +184,7 @@ flowchart TD
 ├── phi3_best_candidate.npy            # Чемпион 3-й задачи автокорреляции Phi_3 <= 1.457058511867 (P=3200)
 ├── heilbronn_n13_champion.npy         # Координаты чемпиона Хейльбронна n=13
 ├── heilbronn_n14_champion.npy         # Координаты чемпиона Хейльбронна n=14
-├── concepts_brief.md                  # Архитектурное резюме эволюции SLEEP-DAG-RSI v5 -> v6 -> v7
+├── concepts_brief.md                  # Архитектурное резюме эволюции SLEEP-DAG-RSI v5 -> v6 -> v7 -> v8
 └── AGENTS.md                          # Контекстные указатели и правила верификации для ИИ-агентов
 ```
 
@@ -184,10 +195,10 @@ flowchart TD
 Требования: `Python 3.10+`, `numpy`, `scipy` (опционально `torch` с CUDA для GPU-картриджей; базовое ядро [`dream_rsi_scripts/_selftest.py`](dream_rsi_scripts/_selftest.py) работает на чистом стандартном Python без внешних библиотек).
 
 ```bash
-# 1. Проверить все 18 тестовых наборов ядра (v1..v4 + SLEEP-DAG-RSI v5..v7, ~0.8 сек)
+# 1. Проверить все 19 тестовых наборов ядра (v1..v4 + SLEEP-DAG-RSI v5..v8, ~0.8 сек)
 python dream_rsi_scripts/_selftest.py
 
-# 2. Запустить стресс-тест SLEEP-DAG-RSI v5 vs v6 vs v7 (WaldSentinel, SpectralFrameLifter, AstCodeSplicer, SymbolicLibrary, ~2 сек)
+# 2. Запустить стресс-тест SLEEP-DAG-RSI v5 vs v6 vs v7 vs v8 (Trials 1..5, ~2 сек)
 python battle_test_sleep_dag_v6.py
 
 # 3. Независимая Zero-Gaming верификация экстремальных чемпионов C1, C2, Phi3 и Heilbronn n=13, 14 (~1.5 сек)

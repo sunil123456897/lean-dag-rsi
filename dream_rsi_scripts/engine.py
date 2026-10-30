@@ -1,4 +1,4 @@
-"""
+﻿"""
 Dream-RSI universal engine.
 
 The replay simulator is domain-agnostic: it needs a tree of scored attempts and
@@ -118,6 +118,10 @@ class Node:
     delta_vs_baseline: float = 0.0
     #: Per-example binary outcome vector (0/1) for Error Fingerprint crossover.
     pass_mask: List[int] = field(default_factory=list)
+    #: Continuous per-bucket margins M_{v, b} (>0 means solved, <=0 means failed).
+    bucket_scores: List[float] = field(default_factory=list)
+    #: Optional continuous tunable parameters dict/list for Neuro-Symbolic split & RRSI pruner.
+    tunable_params: Dict[str, Any] = field(default_factory=dict)
     #: Grouped failure counts or error rates by example tag (e.g. {"opcode=add_alpha": 8.0}).
     failure_breakdown: Dict[str, float] = field(default_factory=dict)
     #: Top CPU hotspot source lines ([{"line_no": int, "code": str, "pct_time": float, "time_ms": float}]).
@@ -125,6 +129,7 @@ class Node:
     #: Domain-specific extras (diff, prompt text, params, logs, ...).
     artifact: Dict[str, Any] = field(default_factory=dict)
     meta: Dict[str, Any] = field(default_factory=dict)
+
 
 
 @dataclass
@@ -1224,13 +1229,146 @@ class OptimalPolicy(Policy):
         return chosen[:slots]
 
 
+def compute_max_tilted_objective(
+    scores: Sequence[float],
+    tau: float = 4.0,
+    baseline: Optional[float] = None,
+    prior_weights: Optional[Sequence[float]] = None,
+) -> Dict[str, Any]:
+    """
+    TTT-Discover Extremal Max-Tilted / Entropic Objective (Tier S #7):
+        J_tau(theta) = (1 / tau) * log( sum_v exp(tau * s_v) )
+        J_{tau,norm}(theta) = (1 / tau) * log( sum_v q_tilde_v * exp(tau * s_v) )
+        w_v = q_v * exp(tau * (s_v - s_max)) / sum_u q_u * exp(tau * (s_u - s_max))
+    Properties:
+    - At tau -> 0+, J_{tau,norm} -> sum_v q_tilde_v * s_v (standard average reward)
+      and w_v -> q_tilde_v.
+    - As tau increases, J_{tau,norm} is strictly non-decreasing and monotonically
+      approaches max_v s_v, concentrating selection/consolidation weight on the
+      singular extremal breakthrough rather than diluting it across mediocre means.
+    """
+    raw_vals = [float(s) for s in scores]
+    n = len(raw_vals)
+    b_val = (
+        float(baseline)
+        if (baseline is not None and math.isfinite(float(baseline)))
+        else 0.0
+    )
+    if n == 0:
+        return {
+            "j_tau": b_val,
+            "j_tau_expectation": b_val,
+            "mean_score": b_val,
+            "max_score": b_val,
+            "tilted_weights": [],
+            "champion_index": -1,
+            "champion_weight": 0.0,
+            "effective_sample_size": 0.0,
+            "tau": float(tau) if math.isfinite(float(tau)) else 0.0,
+        }
+
+    finite_indices = [i for i, v in enumerate(raw_vals) if math.isfinite(v)]
+    if not finite_indices:
+        unif_w = [1.0 / float(n)] * n
+        return {
+            "j_tau": b_val,
+            "j_tau_expectation": b_val,
+            "mean_score": b_val,
+            "max_score": b_val,
+            "tilted_weights": unif_w,
+            "champion_index": 0,
+            "champion_weight": unif_w[0],
+            "effective_sample_size": float(n),
+            "tau": float(tau) if math.isfinite(float(tau)) else 0.0,
+        }
+
+    if prior_weights is not None and len(prior_weights) == n:
+        raw_q = [
+            max(0.0, float(prior_weights[i]))
+            if (i in finite_indices and math.isfinite(float(prior_weights[i])))
+            else 0.0
+            for i in range(n)
+        ]
+        sum_q = sum(raw_q)
+        if sum_q > 0.0:
+            q_tilde = [q / sum_q for q in raw_q]
+        else:
+            q_tilde = [
+                (1.0 / float(len(finite_indices))) if i in finite_indices else 0.0
+                for i in range(n)
+            ]
+    else:
+        q_tilde = [
+            (1.0 / float(len(finite_indices))) if i in finite_indices else 0.0
+            for i in range(n)
+        ]
+
+    mean_score = sum(q_tilde[i] * raw_vals[i] for i in finite_indices)
+    s_max = max(raw_vals[i] for i in finite_indices)
+    champ_idx = max(finite_indices, key=lambda i: raw_vals[i])
+    tied_champ_indices = [
+        i for i in finite_indices if abs(raw_vals[i] - s_max) <= 1e-12
+    ]
+    tau_f = float(tau) if math.isfinite(float(tau)) else 0.0
+
+    if tau_f <= 1e-12:
+        w = list(q_tilde)
+        ess = 1.0 / max(1e-12, sum(wi * wi for wi in w))
+        champ_w = sum(w[i] for i in tied_champ_indices)
+        return {
+            "j_tau": mean_score,
+            "j_tau_expectation": mean_score,
+            "mean_score": mean_score,
+            "max_score": s_max,
+            "tilted_weights": w,
+            "champion_index": champ_idx,
+            "champion_weight": champ_w,
+            "effective_sample_size": ess,
+            "tau": tau_f,
+        }
+
+    # Log-sum-exp stabilization via shift by s_max over finite indices
+    unnorm_exp = [
+        math.exp(max(-700.0, min(700.0, tau_f * (raw_vals[i] - s_max))))
+        if i in finite_indices
+        else 0.0
+        for i in range(n)
+    ]
+    weighted_exp = [q_tilde[i] * unnorm_exp[i] for i in range(n)]
+    Z_raw = max(1e-300, sum(unnorm_exp[i] for i in finite_indices))
+    Z_norm = max(1e-300, sum(weighted_exp[i] for i in finite_indices))
+
+    j_tau = s_max + (1.0 / tau_f) * math.log(Z_raw)
+    j_tau_expectation = s_max + (1.0 / tau_f) * math.log(Z_norm)
+    w = [we / Z_norm for we in weighted_exp]
+    ess = 1.0 / max(1e-12, sum(wi * wi for wi in w))
+    champ_w = sum(w[i] for i in tied_champ_indices)
+
+    return {
+        "j_tau": j_tau,
+        "j_tau_expectation": j_tau_expectation,
+        "mean_score": mean_score,
+        "max_score": s_max,
+        "tilted_weights": w,
+        "champion_index": champ_idx,
+        "champion_weight": champ_w,
+        "effective_sample_size": ess,
+        "tau": tau_f,
+    }
+
+
 class LeanDAGPolicy(OptimalPolicy):
     """
-    Upgraded Lean-DAG-RSI Exploration Policy:
+    Upgraded Lean-DAG-RSI v8 Exploration Policy (`LeanDAGPortfolio`):
     - Enables Tukey-capped counterfactual leaf continuation (`s_cf(v)`) on right-censored
       high-velocity branches so premature cutoffs in prior trees do not blind selection.
     - Enables Directed Acyclic Graph hybrid synthesis `CROSSOVER(u,v)` between the top
       independent above-baseline branches.
+    - Supports TTT-Discover Extremal Max-Tilted (`entropic_tau > 0`) parent ranking:
+          w_v = exp(tau * s_hat_v) / sum_u exp(tau * s_hat_u),
+          J_tau = (1 / tau) * log sum_v exp(tau * s_v)
+      so open-ended extremal search focuses probe budget on singular record-breaking
+      spikes instead of flat mediocre branches.
     """
 
     kind = "lean_dag"
@@ -1244,21 +1382,123 @@ class LeanDAGPolicy(OptimalPolicy):
         max_recovery: int = 1,
         use_counterfactual: bool = True,
         use_crossover: bool = True,
+        entropic_tau: float = 0.0,
     ):
         super().__init__(
             beta=beta, slope_weight=slope_weight, max_recovery=max_recovery
         )
         self.use_counterfactual = bool(use_counterfactual)
         self.use_crossover = bool(use_crossover)
+        self.entropic_tau = float(entropic_tau)
 
     def params(self) -> Dict[str, Any]:
-        return {
+        out: Dict[str, Any] = {
             "beta": self.beta,
             "slope_weight": self.slope_weight,
             "max_recovery": self.max_recovery,
             "use_counterfactual": self.use_counterfactual,
             "use_crossover": self.use_crossover,
         }
+        if self.entropic_tau != 0.0:
+            out["entropic_tau"] = self.entropic_tau
+        return out
+
+    def rank_parents_max_tilted(
+        self,
+        world: World,
+        tau: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """
+        Rank open candidate frontiers in `world` under the TTT-Discover max-tilted
+        entropic objective w_v proportional to exp(tau * s_hat_v), where s_hat_v
+        combines counterfactual continuation score and velocity bonus normalized
+        by observed score span.
+        """
+        eff_tau = float(self.entropic_tau if tau is None else tau)
+        legal_set = set(world.legal_actions())
+        trajectories = reconstruct_trajectories(world)
+        candidates: List[Tuple[str, float, float]] = []  # (frontier_id, raw_score, cf_prio)
+
+        best_anchor = max(
+            (t.successful_anchor for t in trajectories.values()),
+            default=world.tree.baseline_score,
+        )
+        span = max(
+            abs(best_anchor - world.tree.baseline_score),
+            abs(world.tree.baseline_score) * 0.1,
+            1e-6,
+        )
+        for _, traj in sorted(trajectories.items()):
+            if traj.frontier_id not in legal_set or traj.hard_failed:
+                continue
+            raw_s = traj.successful_anchor
+            cf_prio = raw_s + self.slope_weight * max(0.0, traj.last_gain)
+            candidates.append((traj.frontier_id, raw_s, cf_prio))
+
+        if not candidates:
+            return {
+                "ranked_frontiers": [],
+                "tilted_weights": {},
+                "j_tau": world.tree.baseline_score,
+                "j_tau_expectation": world.tree.baseline_score,
+                "champion_frontier": None,
+                "champion_weight": 0.0,
+                "tau": eff_tau,
+            }
+
+        norm_scores = [(c[2] - world.tree.baseline_score) / span for c in candidates]
+        raw_scores = [c[1] for c in candidates]
+        tilt_norm = compute_max_tilted_objective(norm_scores, tau=max(0.0, eff_tau))
+        tilt_raw = compute_max_tilted_objective(raw_scores, tau=max(0.0, eff_tau))
+        weights = tilt_norm["tilted_weights"]
+
+        order = sorted(
+            range(len(candidates)),
+            key=lambda i: (weights[i], candidates[i][2], candidates[i][1]),
+            reverse=True,
+        )
+        ranked_frontiers = [candidates[i][0] for i in order]
+        weight_map = {candidates[i][0]: round(weights[i], 6) for i in order}
+        champ_id = ranked_frontiers[0] if ranked_frontiers else None
+        return {
+            "ranked_frontiers": ranked_frontiers,
+            "tilted_weights": weight_map,
+            "j_tau": round(tilt_raw["j_tau"], 6),
+            "j_tau_expectation": round(tilt_raw["j_tau_expectation"], 6),
+            "mean_score": round(tilt_raw["mean_score"], 6),
+            "max_score": round(tilt_raw["max_score"], 6),
+            "champion_frontier": champ_id,
+            "champion_weight": round(weight_map.get(champ_id, 0.0), 6) if champ_id else 0.0,
+            "effective_sample_size": round(tilt_norm["effective_sample_size"], 6),
+            "tau": eff_tau,
+        }
+
+    def batch(self, world: World) -> List[str]:
+        base_batch = super().batch(world)
+        if self.entropic_tau <= 0.0 or not base_batch:
+            return base_batch
+        rank_info = self.rank_parents_max_tilted(world, tau=self.entropic_tau)
+        ranked = rank_info["ranked_frontiers"]
+        if not ranked:
+            return base_batch
+        slots = world.tree.max_parallelism
+        # Prioritize the max-tilted frontiers first while preserving crossover/root slots
+        chosen: List[str] = []
+        for fid in ranked:
+            if len(chosen) < slots and fid in base_batch and fid not in chosen:
+                chosen.append(fid)
+        for fid in ranked:
+            if len(chosen) < max(1, slots - 1) and fid not in chosen:
+                chosen.append(fid)
+        for act in base_batch:
+            if len(chosen) < slots and act not in chosen:
+                chosen.append(act)
+        return chosen[:slots]
+
+
+# Alias used in SLEEP-DAG-RSI / Lean-DAG-RSI documentation & benchmarks
+LeanDAGPortfolio = LeanDAGPolicy
+
 
 
 class DeepestFirst(Policy):
@@ -1831,12 +2071,559 @@ def profile_callable_lines(
     }
 
 
+class BackwardSubGoalDecomposer:
+    """
+    SLEEP-DAG-RSI v8 Backward Sub-Goal Decomposer (`BES` Tier S #6 + `LADDER` Tier A #12):
+    When every evaluated DAG node fails a hard test bucket b* (`M_{v, b*} <= 0` for all v,
+    so the union coverage `U_v pass_v(b*) == empty`), standard pairwise/hyper crossover
+    cannot synthesize a solution.
+    This decomposer:
+      1. Identifies all dead buckets `b*` where `max_v M_{v, b*} <= 0`.
+      2. Selects the closest-to-threshold anchor node `v_anchor(b*) = argmax_v M_{v, b*}`
+         with best observed deficit `m_best(b*) <= 0`.
+      3. Synthesizes a self-paced ladder of checkable intermediate stepping-stone subgoals
+         (`stepping_stone_subgoals`) with relaxed margin thresholds (e.g. `0.5 * m_best(b*)`),
+         reduced problem scale `N -> N/2`, or relaxed tolerance `eps -> 10 * eps`, together
+         with an executable `subgoal_evaluator_fn` and `assert_expr`.
+      4. Promotes any candidate that clears the stepping-stone subgoal as the new `root_seed`
+         for solving the original bucket `b*`.
+    """
+
+    def __init__(
+        self,
+        ladder_fractions: Sequence[float] = (0.5, 0.25, 0.0),
+        scale_reduction_factor: float = 0.5,
+        tolerance_relaxation_factor: float = 10.0,
+    ) -> None:
+        self.ladder_fractions = [float(f) for f in ladder_fractions]
+        self.scale_reduction_factor = float(scale_reduction_factor)
+        self.tolerance_relaxation_factor = float(tolerance_relaxation_factor)
+
+    @staticmethod
+    def _extract_node_margins(node: Node) -> Optional[List[float]]:
+        b_scores = getattr(node, "bucket_scores", None)
+        if not b_scores and isinstance(node.meta, dict):
+            b_scores = node.meta.get("bucket_scores") or node.meta.get("bucket_margins")
+        if isinstance(b_scores, (list, tuple)) and len(b_scores) > 0:
+            return [float(x) for x in b_scores]
+        p_mask = getattr(node, "pass_mask", None)
+        if not p_mask and isinstance(node.meta, dict):
+            p_mask = node.meta.get("pass_mask")
+        if isinstance(p_mask, (list, tuple)) and len(p_mask) > 0:
+            return [1.0 if bool(x) and float(x) > 0 else -1.0 for x in p_mask]
+        return None
+
+
+    def decompose(
+        self,
+        trees_or_nodes: Sequence[Any],
+        problem: Optional[Problem] = None,
+        bucket_specs: Optional[Sequence[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        prob = problem or Problem()
+        nodes: List[Node] = []
+        for item in trees_or_nodes:
+            if isinstance(item, DiscoveryTree):
+                for nid, n_obj in item.nodes.items():
+                    if nid != item.root_id and prob.is_success(n_obj):
+                        nodes.append(n_obj)
+            elif isinstance(item, Node):
+                if prob.is_success(item):
+                    nodes.append(item)
+
+        node_margins: List[Tuple[Node, List[float]]] = []
+        for n_obj in nodes:
+            m_vec = self._extract_node_margins(n_obj)
+            if m_vec is not None and len(m_vec) > 0:
+                node_margins.append((n_obj, m_vec))
+
+        if not node_margins:
+            return {
+                "dead_buckets": [],
+                "solved_buckets": [],
+                "total_buckets": 0,
+                "stepping_stone_subgoals": [],
+                "subgoal_ladders": {},
+                "root_seed_recommendations": [],
+            }
+
+        n_buckets = min(len(m_vec) for _, m_vec in node_margins)
+        dead_buckets: List[int] = []
+        solved_buckets: List[int] = []
+        stepping_stones: List[Dict[str, Any]] = []
+        subgoal_ladders: Dict[int, List[Dict[str, Any]]] = {}
+        root_seed_recommendations: List[Dict[str, Any]] = []
+
+        for b in range(n_buckets):
+            finite_pairs = [
+                (n_obj, max(-1e6, min(1e6, float(m_vec[b]))))
+                for n_obj, m_vec in node_margins
+                if math.isfinite(float(m_vec[b]))
+            ]
+            had_nonfinite = len(finite_pairs) < len(node_margins)
+            if finite_pairs:
+                best_node, best_m = max(
+                    finite_pairs,
+                    key=lambda pair: (pair[1], prob.score(pair[0])),
+                )
+                worst_m = min(pair[1] for pair in finite_pairs)
+            else:
+                best_node = max(
+                    (n_obj for n_obj, _ in node_margins),
+                    key=lambda n_obj: prob.score(n_obj),
+                )
+                best_m = -1.0
+                worst_m = -1.0
+
+            if best_m > 0.0:
+                solved_buckets.append(b)
+                continue
+
+            dead_buckets.append(b)
+            spec_b = (
+                dict(bucket_specs[b])
+                if (bucket_specs is not None and b < len(bucket_specs) and isinstance(bucket_specs[b], dict))
+                else {}
+            )
+            base_scale = int(spec_b.get("scale_N", 64))
+            base_eps = float(spec_b.get("tol_eps", 1e-4))
+            bucket_name = str(spec_b.get("name", f"bucket_{b}"))
+
+            ladder_steps: List[Dict[str, Any]] = []
+            for step_idx, frac in enumerate(self.ladder_fractions):
+                if best_m < -1e-12:
+                    # E.g. best_m = -0.40, frac = 0.5 -> target_margin = -0.20 (half deficit)
+                    target_margin = float(frac) * best_m
+                elif worst_m < -1e-12:
+                    target_margin = float(frac) * 0.5 * worst_m
+                else:
+                    target_margin = -1e-4 * float(frac)
+
+                level_pow = max(1, len(self.ladder_fractions) - step_idx)
+                relaxed_scale_n = max(
+                    1, int(round(base_scale * (self.scale_reduction_factor ** level_pow)))
+                )
+                relaxed_tol_eps = base_eps * (self.tolerance_relaxation_factor ** level_pow)
+
+                def _make_eval_fn(b_idx: int, t_margin: float) -> Callable[[Sequence[float]], float]:
+                    def _eval_subgoal(margins: Sequence[float]) -> float:
+                        val_b = float(margins[b_idx])
+                        if not math.isfinite(val_b):
+                            return -1e9
+                        return val_b - t_margin
+
+                    return _eval_subgoal
+
+                anc_score = prob.score(best_node)
+                anc_score_safe = float(anc_score) if math.isfinite(float(anc_score)) else 0.0
+                step_entry = {
+                    "bucket_id": b,
+                    "bucket_name": bucket_name,
+                    "ladder_step": step_idx,
+                    "anchor_node_id": best_node.id,
+                    "anchor_branch": best_node.branch,
+                    "anchor_score": anc_score_safe,
+                    "current_best_margin": round(best_m, 6),
+                    "target_margin": round(target_margin, 6),
+                    "required_margin_gain": round(target_margin - best_m, 6),
+                    "had_nonfinite_margins": had_nonfinite,
+                    "relaxed_scale_N": relaxed_scale_n,
+                    "original_scale_N": base_scale,
+                    "relaxed_tol_eps": relaxed_tol_eps,
+                    "original_tol_eps": base_eps,
+                    "assert_expr": f"assert bucket_margins[{b}] >= {target_margin:.6g}",
+                    "subgoal_evaluator_fn": _make_eval_fn(b, target_margin),
+                    "subgoal_prompt": (
+                        f"Backward Sub-Goal (BES/LADDER step {step_idx + 1}/{len(self.ladder_fractions)}) "
+                        f"for dead `{bucket_name}` (bucket {b}): all nodes currently fail with "
+                        f"best_margin={best_m:.4f} (anchor `{best_node.id}`). First solve the "
+                        f"stepping-stone subgoal `margin[{b}] >= {target_margin:.4f}` "
+                        f"(or scale N={relaxed_scale_n}, tol={relaxed_tol_eps:.2g}), then promote "
+                        f"that solution as `root_seed` for full `{bucket_name}`."
+                    ),
+                }
+                ladder_steps.append(step_entry)
+
+            subgoal_ladders[b] = ladder_steps
+            primary_subgoal = ladder_steps[0]
+            stepping_stones.append(primary_subgoal)
+            root_seed_recommendations.append(
+                {
+                    "bucket_id": b,
+                    "anchor_node_id": best_node.id,
+                    "stepping_stone_target": primary_subgoal["target_margin"],
+                    "action": f"SUBGOAL_SEED({best_node.id},bucket={b},target={primary_subgoal['target_margin']})",
+                }
+            )
+
+        return {
+            "dead_buckets": dead_buckets,
+            "solved_buckets": solved_buckets,
+            "total_buckets": n_buckets,
+            "stepping_stone_subgoals": stepping_stones,
+            "subgoal_ladders": subgoal_ladders,
+            "root_seed_recommendations": root_seed_recommendations,
+        }
+
+    decompose_dead_buckets = decompose
+
+    def select_stepping_stone_seed(
+        self,
+        dead_bucket: int,
+        candidate_nodes: Sequence[Node],
+        subgoal: Dict[str, Any],
+        problem: Optional[Problem] = None,
+    ) -> Dict[str, Any]:
+        """
+        Evaluate new candidate attempts against a stepping-stone subgoal for `dead_bucket`
+        and promote the highest-margin candidate that clears `target_margin` as the new
+        `root_seed` for solving the unrelaxed bucket.
+        """
+        prob = problem or Problem()
+        eval_fn = subgoal.get("subgoal_evaluator_fn")
+        raw_t = float(subgoal.get("target_margin", 0.0))
+        target_m = raw_t if math.isfinite(raw_t) else -0.5
+        cleared: List[Tuple[float, float, Node]] = []
+        for cand in candidate_nodes:
+            if not prob.is_success(cand):
+                continue
+            m_vec = self._extract_node_margins(cand)
+            if m_vec is None or dead_bucket >= len(m_vec):
+                continue
+            cand_m = float(m_vec[dead_bucket])
+            if not math.isfinite(cand_m):
+                continue
+            surplus = (
+                float(eval_fn(m_vec))
+                if callable(eval_fn)
+                else (cand_m - target_m)
+            )
+            if math.isfinite(surplus) and surplus >= -1e-12:
+                c_score = prob.score(cand)
+                c_score_safe = float(c_score) if math.isfinite(float(c_score)) else 0.0
+                cleared.append((cand_m, c_score_safe, cand))
+
+        cleared.sort(key=lambda item: (item[0], item[1]), reverse=True)
+        if not cleared:
+            return {
+                "subgoal_cleared": False,
+                "promoted_root_seed_id": None,
+                "best_achieved_margin": None,
+                "next_target_margin": target_m,
+            }
+        best_margin, best_score, winner = cleared[0]
+        return {
+            "subgoal_cleared": True,
+            "promoted_root_seed_id": winner.id,
+            "promoted_branch": winner.branch,
+            "promoted_score": best_score,
+            "best_achieved_margin": round(best_margin, 6),
+            "next_target_margin": 0.0 if best_margin < 0.0 else round(best_margin + 0.1, 6),
+        }
+
+
+def decompose_dead_buckets(
+    trees_or_nodes: Sequence[Any],
+    problem: Optional[Problem] = None,
+    ladder_fractions: Sequence[float] = (0.5, 0.25, 0.0),
+    bucket_specs: Optional[Sequence[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    """Convenience functional wrapper around `BackwardSubGoalDecomposer`."""
+    decomposer = BackwardSubGoalDecomposer(ladder_fractions=ladder_fractions)
+    return decomposer.decompose(trees_or_nodes, problem=problem, bucket_specs=bucket_specs)
+
+
+class MutableSkillState:
+    """
+    SLEEP-DAG-RSI v8 Mutable Typed State (`SKILL.state` / `MutableSkillState`, Tier A #1):
+    Replaces unbounded append-only prompt/history accumulation with a strictly bounded,
+    schema-validated state object:
+        S_t = (best_invariants, dead_end_fingerprints, unsolved_buckets, active_library_primitives)
+    that updates atomically after each discovery cycle (`S_t -> S_{t+1}`) and discards
+    raw intermediate node traces (`line_hotspots`, verbose stdout/stderr, redundant clones)
+    from the active context window.
+    """
+
+    def __init__(
+        self,
+        task: str = "default",
+        round_index: int = 0,
+        max_invariants: int = 8,
+        max_dead_ends: int = 16,
+        max_unsolved_buckets: int = 32,
+        max_primitives: int = 12,
+    ) -> None:
+        self.task = str(task)
+        self.round_index = int(round_index)
+        self.max_invariants = max(1, int(max_invariants))
+        self.max_dead_ends = max(1, int(max_dead_ends))
+        self.max_unsolved_buckets = max(1, int(max_unsolved_buckets))
+        self.max_primitives = max(1, int(max_primitives))
+
+        self.best_invariants: List[Dict[str, Any]] = []
+        self.dead_end_fingerprints: List[Dict[str, Any]] = []
+        self.unsolved_buckets: List[Dict[str, Any]] = []
+        self.active_library_primitives: List[Dict[str, Any]] = []
+        self.discarded_raw_traces_count: int = 0
+
+    def commit_cycle(
+        self,
+        tree: DiscoveryTree,
+        problem: Optional[Problem] = None,
+        library_primitives: Optional[Sequence[Any]] = None,
+        coupled_invariants: Optional[Sequence[Any]] = None,
+    ) -> "MutableSkillState":
+        """
+        Atomic state transition S_t -> S_{t+1}:
+          1. Extracts compact invariant records from above-baseline nodes in `tree` and
+             retains only the top `max_invariants` unique solutions.
+          2. Deduplicates hard-failed / zero-gain branches into `dead_end_fingerprints`
+             (incrementing `occurrences` on repeat rather than appending duplicates).
+          3. Updates `unsolved_buckets` from `decompose_dead_buckets([tree])`, automatically
+             evicting any bucket that has now been solved (`margin > 0`).
+          4. Registers reusable AST primitives into `active_library_primitives`.
+          5. Discards raw execution traces and increments `round_index`.
+        """
+        prob = problem or Problem()
+        self.round_index += 1
+        self.discarded_raw_traces_count += len(tree.nodes)
+
+        # 1. Update best_invariants (deduplicated by node_id / param signature)
+        inv_by_sig: Dict[str, Dict[str, Any]] = {
+            str(item.get("signature", item.get("node_id"))): dict(item)
+            for item in self.best_invariants
+        }
+        extra_invs = list(coupled_invariants) if coupled_invariants is not None else []
+        for nid, node in tree.nodes.items():
+            if nid == tree.root_id:
+                continue
+            if prob.is_success(node) and prob.score(node) > tree.baseline_score:
+                t_params = getattr(node, "tunable_params", None) or (
+                    node.meta.get("tunable_params") if isinstance(node.meta, dict) else None
+                )
+                node_invs = (
+                    node.meta.get("coupled_invariants", extra_invs)
+                    if isinstance(node.meta, dict)
+                    else extra_invs
+                )
+                sig = f"{nid}:{json.dumps(t_params, sort_keys=True) if t_params else round(prob.score(node), 6)}"
+                compact_rec = {
+                    "node_id": nid,
+                    "branch": node.branch,
+                    "score": round(prob.score(node), 6),
+                    "tunable_params": dict(t_params) if isinstance(t_params, dict) else t_params,
+                    "coupled_invariants": list(node_invs) if isinstance(node_invs, (list, tuple)) else [],
+                    "signature": sig,
+                    "updated_round": self.round_index,
+                }
+                prev = inv_by_sig.get(sig)
+                if prev is None or float(compact_rec["score"]) >= float(prev.get("score", -1e30)):
+                    inv_by_sig[sig] = compact_rec
+
+        sorted_invs = sorted(
+            inv_by_sig.values(),
+            key=lambda item: (float(item.get("score", 0.0)), int(item.get("updated_round", 0))),
+            reverse=True,
+        )
+        self.best_invariants = sorted_invs[: self.max_invariants]
+
+        # 2. Update dead_end_fingerprints (deduplicated by failure signature)
+        fp_map: Dict[str, Dict[str, Any]] = {
+            str(item["fingerprint_key"]): dict(item) for item in self.dead_end_fingerprints
+        }
+        for nid, node in tree.nodes.items():
+            if nid == tree.root_id:
+                continue
+            is_dead = prob.hard_failure(node) or (
+                not prob.is_success(node) and not prob.repairable(node)
+            )
+            if not is_dead:
+                continue
+            f_cls = prob.class_of(node)
+            p_mask = getattr(node, "pass_mask", None) or (
+                node.meta.get("pass_mask") if isinstance(node.meta, dict) else None
+            )
+            mask_sig = (
+                "".join("1" if x else "0" for x in p_mask[:16])
+                if isinstance(p_mask, (list, tuple))
+                else "no_mask"
+            )
+            err_head = str(node.error or f_cls)[:48]
+            fp_key = f"{f_cls}:{mask_sig}:{err_head}"
+            if fp_key in fp_map:
+                fp_map[fp_key]["occurrences"] = int(fp_map[fp_key].get("occurrences", 1)) + 1
+                fp_map[fp_key]["last_round"] = self.round_index
+            else:
+                fp_map[fp_key] = {
+                    "fingerprint_key": fp_key,
+                    "fail_class": f_cls,
+                    "mask_signature": mask_sig,
+                    "error_summary": err_head,
+                    "occurrences": 1,
+                    "last_round": self.round_index,
+                }
+
+        sorted_fps = sorted(
+            fp_map.values(),
+            key=lambda item: (int(item.get("occurrences", 1)), int(item.get("last_round", 0))),
+            reverse=True,
+        )
+        self.dead_end_fingerprints = sorted_fps[: self.max_dead_ends]
+
+        # 3. Update unsolved_buckets (evict solved buckets, retain current dead buckets)
+        decomp = decompose_dead_buckets([tree], problem=prob)
+        solved_set = set(decomp["solved_buckets"])
+        existing_unsolved: Dict[int, Dict[str, Any]] = {
+            int(item["bucket_id"]): dict(item)
+            for item in self.unsolved_buckets
+            if int(item["bucket_id"]) not in solved_set
+        }
+        for sub in decomp["stepping_stone_subgoals"]:
+            b_id = int(sub["bucket_id"])
+            existing_unsolved[b_id] = {
+                "bucket_id": b_id,
+                "bucket_name": sub["bucket_name"],
+                "anchor_node_id": sub["anchor_node_id"],
+                "current_best_margin": sub["current_best_margin"],
+                "stepping_stone_target": sub["target_margin"],
+                "assert_expr": sub["assert_expr"],
+                "updated_round": self.round_index,
+            }
+        sorted_unsolved = sorted(
+            existing_unsolved.values(),
+            key=lambda item: float(item.get("current_best_margin", -1e9)),
+        )
+        self.unsolved_buckets = sorted_unsolved[: self.max_unsolved_buckets]
+
+        # 4. Update active_library_primitives
+        if library_primitives:
+            prim_map: Dict[str, Dict[str, Any]] = {
+                str(item["name"]): dict(item) for item in self.active_library_primitives
+            }
+            for p in library_primitives:
+                if isinstance(p, dict):
+                    p_name = str(p.get("name", f"prim_{len(prim_map)}"))
+                    prim_map[p_name] = {
+                        "name": p_name,
+                        "arity": int(p.get("arity", 1)),
+                        "expr": str(p.get("expr", p.get("source", "")))[:120],
+                        "compression_gain": float(p.get("compression_gain", 1.0)),
+                    }
+                else:
+                    p_name = str(getattr(p, "name", f"prim_{len(prim_map)}"))
+                    prim_map[p_name] = {
+                        "name": p_name,
+                        "arity": int(getattr(p, "arity", 1)),
+                        "expr": str(getattr(p, "source_expr", getattr(p, "expr", "")))[:120],
+                        "compression_gain": float(getattr(p, "compression_gain", 1.0)),
+                    }
+            sorted_prims = sorted(
+                prim_map.values(),
+                key=lambda item: float(item.get("compression_gain", 0.0)),
+                reverse=True,
+            )
+            self.active_library_primitives = sorted_prims[: self.max_primitives]
+
+        return self
+
+    def validate_schema(self) -> Dict[str, Any]:
+        forbidden_raw_keys = {"raw_trace", "stdout_log", "stderr_log", "line_hotspots"}
+        leaked_keys: List[str] = []
+        for coll in (
+            self.best_invariants,
+            self.dead_end_fingerprints,
+            self.unsolved_buckets,
+            self.active_library_primitives,
+        ):
+            for entry in coll:
+                if isinstance(entry, dict):
+                    overlap = forbidden_raw_keys.intersection(entry.keys())
+                    if overlap:
+                        leaked_keys.extend(sorted(overlap))
+
+        within_caps = (
+            len(self.best_invariants) <= self.max_invariants
+            and len(self.dead_end_fingerprints) <= self.max_dead_ends
+            and len(self.unsolved_buckets) <= self.max_unsolved_buckets
+            and len(self.active_library_primitives) <= self.max_primitives
+        )
+        valid = within_caps and len(leaked_keys) == 0
+        return {
+            "valid": valid,
+            "within_caps": within_caps,
+            "leaked_raw_keys": leaked_keys,
+            "counts": {
+                "best_invariants": len(self.best_invariants),
+                "dead_end_fingerprints": len(self.dead_end_fingerprints),
+                "unsolved_buckets": len(self.unsolved_buckets),
+                "active_library_primitives": len(self.active_library_primitives),
+            },
+            "discarded_raw_traces_count": self.discarded_raw_traces_count,
+            "serialized_byte_size": self.serialized_byte_size(),
+        }
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "task": self.task,
+            "round_index": self.round_index,
+            "best_invariants": list(self.best_invariants),
+            "dead_end_fingerprints": list(self.dead_end_fingerprints),
+            "unsolved_buckets": list(self.unsolved_buckets),
+            "active_library_primitives": list(self.active_library_primitives),
+            "discarded_raw_traces_count": self.discarded_raw_traces_count,
+            "caps": {
+                "max_invariants": self.max_invariants,
+                "max_dead_ends": self.max_dead_ends,
+                "max_unsolved_buckets": self.max_unsolved_buckets,
+                "max_primitives": self.max_primitives,
+            },
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "MutableSkillState":
+        caps = data.get("caps", {}) if isinstance(data.get("caps"), dict) else {}
+        obj = cls(
+            task=str(data.get("task", "default")),
+            round_index=int(data.get("round_index", 0)),
+            max_invariants=int(caps.get("max_invariants", 8)),
+            max_dead_ends=int(caps.get("max_dead_ends", 16)),
+            max_unsolved_buckets=int(caps.get("max_unsolved_buckets", 32)),
+            max_primitives=int(caps.get("max_primitives", 12)),
+        )
+        obj.best_invariants = list(data.get("best_invariants", []))[: obj.max_invariants]
+        obj.dead_end_fingerprints = list(data.get("dead_end_fingerprints", []))[: obj.max_dead_ends]
+        obj.unsolved_buckets = list(data.get("unsolved_buckets", []))[: obj.max_unsolved_buckets]
+        obj.active_library_primitives = list(data.get("active_library_primitives", []))[
+            : obj.max_primitives
+        ]
+        obj.discarded_raw_traces_count = int(data.get("discarded_raw_traces_count", 0))
+        return obj
+
+    def serialized_byte_size(self) -> int:
+        return len(json.dumps(self.to_dict(), sort_keys=True).encode("utf-8"))
+
+    def compact_prompt_context(self) -> str:
+        payload = {
+            "SKILL.state": {
+                "task": self.task,
+                "round": self.round_index,
+                "best_invariants": self.best_invariants,
+                "dead_end_fingerprints": self.dead_end_fingerprints,
+                "unsolved_buckets": self.unsolved_buckets,
+                "active_library_primitives": self.active_library_primitives,
+            }
+        }
+        return json.dumps(payload, indent=2, sort_keys=True)
+
+
 def ideate_over_history(
     trees: Sequence[DiscoveryTree],
     problem: Optional[Problem] = None,
+    skill_state: Optional[MutableSkillState] = None,
+    library_primitives: Optional[Sequence[Any]] = None,
 ) -> Dict[str, Any]:
     """
-    Lean-DAG-RSI Ideation Synthesizer:
+    Lean-DAG-RSI v8 Ideation Synthesizer:
     Analyzes all recorded discovery trees and produces concrete, actionable
     mechanisms for generating NEW ideas in the next online round:
       1. `crossovers`: pairs of distinct above-baseline branches (`CROSSOVER(u,v)`)
@@ -1853,6 +2640,10 @@ def ideate_over_history(
       5. `bottleneck_diagnostics`: automated forensic pinpointing from `failure_breakdown`
          (dominant error tag) and `line_hotspots` (top CPU hotspot source line).
       6. `dead_ends`: confirmed `algorithmic_failure` branches to never repeat.
+      7. `backward_subgoals`: BES + LADDER backward subgoal decomposition for dead buckets
+         where `M_{v, b*} <= 0` across all evaluated nodes.
+      8. `skill_state`: bounded, schema-validated `MutableSkillState` (`SKILL.state`)
+         updated atomically across `trees` with raw intermediate traces discarded.
     """
     prob = problem or Problem()
     crossovers: List[Dict[str, Any]] = []
@@ -1862,7 +2653,14 @@ def ideate_over_history(
     bottleneck_diagnostics: List[Dict[str, Any]] = []
     dead_ends: List[Dict[str, Any]] = []
 
+    active_state = (
+        skill_state
+        if skill_state is not None
+        else MutableSkillState(task=trees[0].task if trees else "default")
+    )
+
     for idx, tree in enumerate(trees):
+        active_state.commit_cycle(tree, prob, library_primitives=library_primitives)
         tukey_cap = compute_tukey_cap(tree, prob)
         w_full = World(tree, prob, allow_counterfactual=True, allow_crossover=True)
         # Reveal all recorded nodes to inspect the full realized tree structure
@@ -2072,6 +2870,7 @@ def ideate_over_history(
                 crossovers.append(pair_candidates[0][1])
 
     harness_diagnostics = diagnose_harness_failures(trees, prob)
+    backward_subgoals = decompose_dead_buckets(trees, prob)
     return {
         "crossovers": crossovers,
         "censored_breakthroughs": censored_breakthroughs,
@@ -2080,6 +2879,8 @@ def ideate_over_history(
         "bottleneck_diagnostics": bottleneck_diagnostics,
         "harness_diagnostics": harness_diagnostics,
         "dead_ends": dead_ends,
+        "backward_subgoals": backward_subgoals,
+        "skill_state": active_state.to_dict(),
     }
 
 
@@ -4755,12 +5556,36 @@ class ActiveBoundarySynthesizer:
         step_lr: float = 0.20,
         fd_eps: float = 1e-3,
         probe_zero_boundary: bool = True,
+        max_active_coords: int = 16,
     ) -> None:
         self.trust_radius_sigma = float(trust_radius_sigma)
         self.ascent_steps = max(1, int(ascent_steps))
         self.step_lr = float(step_lr)
         self.fd_eps = float(fd_eps)
         self.probe_zero_boundary = bool(probe_zero_boundary)
+        self.max_active_coords = max(1, int(max_active_coords))
+
+    def _screen_active_coordinates(
+        self,
+        base_x: Sequence[float],
+        col_stds: Sequence[float],
+        committee_fns: Sequence[Callable[[Sequence[float]], Any]],
+    ) -> List[int]:
+        d = len(base_x)
+        if d <= self.max_active_coords:
+            return list(range(d))
+        fn0 = committee_fns[0]
+        base_v = self._to_vec(fn0(base_x))
+        sens: List[Tuple[float, int]] = []
+        for c in range(d):
+            h = max(1e-5, self.fd_eps * col_stds[c])
+            x_p = list(base_x)
+            x_p[c] += h
+            vp = self._to_vec(fn0(x_p))
+            diff = sum(abs(vp[k] - base_v[k]) for k in range(min(len(vp), len(base_v))))
+            sens.append((diff * col_stds[c], c))
+        sens.sort(reverse=True)
+        return sorted(idx for _, idx in sens[: self.max_active_coords])
 
     @staticmethod
     def _to_vec(val: Any) -> List[float]:
@@ -4906,6 +5731,8 @@ class ActiveBoundarySynthesizer:
             ]
             seeds.append((pert, list(anchors[base_idx])))
 
+        active_dims = self._screen_active_coordinates(anchors[0], col_stds, committee_fns)
+
         # 2. Projected Gradient Ascent on committee disagreement D(x)
         optimized_candidates: List[Tuple[float, bool, List[float]]] = []
         for seed_x, center_x in seeds[: max(num_synthetic, len(seeds))]:
@@ -4920,7 +5747,7 @@ class ActiveBoundarySynthesizer:
             ]
             for _ in range(self.ascent_steps):
                 grad = [0.0] * d
-                for c in range(d):
+                for c in active_dims:
                     h = max(1e-5, self.fd_eps * col_stds[c])
                     x_p = list(curr_x)
                     x_m = list(curr_x)
@@ -4933,7 +5760,7 @@ class ActiveBoundarySynthesizer:
                 g_norm = math.sqrt(sum(g * g for g in grad))
                 if g_norm < 1e-12:
                     break
-                for c in range(d):
+                for c in active_dims:
                     step = self.step_lr * col_stds[c] * (grad[c] / g_norm)
                     curr_x[c] = min(highs_loc[c], max(lows_loc[c], curr_x[c] + step))
 
@@ -4959,9 +5786,270 @@ class ActiveBoundarySynthesizer:
             "boundary_crossings_found": crossings,
         }
 
+    def evaluate_consensus_fragility(
+        self,
+        x: Sequence[float],
+        committee_fns: Sequence[Callable[[Sequence[float]], Any]],
+        consensus_var_tol: float = 0.05,
+    ) -> Dict[str, Any]:
+        """
+        SLEEP-DAG-RSI v8 Consensus Challenger Evaluation (`VeriHarness`, Tier A #8):
+        Inspects points where all committee models agree (`variance <= consensus_var_tol`
+        and unanimous sign), yet the shared stability margin `M_cons(x) = min_k |f_k(x)_0|`
+        is small. High fragility score indicates a collective blind spot where unanimous
+        agreement masks proximity to a shared failure cliff.
+        """
+        preds = [self._to_vec(fn(x)) for fn in committee_fns]
+        k_models = len(preds)
+        if k_models < 1 or not preds[0]:
+            return {
+                "fragility": 0.0,
+                "consensus_margin": 0.0,
+                "mean_pred": 0.0,
+                "variance": 0.0,
+                "is_unanimous_sign": False,
+                "is_consensus_state": False,
+                "preds": preds,
+            }
+        d_out = len(preds[0])
+        mean_vec = [
+            sum(preds[m][c] for m in range(k_models)) / float(k_models)
+            for c in range(d_out)
+        ]
+        variance = (
+            sum(
+                sum((preds[m][c] - mean_vec[c]) ** 2 for c in range(d_out))
+                for m in range(k_models)
+            )
+            / float(k_models)
+        )
+        signs = {1 if preds[m][0] >= 0.0 else -1 for m in range(k_models)}
+        is_unanimous = len(signs) == 1
+        consensus_margin = min(abs(preds[m][0]) for m in range(k_models))
+        is_consensus = bool(is_unanimous and variance <= consensus_var_tol)
+        # Fragility rises sharply as consensus_margin -> 0 while variance remains near 0
+        fragility = math.exp(-10.0 * variance) / (consensus_margin + 1e-3)
+        return {
+            "fragility": fragility,
+            "consensus_margin": consensus_margin,
+            "mean_pred": mean_vec[0],
+            "variance": variance,
+            "is_unanimous_sign": is_unanimous,
+            "is_consensus_state": is_consensus,
+            "preds": preds,
+        }
+
+    def challenge_consensus_points(
+        self,
+        anchor_points: Sequence[Sequence[float]],
+        committee_fns: Sequence[Callable[[Sequence[float]], Any]],
+        num_challengers: int = 4,
+        bounds: Optional[Sequence[Tuple[float, float]]] = None,
+        consensus_var_tol: float = 0.05,
+    ) -> Dict[str, Any]:
+        """
+        VeriHarness Second Head — `Consensus Challenger` (Tier A #8):
+        Targets regions where all top candidates agree (`variance ~ 0`), so standard
+        disagreement maximization (`grad_x Var_k`) has zero gradient and is blind.
+        Perturbs consensus anchors along the shared adversarial margin-collapse direction
+        `-sign(f_bar(x_anc)) * grad_x f_bar(x)` (while penalizing committee variance)
+        to expose collective blind spots where a small perturbation collapses or flips
+        the unanimous prediction.
+        """
+        n_anc = len(anchor_points)
+        if n_anc == 0 or len(committee_fns) < 1:
+            return {
+                "challenger_points": [],
+                "anchor_mean_consensus_margin": 0.0,
+                "challenged_mean_consensus_margin": 0.0,
+                "margin_collapse_ratio": 1.0,
+                "collective_blind_spots_found": 0,
+                "unanimous_flips_found": 0,
+            }
+
+        d = len(anchor_points[0])
+        anchors = [[float(v) for v in row] for row in anchor_points]
+        col_means = [sum(anchors[r][c] for r in range(n_anc)) / float(n_anc) for c in range(d)]
+        col_stds = [
+            max(
+                1e-4,
+                math.sqrt(
+                    sum((anchors[r][c] - col_means[c]) ** 2 for r in range(n_anc))
+                    / float(max(1, n_anc - 1))
+                ),
+            )
+            for c in range(d)
+        ]
+        if bounds is not None and len(bounds) == d:
+            global_lows = [float(b[0]) for b in bounds]
+            global_highs = [float(b[1]) for b in bounds]
+        else:
+            global_lows = [
+                min(anchors[r][c] for r in range(n_anc)) - self.trust_radius_sigma * col_stds[c]
+                for c in range(d)
+            ]
+            global_highs = [
+                max(anchors[r][c] for r in range(n_anc)) + self.trust_radius_sigma * col_stds[c]
+                for c in range(d)
+            ]
+
+        anc_evals = [
+            self.evaluate_consensus_fragility(x, committee_fns, consensus_var_tol=consensus_var_tol)
+            for x in anchors
+        ]
+        consensus_indices = [
+            i for i in range(n_anc) if anc_evals[i]["is_consensus_state"]
+        ]
+        if not consensus_indices:
+            # Fall back to lowest-variance anchors
+            consensus_indices = sorted(range(n_anc), key=lambda i: anc_evals[i]["variance"])[
+                : max(1, num_challengers)
+            ]
+
+        # Rank consensus anchors by highest fragility (lowest safety margin at low variance)
+        consensus_indices.sort(key=lambda i: anc_evals[i]["fragility"], reverse=True)
+        anchor_mean_margin = sum(
+            anc_evals[i]["consensus_margin"] for i in consensus_indices
+        ) / float(max(1, len(consensus_indices)))
+
+        active_dims = self._screen_active_coordinates(anchors[consensus_indices[0]], col_stds, committee_fns)
+
+        challenged_candidates: List[Tuple[float, float, bool, bool, List[float]]] = []
+        for idx_pos in range(max(num_challengers, len(consensus_indices))):
+            anc_i = consensus_indices[idx_pos % len(consensus_indices)]
+            center_x = list(anchors[anc_i])
+            curr_x = list(center_x)
+            orig_sign = 1.0 if anc_evals[anc_i]["mean_pred"] >= 0.0 else -1.0
+            orig_margin = max(1e-9, anc_evals[anc_i]["consensus_margin"])
+
+            lows_loc = [
+                max(global_lows[c], center_x[c] - self.trust_radius_sigma * col_stds[c])
+                for c in range(d)
+            ]
+            highs_loc = [
+                min(global_highs[c], center_x[c] + self.trust_radius_sigma * col_stds[c])
+                for c in range(d)
+            ]
+
+            for _ in range(self.ascent_steps):
+                # Minimize signed consensus prediction `orig_sign * mean_pred(x) + 2.0 * variance(x)`
+                # so the step pushes the unanimous committee across the 0-boundary together.
+                grad = [0.0] * d
+                for c in active_dims:
+                    h = max(1e-5, self.fd_eps * col_stds[c])
+                    x_p = list(curr_x)
+                    x_m = list(curr_x)
+                    x_p[c] = min(highs_loc[c], curr_x[c] + h)
+                    x_m[c] = max(lows_loc[c], curr_x[c] - h)
+                    denom = max(1e-12, x_p[c] - x_m[c])
+                    ev_p = self.evaluate_consensus_fragility(
+                        x_p, committee_fns, consensus_var_tol=consensus_var_tol
+                    )
+                    ev_m = self.evaluate_consensus_fragility(
+                        x_m, committee_fns, consensus_var_tol=consensus_var_tol
+                    )
+                    loss_p = orig_sign * ev_p["mean_pred"] + 2.0 * ev_p["variance"]
+                    loss_m = orig_sign * ev_m["mean_pred"] + 2.0 * ev_m["variance"]
+                    grad[c] = (loss_p - loss_m) / denom
+
+                g_norm = math.sqrt(sum(g * g for g in grad))
+                if g_norm < 1e-12:
+                    break
+                for c in active_dims:
+                    step = -self.step_lr * col_stds[c] * (grad[c] / g_norm)
+                    curr_x[c] = min(highs_loc[c], max(lows_loc[c], curr_x[c] + step))
+
+            ev_fin = self.evaluate_consensus_fragility(
+                curr_x, committee_fns, consensus_var_tol=consensus_var_tol
+            )
+            new_sign = 1.0 if ev_fin["mean_pred"] >= 0.0 else -1.0
+            unanimous_flip = bool(ev_fin["is_unanimous_sign"] and (new_sign != orig_sign))
+            margin_collapsed = bool(
+                unanimous_flip or (ev_fin["consensus_margin"] < 0.5 * orig_margin)
+            )
+            score_key = (
+                (1000.0 + abs(ev_fin["mean_pred"]))
+                if unanimous_flip
+                else ev_fin["fragility"]
+            )
+            challenged_candidates.append(
+                (
+                    score_key,
+                    ev_fin["consensus_margin"],
+                    margin_collapsed,
+                    unanimous_flip,
+                    curr_x,
+                )
+            )
+
+        challenged_candidates.sort(key=lambda item: item[0], reverse=True)
+        chosen = challenged_candidates[:num_challengers]
+        chal_points = [item[4] for item in chosen]
+        chal_mean_margin = sum(item[1] for item in chosen) / float(max(1, len(chosen)))
+        blind_spots = sum(1 for item in chosen if item[2])
+        unanimous_flips = sum(1 for item in chosen if item[3])
+        collapse_ratio = chal_mean_margin / max(anchor_mean_margin, 1e-9)
+
+        return {
+            "challenger_points": chal_points,
+            "anchor_mean_consensus_margin": round(anchor_mean_margin, 6),
+            "challenged_mean_consensus_margin": round(chal_mean_margin, 6),
+            "margin_collapse_ratio": round(collapse_ratio, 6),
+            "collective_blind_spots_found": blind_spots,
+            "unanimous_flips_found": unanimous_flips,
+        }
+
+    def synthesize_dual_head_verification(
+        self,
+        anchor_points: Sequence[Sequence[float]],
+        committee_fns: Sequence[Callable[[Sequence[float]], Any]],
+        num_disagreement: int = 4,
+        num_consensus_challengers: int = 4,
+        bounds: Optional[Sequence[Tuple[float, float]]] = None,
+        consensus_var_tol: float = 0.05,
+        num_challenger: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        VeriHarness Dual-Head Verification (`Disagreement Resolver + Consensus Challenger`, Tier A #8):
+        Combines:
+          - Head 1 (`Disagreement Resolver`): finds boundary inputs maximizing committee
+            disagreement `Var_k(f_k(x))` to separate competing candidates.
+          - Head 2 (`Consensus Challenger`): finds perturbations at unanimous low-margin
+            states (`Var_k ~ 0`) that collapse or flip collective predictions.
+        """
+        n_chal = int(num_challenger) if num_challenger is not None else int(num_consensus_challengers)
+        head_disagreement = self.synthesize_boundary_points(
+            anchor_points=anchor_points,
+            committee_fns=committee_fns,
+            num_synthetic=num_disagreement,
+            bounds=bounds,
+        )
+        head_consensus = self.challenge_consensus_points(
+            anchor_points=anchor_points,
+            committee_fns=committee_fns,
+            num_challengers=n_chal,
+            bounds=bounds,
+            consensus_var_tol=consensus_var_tol,
+        )
+        combined = list(head_disagreement["synthetic_points"]) + list(
+            head_consensus["challenger_points"]
+        )
+        return {
+            "disagreement_head": head_disagreement,
+            "disagreement_resolver_head": head_disagreement,
+            "consensus_challenger_head": head_consensus,
+            "combined_verification_points": combined,
+            "total_verification_points": len(combined),
+            "total_boundary_crossings": int(head_disagreement["boundary_crossings_found"]),
+            "collective_blind_spots_found": int(
+                head_consensus["collective_blind_spots_found"]
+            ),
+            "unanimous_flips_found": int(head_consensus["unanimous_flips_found"]),
+        }
+
 
 # ---------------------------------------------------------------------------
-# 18. SLEEP-DAG-RSI v5, v6 & v7 Parametric Continual Learning Exports
+# 18. SLEEP-DAG-RSI v5, v6, v7 & v8 Parametric Continual Learning Exports
 # ---------------------------------------------------------------------------
 try:
     from sleep_dag_rsi import (  # type: ignore
@@ -4971,6 +6059,7 @@ try:
         DeltaRuleFastMemory,
         ExpandableMoEMLP,
         ExpertFingerprintMeta,
+        FeedbackConditionedSelfTeacher,
         LibraryPrimitive,
         LoRALinearWrapper,
         LowRankExpert,
