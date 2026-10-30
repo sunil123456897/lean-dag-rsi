@@ -1,66 +1,289 @@
-# Lean-DAG-RSI (`Auto-Dream-RSI` v3, v4 & `SLEEP-DAG-RSI` v5–v7)
+# Lean-DAG-RSI & SLEEP-DAG-RSI (v1–v7)
 
-**Autonomous Scientific & Engineering Discovery via Error-Fingerprint DAG Crossover, Spectral Frame-Lifting, Autonomous AST Splicing, Compositional Neuro-Symbolic Sleep (`SLEEP + HOPE + CMS`), and Formal/Exact-Rational Verification.**
-
-* **Full Papers (Russian, PDF & Markdown):**
-  * [`Полная_Статья_Lean_DAG_RSI_v3.pdf`](Полная_Статья_Lean_DAG_RSI_v3.pdf) & [`Полная_Статья_Lean_DAG_RSI_v3.md`](Полная_Статья_Lean_DAG_RSI_v3.md)
-  * [`lean_dag_rsi_v5_sleep_paper.pdf`](lean_dag_rsi_v5_sleep_paper.pdf) & [`Полная_Статья_Lean_DAG_RSI_v5_SLEEP.md`](Полная_Статья_Lean_DAG_RSI_v5_SLEEP.md) ([`sleep_dag_rsi_unification_report.md`](sleep_dag_rsi_unification_report.md), [`concepts_brief.md`](concepts_brief.md))
-* **Self-Contained Core Engine (`18` self-test suites + `SLEEP-DAG-RSI` v7 parametric & neuro-symbolic sleep):**
-  * [`dream_rsi_scripts/engine.py`](dream_rsi_scripts/engine.py), [`dream_rsi_scripts/_selftest.py`](dream_rsi_scripts/_selftest.py), [`sleep_dag_rsi.py`](sleep_dag_rsi.py), [`battle_test_sleep_dag_v6.py`](battle_test_sleep_dag_v6.py), & [`run_sleep_dag_experiments.py`](run_sleep_dag_experiments.py)
-* **Real Bitcoin Multi-Timeframe Continual Sleep & Trader Suite (`149,953` gap-free `BTCUSDT` bars):**
-  * [`btc_sleep_dag_rsi/`](btc_sleep_dag_rsi/) ([`btc_sleep_dag_engine.py`](btc_sleep_dag_rsi/btc_sleep_dag_engine.py), [`BTC_TRADER_ANALYSIS_REPORT.md`](btc_sleep_dag_rsi/BTC_TRADER_ANALYSIS_REPORT.md))
-* **Autonomous 8-Cartridge Discovery Harness:**
-  * [`auto_dream_rsi.py`](auto_dream_rsi.py)
-* **Heilbronn Triangle $n=13, 14, 15, 16, 17$ 500-Digit & $10^{100}$-Rational Certificate Package (`tejstead/heilbronn-site`):**
-  * [`heilbronn_pr_package/`](heilbronn_pr_package/) ([`PR_DESCRIPTION.md`](heilbronn_pr_package/PR_DESCRIPTION.md), [`verify_pr_package.py`](heilbronn_pr_package/verify_pr_package.py))
-* **Two-Layer Formal `Lean 4` Rational Certificates (Zero `Float`, Zero `sorryAx`):**
-  * [`lean4_certificates/Defs.lean`](lean4_certificates/Defs.lean) & [`lean4_certificates/Cert_Heilbronn_13_14.lean`](lean4_certificates/Cert_Heilbronn_13_14.lean)
+**Универсальный движок автономного научного и инженерного поиска, нейро-символической дистилляции, непрерывного дообучения нейросетей во сне (`SLEEP + HOPE + CMS`) и формальной математической верификации (`Lean 4` / `fractions.Fraction` / `500-dps Decimal`).**
 
 ---
 
-## Key Results Summary
-
-### 1. Mathematical Audit & Structural Fixes over `Dream-RSI` (2026) and `DiscoveryRSI` (`arXiv:2610.23839`)
-1. **Fixing the Probe-Spamming Bug in `Dream-RSI` Eq. 1:** In `Dream-RSI` Eq. 1 ($V = \max s_v - \beta_1 N + \beta_2 N / k^\star$), taking the partial derivative with respect to total probes $N$ yields $\partial V / \partial N = -\beta_1 + \beta_2 / k^\star > 0$ whenever $k^\star < \beta_2/\beta_1$, rewarding policies that spam useless parallel probes. Replaced by the strictly monotone latency penalty $V = \max s_v - \beta_1 N - \beta_2 k^\star$ (`engine.py:622`).
-2. **Resolving Support Censorship & Tree Isolation (`LeanDAGPortfolio` + `compute_error_fingerprint`):** Replaces scalar tree continuation with a Directed Acyclic Graph (`DAG`) that cross-pollinates branches $(u, v)$ strictly when their empirical binary pass masks `pass_mask` $\in \{0, 1\}^M$ have positive union gain ($\Delta_{\cup}(u, v) > 0$), plus multi-parent submodular margin crossover (`compute_hyper_crossover` in v4).
-3. **Neuro-Symbolic Split & RRSI Complexity Pruner (`prune_tunable_params` & `prune_epistatic_gauss_newton`):** Separates discrete structural ideation from inner-loop continuous optimization (`HiGHS LP`, `SLSQP`, `Boltzmann Roof-Bundle Subgradient`), followed by greedy backward parameter elimination and 20-direction $\pm 5\%$ flat-plateau jitter verification (`evaluate_flat_plateau`).
-4. **Resolving the "Cautious Valedictorian Paradox" in `DiscoveryRSI` Eq. 17:** Sets $\lambda_{\text{breakthrough}} = 0.35 > \lambda_{\text{repair}} = 0.10$ and enforces a $2 \times 2$ joint `Model × Harness` novelty floor (`accept_joint_2x2`).
+## Содержание
+1. [Обзор архитектуры (`Lean-DAG-RSI` $\to$ `SLEEP-DAG-RSI v7`)](#1-обзор-архитектуры-lean-dag-rsi--sleep-dag-rsi-v7)
+2. [Математический аудит и ключевые алгоритмические механизмы (v1–v7)](#2-математический-аудит-и-ключевые-алгоритмические-механизмы-v1v7)
+3. [Сводка результатов: Экстремальная математика и открытые задачи](#3-сводка-результатов-экстремальная-математика-и-открытые-задачи)
+4. [Автономный стенд из 8 картриджей (`auto_dream_rsi.py`)](#4-автономный-стенд-из-8-картриджей-auto_dream_rsipy)
+5. [Испытания `SLEEP-DAG-RSI v5–v7`: Непрерывный сон и изобретение AST-библиотек](#5-испытания-sleep-dag-rsi-v5v7-непрерывный-сон-и-изобретение-ast-библиотек)
+6. [Реальный стенд Bitcoin (`BTCUSDT`, `149,953` свечей, 5 таймфреймов)](#6-реальный-стенд-bitcoin-btcusdt-149953-свечей-5-таймфреймов)
+7. [Структура репозитория](#7-структура-репозитория)
+8. [Быстрый старт и команды верификации](#8-быстрый-старт-и-команды-верификации)
+9. [Примеры использования Python API](#9-примеры-использования-python-api)
 
 ---
 
-### 2. Extremal Mathematics & Open Problems (Zero-External-Seed Provenance)
+## 1. Обзор архитектуры (`Lean-DAG-RSI` $\to$ `SLEEP-DAG-RSI v7`)
 
-| Problem / Cartridge | Result | Verification & Comparison |
+Проект объединяет три исследовательских направления в единую замкнутую систему рекурсивного самоулучшения без внешних зависимостей в базовом ядре ([`dream_rsi_scripts/engine.py`](dream_rsi_scripts/engine.py) и [`sleep_dag_rsi.py`](sleep_dag_rsi.py)):
+
+1. **Контрфактический поиск на графах открытий (`Lean-DAG-RSI v1–v4`)** — развитие идей *Dream-RSI* (Google DeepMind, 2026) и *DiscoveryRSI* (`arXiv:2610.23839v1`). Заменяет изолированные деревья поиска ориентированным ациклическим графом (`DAG`), скрещивает ветви по бинарным и непрерывным отпечаткам ошибок (`compute_error_fingerprint`, `compute_hyper_crossover`), автоматически сшивает AST-код родителей (`AstCodeSplicer`), отсекает лишние непрерывные ручки через спектральный секатор Гаусса–Ньютона (`prune_epistatic_gauss_newton`) и проверяет устойчивость плато (`evaluate_flat_plateau`).
+2. **Спектральный подъём координат и ранний фильтр Вальда (`SLEEP-DAG-RSI v6`)** — автоматическое обнаружение оврагов и вырожденных KKT-систем через эффективное число обусловленности $\kappa_{\text{eff}}(G)$ матрицы Гаусса–Ньютона $G = \frac{1}{M}J^\top J$ (`SpectralFrameLifter`: `EigenRotationTransform`, `KktSlackTransform` с конденсацией активного множества `condense_active_set`, `DyadicHomotopyTransform`) и отсев заведомо провальных мутаций на `5%` бюджета (`WaldMicroSentinel`).
+3. **Параметрический и нейро-символический цикл сна (`SLEEP-DAG-RSI v5–v7`)** — объединение *SLEEP* (`arXiv:2606.03979v2`) и *HOPE / Continuum Memory System (CMS)* (`arXiv:2512.24695`) с `Lean-DAG-RSI`. Позволяет любой предобученной нейросети (`PyTorch nn.Module` или произвольному `callable`) адаптироваться на потоке данных в фазе **Wake** через быструю ассоциативную память с дельта-правилом (`DeltaRuleFastMemory`), а затем консолидировать знания в фазах **NREM** и **REM**:
+   - **NREM**: фильтрация тупиков по маске потерь DAG (`export_masked_sft_dataset`), генерация контрпримеров на границе разногласия комитета (`ActiveBoundarySynthesizer`), дистилляция нейронных весов в явные формулы Python AST (`NeuroSymbolicDistiller`) и иерархическое изобретение переиспользуемых подпрограмм глубины $3+$ в стиле DreamCoder (`SymbolicLibrary` + `LibraryPrimitive`).
+   - **REM**: детерминированное скрещивание ортогональных медленных экспертов MoE (`ExpandableMoEMLP` + `ExpertFingerprintMeta`) и контрфактический отбор снов (`CounterfactualDreamingEngine`) перед $2 \times 2$ гейтом принятия (`accept_joint_2x2`).
+
+```mermaid
+flowchart TD
+    subgraph WAKE["Фаза 1: WAKE (Онлайн-исследование и быстрая память)"]
+        W1["Кандидат / Мутация ветви DAG"] --> W2["WaldMicroSentinel\n(5% Adversarial + Stratified Veto)"]
+        W2 -- "Отсечено (95% экономии)" --> DPO["Контрастивный пул DPO\n(export_dag_dpo_pairs)"]
+        W2 -- "Прошло фильтр" --> W3["Полная оценка + Запись в DiscoveryTree\n(pass_mask, bucket_margins, G = J^T J)"]
+        W3 --> W4["SpectralFrameLifter\n(EigenRotation / KKT Slack / Dyadic Homotopy)"]
+        W3 --> W5["AstCodeSplicer + compute_hyper_crossover\n(Автономная сшивка AST-кода родителей)"]
+        W3 --> W6["HOPE DeltaRuleFastMemory\n(Быстрое обновление на потоке данных)"]
+    end
+
+    subgraph NREM["Фаза 2: NREM (Консолидация, дистилляция и изобретение примитивов)"]
+        W6 --> N1["DAG-Masked Knowledge Seeding\n(loss_mask=1 только на проверенной линии)"]
+        DPO --> N1
+        N1 --> N2["ActiveBoundarySynthesizer\n(Бисекция хорд + градиент дисперсии комитета)"]
+        N2 --> N3["NeuroSymbolicDistiller\n(Lasso + OLS + Residual-Keep вычитание)"]
+        N3 --> N4["SymbolicLibrary & LibraryPrimitive\n(Иерархическое изобретение lib_k(x) глубины 3+)"]
+    end
+
+    subgraph REM["Фаза 3: REM (Контрфактические сны и MoE-кроссовер)"]
+        N4 --> R1["ExpandableMoEMLP + ExpertFingerprintMeta\n(Подбор экспертов с max union gain > 0)"]
+        R1 --> R2["CounterfactualDreamingEngine\n(LeanDAGWorld реплей + Flat-Plateau 20-dir Jitter)"]
+    end
+
+    subgraph GATE["Фаза 4: Гейт принятия и формальная сертификация"]
+        R2 --> G1["AstPolicySafetyGate + 2x2 Joint Gate\n(accept_joint_2x2: Model x Harness)"]
+        G1 --> G2["Точная верификация\n(float64 + Decimal 500-dps + Fraction 10^100 + Lean 4)"]
+    end
+```
+
+---
+
+## 2. Математический аудит и ключевые алгоритмические механизмы (v1–v7)
+
+### 2.1. Исправление структурных уязвимостей `Dream-RSI` (2026) и `DiscoveryRSI` (`arXiv:2610.23839`)
+1. **Устранение бага спама пустыми пробами в `Dream-RSI` Eq. 1 (`engine.py:622`)**:
+   В исходной формуле `Dream-RSI` Eq. 1 ($V = \max s_v - \beta_1 N + \beta_2 N / k^\star$) частная производная по числу проб $N$ равна $\frac{\partial V}{\partial N} = -\beta_1 + \frac{\beta_2}{k^\star} > 0$ при $k^\star < \beta_2 / \beta_1$. Это вознаграждает политики за спам бесполезными параллельными пробами в первых раундах. В `Lean-DAG-RSI` введена строго монотонная функция ценности:
+   $$V = \max_{v} s_v - \beta_1 N - \beta_2 k^\star, \qquad \frac{\partial V}{\partial N} = -\beta_1 < 0, \quad \frac{\partial V}{\partial k^\star} = -\beta_2 < 0.$$
+2. **Преодоление цензурирования носителя (Support Censorship) и изоляции ветвей (`compute_error_fingerprint` & `compute_hyper_crossover`)**:
+   Вместо скалярного продолжения одиночных ветвей дерева движок сопоставляет бинарные маски прохождения тестов `pass_mask` $\in \{0, 1\}^M$ и непрерывные запасы прочности `bucket_margins` $\phi_j(u) \in [0, 1]$. Скрещивание $S = \{u_1, \dots, u_k\}$ запускается строго при положительном субмодулярном приросте над лучшим родителем за вычетом штрафа за коллизию AST-узлов:
+   $$\Delta_{\text{hyper}}(S) = \frac{1}{M}\sum_{j=1}^M \max_{u \in S} \phi_j(u) - \max_{u \in S} \bar{\phi}(u) - \lambda_{\text{coll}} \sum_{u < v \in S} \operatorname{IoU}_{\text{AST}}(A(u), A(v)) > 0.$$
+3. **Устранение «парадокса осторожного отличника» в `DiscoveryRSI` Eq. 17 (`compute_provenance_credit`)**:
+   Установлен приоритет прорывов над рутинными починками ($\lambda_{\text{breakthrough}} = 0.35 > \lambda_{\text{repair}} = 0.10$), ограничение семейств клонов ($C_{\text{loc}} = C_{\text{glob}} = W_{\max} = 2.0$, сохраняющее сумму кредитов по Предложению 1) и селективная маска потерь `export_masked_sft_dataset`, оставляющая $100\%$ истории (включая ошибки и тупики) в контексте (`in_context = True`), но обучающая (`loss_mask = 1`) строго на проверенной линии-победителе.
+
+### 2.2. Спектральный подъём, автономный AST-сплайсинг и иерархическая дистилляция (`SLEEP-DAG-RSI v6–v7`)
+| Модуль | Механизм | Решаемая проблема | Наблюдаемый эффект (`[VERIFIED]`) |
+| :--- | :--- | :--- | :--- |
+| **`WaldMicroSentinel`** (`engine.py`) | Последовательный тест Вальда на `2.5%` худших остатков родителя ($S_{\text{adv}}$) + `2.5%` стратифицированной выборки ($S_{\text{strat}}$); освобождение кроссоверов и подъёмов координат от $S_{\text{adv}}$ | Оценка тупиковых мутаций на полном датасете тратит до `80%` вычислительного бюджета | Экономия **`39.4%`** бюджета оценок; **`0`** ложных отсечений глобальных перестроек; автоматическая подача отсечённых узлов в `DAG-DPO` |
+| **`SpectralFrameLifter`** (`engine.py`) | Регуляризованная оценка $\kappa_{\text{eff}}(G) = \frac{\lambda_{\max}}{\max(\lambda_{d-\min(M,d)}, 10^{-12})}$ (без ложных срабатываний при $M < d$); операторы `EigenRotationTransform`, `KktSlackTransform` (`condense_active_set`), `DyadicHomotopyTransform` | Покоординатные мутации и градиентный спуск застревают в повёрнутых оврагах ($\kappa \ge 10^6$) и на изломах $\min_i f_i(x)$ | На несепарабельном овраге Розенброка ($\kappa = 10^8$) снижает ошибку с `0.155` (стагнация `v5`) до **`7.92e-19`** (улучшение в **`1.96e17`** раз) |
+| **`AstCodeSplicer`** (`engine.py`) | Статический разбор `ast.parse` родителей в `compute_hyper_crossover`, вычисление структурного `IoU`, слияние независимых функций и внутрифункциональных присваиваний (`structural_ast_merge`) либо синтез диспетчера (`ensemble_dispatch_merge`) | Раньше `CROSSOVER(u, v)` выдавал только текстовую подсказку, требуя ручного написания гибридного кода | Автономно синтезирует компилируемый код гибрида из двух ортогональных патчей (`AST IoU = 0.0`) со **`100%`** прохождением тестов |
+| **`ActiveBoundarySynthesizer`** (`engine.py`) | Поиск разноцветных пар точек (`Bichromatic Chord Bisection`), где модели комитета меняют знак, + проекционный градиентный подъём по дисперсии комитета $\operatorname{Var}_k(f_k(x))$ внутри доверительного шара | Пассивный буфер реплея содержит сглаженные точки внутри одного бассейна и плохо разделяет конкурирующие гипотезы | Усиливает разногласие комитета в **`10.39x`–`20.23x`** по сравнению с пассивным реплеем и находит точные пограничные контрпримеры |
+| **`NeuroSymbolicDistiller` + `SymbolicLibrary`** (`sleep_dag_rsi.py`) | Векторизованный Coordinate-Descent Lasso + OLS-полировка на словаре $\Psi(X)$ в фазе NREM, вычитание символического закона из нейронных весов (`Residual-Keep`) и абстракция найденных мотивов в библиотеку примитивов `lib_k(x)` | Одношаговая глубина-2 дистилляция слепа к суперпозициям глубины $3+$ вида $\tanh(x_0 x_1 - 0.8 \operatorname{sign}(x_2)) \cdot x_3$ | Изобретает `lib_0(x)` в Цикле 1 и точно вскрывает закон глубины 3 в Цикле 2 (**`R^2_OOS = 1.000`** против **`0.000`** у плоского дистиллятора `v6`), сжимая нейронный остаток на **`100%`** |
+
+---
+
+## 3. Сводка результатов: Экстремальная математика и открытые задачи
+
+Все математические конструкции ниже получены **с нуля (Zero-External-Seed Provenance)** и независимо верифицированы в стандартной плавающей точке `IEEE-754 float64`, арифметике произвольной точности (`50-dps` / `500-dps decimal.Decimal`), точной рациональной арифметике `fractions.Fraction` ($10^{16}, 10^{50}, 10^{100}$) и/или формальных сертификатах `Lean 4` (`zero Float`, `zero sorryAx`).
+
+| Задача / Картридж | Наш результат | Сравнение с мировыми ориентирами и верификация |
 | :--- | :--- | :--- |
-| **Heilbronn Triangle $n = 13$** ([`n13_exact_500dps.json`](heilbronn_pr_package/n13_exact_500dps.json)) | $\Delta_{13}^\star = \mathbf{0.026556528919775580138364411226\dots}$ | **`+3.731566397517e-14`** over Tej Stead (July 2026) published `float64` literals (`0.026556528919738264474389245471`); $\operatorname{rank}(J_{13}) = 19 < 20$, KKT curvature invariant $c_{13} = 0.036078780238 > 0$; 3 exact parallel chords ($u_0 \equiv u_9, u_2 \equiv u_5, v_{11} \equiv v_{12}$); $\deg P(\Delta_{13}^\star) > 78$. |
-| **Heilbronn Triangle $n = 14$** ([`n14_exact_500dps.json`](heilbronn_pr_package/n14_exact_500dps.json)) | $\Delta_{14}^\star = \mathbf{0.023775773107573057671296916141\dots}$ | Independent from-scratch rediscovery of David W. Cantrell (June 2007), certified to 500 digits & $10^{100}$ exact rationals (`23` active triangles, exact chord $u_6 \equiv u_9$, $\deg P(\Delta_{14}^\star) > 78$). |
-| **Heilbronn Triangle $n = 15$** ([`n15_exact_500dps.json`](heilbronn_pr_package/n15_exact_500dps.json)) | $\Delta_{15}^\star = \mathbf{0.021090769460266687959320407664\dots}$ | Independent $14^\star \to 15$ cascade rediscovery & 500-digit verification of the $12+3$ floater split and degree-5 minimal polynomial $5250987 \Delta_{15}^5 + 1609650 \Delta_{15}^4 + 161469 \Delta_{15}^3 + 5438 \Delta_{15}^2 - 13 \Delta_{15} - 4 = 0$ (Cantrell 2007; Stead 2026), $\|P_{15}(\Delta_{15}^\star)\| = 2.78 \times 10^{-503}$. |
-| **Heilbronn Triangle $n = 16$** ([`n16_exact_500dps.json`](heilbronn_pr_package/n16_exact_500dps.json)) | $\Delta_{16}^\star = \mathbf{0.018355546355461140412325363653\dots}$ | **`+5.769027637240e-14`** over Fable 5.1 & Shengtong Zhang (Sept 2026) 30-digit damped Gauss-Newton tie-system solution (`0.0183555463554034501359529610459`); proves the **$15 + 1$ Floater Split** (`p_13` has 0 active triangles, clearance `0.018532001428`) and $\operatorname{rank}(J_{\text{frame}}) = 23 < 24$ (1D equiareal curve $\Gamma_{16}(s)$ with KKT curvature $c_{16} = 0.011234563954 > 0$); exact hypotenuse-parallel chord $(u_1+v_1) \equiv (u_{10}+v_{10})$. |
-| **Heilbronn Triangle $n = 17$ ($16+1$ Basin)** ([`n17_exact_500dps.json`](heilbronn_pr_package/n17_exact_500dps.json)) | $\Delta_{17}^\star = \mathbf{0.015873844567914898558694564865\dots}$ | **`+3.4455%`** over previous local $n=17$ lift (`0.0153451315213836`); certifies the exact **$16 + 1$ Floater Split** stationary KKT point of the $16^\star \to 17$ lift (`27` active triangles, full-rank $27 \times 26$ frame Jacobian, interior floater `p_7` clearance `0.016314496144`). |
-| **SLEEP-DAG-RSI v5–v7 Continual Sleep & AST Invention** ([`sleep_dag_rsi.py`](sleep_dag_rsi.py), [`battle_test_sleep_dag_v6.py`](battle_test_sleep_dag_v6.py)) | **`97.63%`** D1 Retention / **`R^2_{\text{OOS}} = 1.000`** Depth-3 AST | Unites `SLEEP + HOPE + CMS` (`arXiv:2606.03979v2`) with `Lean-DAG-RSI`: cuts dead-end trap contamination from `39.49%` to **`2.18%`**, achieves **`100%`** complementary MoE hit rate, reduces probe cost by **`39.4%`** (`WaldMicroSentinel`), escapes $\kappa = 10^8$ Rosenbrock (`SpectralFrameLifter`), autonomously splices AST code (`AstCodeSplicer`), amplifies boundary disagreement by **`10.39x`** (`ActiveBoundarySynthesizer`), and invents reusable depth-3+ subroutines (`SymbolicLibrary`). |
-| **2nd Autocorrelation Inequality $C_2$** ([`autocorr_c2_p20256_champion.npy`](autocorr_c2_p20256_champion.npy)) | $C_2 \ge \mathbf{0.942158772814}$ ($P = 20\,256$) | Beats direct step-function searches of DeepMind AlphaEvolve v1 (`0.9053`), Boyer & Li (`0.901562`), and Jaech & Joseph 2025 (`0.94136` at $P=2399$) via GPU `Boltzmann Roof-Bundle Subgradient`. |
-| **1st Autocorrelation Inequality $C_1$** ([`autocorr_c1_champion.npy`](autocorr_c1_champion.npy)) | $C_1 \le \mathbf{1.503822792008}$ ($P = 2\,560$) | Derived from scratch via Sphere-Lagrangian Exact Curvature + Dyadic Multi-Scale Scar Healing; certified in exact `fractions.Fraction` at $10^{16}$ and $10^{50}$ via Kronecker big-int polynomial squaring; beats Matolcsi & Vinuesa (`1.5098`) and Google DeepMind AlphaEvolve v1 (`1.5053` by `-0.00147721`). |
-| **3rd Autocorrelation Inequality $\Phi_3$** ([`phi3_best_candidate.npy`](phi3_best_candidate.npy)) | $\Phi_3 \le \mathbf{1.457058511867}$ ($P = 3\,200$) | Derived via analytical PSD Gauss-Newton preconditioner $H_{\text{GN}}(a) = \beta J^\top(\operatorname{diag}(u) - w w^\top) J$ + High-Beta Exact Newton + Boltzmann Roof-Bundle Polish; beats Cilleruelo–Ruzsa–Vinuesa (`1.4581`), OpenEvolve (`1.4600`), EvoX (`1.4589`), and ShinkaEvolve (`1.4578`). |
-| **AlgoTune RBF Kernel & Weibull Bin Packing** | **`33.36x`** speedup / **`0.3690%`** $L_2$ excess | Beats SciPy reference by `33.36x` (C++ Look-Ahead Anderson Lasso beats Celer by `2.65x`) and FunSearch Weibull bin packing (`0.68%` $\to$ `0.3690%`). |
+| **Треугольник Хейльбронна $n = 13$** ([`n13_exact_500dps.json`](heilbronn_pr_package/n13_exact_500dps.json), [`Cert_Heilbronn_13_14.lean`](lean4_certificates/Cert_Heilbronn_13_14.lean)) | $\Delta_{13}^\star = \mathbf{0.026556528919775580138364411226\dots}$ | **`+3.731566397517e-14`** выше опубликованных `float64`-координат Tej Stead (июль 2026, `0.026556528919738264474389245471`) и **`+5.52e-5`** выше P. Karpov (2018, `0.0265013`). Доказано, что якобиан 20 активных треугольников имеет коранг 1 ($\operatorname{rank}(J_{13}) = 19 < 20$), задавая 1D эквиареальную кривую $\Gamma_{13}(s)$ с инвариантом кривизны KKT $c_{13} = 0.036078780238 > 0$ и 3 точными параллельными хордами ($u_0 \equiv u_9, u_2 \equiv u_5, v_{11} \equiv v_{12}$). |
+| **Треугольник Хейльбронна $n = 14$** ([`n14_exact_500dps.json`](heilbronn_pr_package/n14_exact_500dps.json), [`Cert_Heilbronn_13_14.lean`](lean4_certificates/Cert_Heilbronn_13_14.lean)) | $\Delta_{14}^\star = \mathbf{0.023775773107573057671296916141\dots}$ | Независимое переоткрытие с нуля 19-летнего рекорда D. W. Cantrell (июнь 2007, `0.0237757731`), сертифицированное до **500 знаков** и точных дробей со знаменателем $10^{100}$ (`23` активных треугольника, точная хорда $u_6 \equiv u_9$, теорема `Lean 4`). |
+| **Треугольник Хейльбронна $n = 15$** ([`n15_exact_500dps.json`](heilbronn_pr_package/n15_exact_500dps.json)) | $\Delta_{15}^\star = \mathbf{0.021090769460266687959320407664\dots}$ | Независимое каскадное переоткрытие ($14^\star \to 15$) и 500-значная сертификация расщепления $12+3$ (3 свободных флоатера) и минимального многочлена 5-й степени $5250987 \Delta_{15}^5 + 1609650 \Delta_{15}^4 + 161469 \Delta_{15}^3 + 5438 \Delta_{15}^2 - 13 \Delta_{15} - 4 = 0$ ($\|P_{15}(\Delta_{15}^\star)\| = 2.78 \times 10^{-503}$). |
+| **Треугольник Хейльбронна $n = 16$** ([`n16_exact_500dps.json`](heilbronn_pr_package/n16_exact_500dps.json), [`heilbronn_n16_champion.npy`](heilbronn_pr_package/heilbronn_n16_champion.npy)) | $\Delta_{16}^\star = \mathbf{0.018355546355461140412325363653\dots}$ | **`+5.769027637240e-14`** выше 30-значного решения Fable 5.1 & Shengtong Zhang (сентябрь 2026, `0.0183555463554034501359529610459`). Впервые доказано **расщепление $15 + 1$ с внутренним флоатером** (`p_13` имеет `0` активных треугольников, зазор `0.018532001428`) и коранг-1 вырождение каркаса ($\operatorname{rank}(J_{\text{frame}}) = 23 < 24$, кривая $\Gamma_{16}(s)$ с кривизной $c_{16} = 0.011234563954 > 0$, хорда $(u_1+v_1) \equiv (u_{10}+v_{10})$). |
+| **Треугольник Хейльбронна $n = 17$** ([`n17_exact_500dps.json`](heilbronn_pr_package/n17_exact_500dps.json)) | $\Delta_{17}^\star = \mathbf{0.015873844567914898558694564865\dots}$ | **`+3.4455%`** выше предыдущего локального подъёма (`0.0153451315213836`); 500-значный KKT-сертификат расщепления **$16 + 1$** (`27` активных треугольников, полноранговый якобиан каркаса $27 \times 26$, зазор флоатера `p_7` равен `0.016314496144`). |
+| **Треугольник Хейльбронна $n = 11$** ([`auto_dream_rsi.py`](auto_dream_rsi.py)) | $\Delta_{11}^\star = \mathbf{0.03651835}$ | Превышает порог `0.0365` за счёт гибридного каскада гладкого LogSumExp L-BFGS-B и точного `HiGHS Trust-Region SLP`. |
+| **Первое неравенство автокорреляции $C_1$** ([`autocorr_c1_champion.npy`](autocorr_c1_champion.npy)) | $C_1 \le \mathbf{1.503822792008}$ ($P = 2\,560$) | Пробивает классическую оценку Matolcsi & Vinuesa (2010, `1.5098`) на **`-0.00597721`** и оценку Google DeepMind AlphaEvolve v1 (2025, `1.5053`) на **`-0.00147721`**. Найдено через точную KKT-кривизну Лагранжиана на сфере `2*clamp(g_a - mu, 0)` + `Micro-Wakeup` + диадическое залечивание шрамов грубой сетки ($P=160 \to 320 \to 640 \to 1280 \to 2560$). Сертифицировано во всех $2P-1 = 5119$ сдвигах через полиномиальное возведение в квадрат Кронекера в `fractions.Fraction` при $10^{16}$ и $10^{50}$. |
+| **Второе неравенство автокорреляции $C_2$** ([`autocorr_c2_p20256_champion.npy`](autocorr_c2_p20256_champion.npy), [`autocorr_c2_champion.npy`](autocorr_c2_champion.npy)) | $C_2 \ge \mathbf{0.942158772814}$ ($P = 20\,256$)<br>$C_2 \ge \mathbf{0.942111374293}$ ($P = 10\,128$) | Превосходит прямые ступенчатые конструкции Matolcsi & Vinuesa (`0.88922`), Boyer & Li (`0.901562`), DeepMind AlphaEvolve v1 (`0.90530`) и Jaech & Joseph (2025, `0.94136` при $P=2399$) на **`+0.00079877`** (`50.93%` сдвигов автосвёртки лежат на плоской крыше $\ge 0.95 \max g$). |
+| **Третье неравенство автокорреляции $\Phi_3$** ([`phi3_best_candidate.npy`](phi3_best_candidate.npy)) | $\Phi_3 \le \mathbf{1.457058511867}$ ($P = 3\,200$) | Превосходит OpenEvolve (`1.4600`), EvoX (`1.4589`), Cilleruelo–Ruzsa–Vinuesa (2010, `1.4581`) и ShinkaEvolve (`1.4578`). Найдено через аналитический PSD Гаусс–Ньютон + полногессиановый Ньютон при $\beta = 5 \times 10^6$ + `Boltzmann Roof-Bundle Subgradient`. |
 
 ---
 
-## Quick Verification Commands
+## 4. Автономный стенд из 8 картриджей (`auto_dream_rsi.py`)
+
+Файл [`auto_dream_rsi.py`](auto_dream_rsi.py) реализует универсальный 5-раундовый цикл `AutoDreamRunner` (`Round 1: Parallel Seed` $\to$ `Round 2: Auto-Repair` $\to$ `Round 3: Error-Fingerprint DAG Crossover` $\to$ `Round 4: Neuro-Symbolic Split + RRSI Pruner + Flat-Plateau` $\to$ `Round 5: DiscoveryRSI Credit + Masked-SFT + 2x2 Gate`) для 8 прикладных и математических задач:
+
+| № | Имя картриджа (`--task`) | Область | Базовый счёт (`root`) | Счёт чемпиона | Ключевой результат и открытый механизм | Время |
+| :-: | :--- | :--- | :---: | :---: | :--- | :---: |
+| 1 | `algotune-rbf-kernel-solver` | Численные алгоритмы / СЛАУ | `1.00x` | **`33.36x`** | Блочное предвычисление матриц расстояний + Cholesky (`cho_factor`/`cho_solve`) вместо повторного построения ядра | `~0.4s` |
+| 2 | `funsearch-weibull-binpacking` | Комбинаторная оптимизация | `4.18%` (First-Fit) | **`0.3690%`** excess | Превосходит Google DeepMind FunSearch (`0.68%` excess над нижней границей $L_2$) на бенчмарке Weibull 5k | `~0.5s` |
+| 3 | `open-autocorrelation-c1` | Экстремальный анализ ($C_1$) | `1000.00` ($C_1=2.0$) | **`1496.18`** | **$C_1 \le 1.50382279$** ($P=2560$, пробивает AlphaEvolve v1 `1.5053`); `RRSI Pruner` оставляет `3/5` активных ручек залечивания шрамов | `~3.9s` |
+| 4 | `open-heilbronn-triangle-11` | Дискретная геометрия ($n=11$) | `219.45` | **`365.18`** | **$\Delta_{11} = 0.03651835 > 0.0365$** в треугольнике единичной площади за счёт DAG-кроссовера L-BFGS-B и Trust-Region LP | `~1.8s` |
+| 5 | `pocket-otc-crack` | Финансовые временные ряды | `50.00%` | **`57.13%`** LCB95 | `59.11%` OOS WR, **`57.52%` Blind Vault WR** (`LCB95 = 54.80%` после того, как `RRSI Pruner` заморозил переобученный порог `slope60_min`) | `~0.7s` |
+| 6 | `simvq-zero-crutch` | Нейросети (`1.58-bit` Ternary) | `71.40%` | **`100.00%`** | Устранение обрезки `keep_full_mask <= 66` в `M_fast` и седлового затухания `Circuit-2`; **`100%`** точность на $T=64\dots 1024$ и 2000 OOD API правил | `~50s` |
+| 7 | `open-heilbronn-triangle-13-14` | Дискретная геометрия ($n=13,14$) | `20.36` | **`503.32`** | **$\Delta_{13} = 0.026556528920$** (`+3.74e-14` над Stead 2026) и **$\Delta_{14} = 0.023775773108$** (Cantrell 2007) через вертикальный засев $14\to 13, 15\to 14$ | `~0.5s` |
+| 8 | `open-autocorrelation-c2` | Экстремальный анализ ($C_2$) | `6666.67` ($C_2=2/3$) | **`9421.11`** | **$C_2 \ge 0.94211137$** ($P=10128$) и **$0.94215877$** ($P=20256$), пробивает Jaech & Joseph (`0.94136`) | `~3.4s` |
+
+---
+
+## 5. Испытания `SLEEP-DAG-RSI v5–v7`: Непрерывный сон и изобретение AST-библиотек
+
+### 5.1. Параметрический сон `SLEEP-DAG-RSI v5` ([`run_sleep_dag_experiments.py`](run_sleep_dag_experiments.py))
+Сравнение стандартного нефильтрационного сна (*Vanilla SLEEP*, `arXiv:2606.03979v2`) и `SLEEP-DAG-RSI v5` на 5 последовательных доменах и 8 картриджах:
+* **Удержание знаний (5-Domain Continual Retention)**: `SLEEP-DAG-RSI v5` сохраняет **`97.63%`** точности на Домене 1 после 5 циклов сна (среднее по 5 доменам **`97.82%`**) против `54.12%` у наивного fine-tuning и `81.40%` у Vanilla SLEEP.
+* **Подавление заражения ловушками (Trap Contamination)**: благодаря маске потерь DAG (`loss_mask = 0` на тупиках и симметричных ловушках) и DPO-отталкиванию доля генерации токенов-ловушек снижена с `39.49%` (Vanilla SLEEP) до **`2.18%`**.
+* **Эффективность REM-кроссовера экспертов**: детерминированный роутер `ExpandableMoEMLP` по отпечаткам ошибок достигает **`100%`** частоты выбора комплементарных пар экспертов (`+111.8%` гибридного счёта) против `10%` при случайном смешивании в стиле Drop-Upcycling.
+
+### 5.2. Сравнительный стресс-тест `v5` vs `v6` vs `v7` ([`battle_test_sleep_dag_v6.py`](battle_test_sleep_dag_v6.py))
+Четыре жёстких испытания в [`battle_test_sleep_dag_v6.py`](battle_test_sleep_dag_v6.py) (результаты сохраняются в [`battle_test_v6_results.json`](battle_test_v6_results.json)):
+
+| Испытание | Задача и условие стресс-теста | Базовый `v5` / `v6` | **`SLEEP-DAG-RSI v6 / v7`** | Прирост / Вердикт |
+| :--- | :--- | :---: | :---: | :--- |
+| **Trial 1: `WaldMicroSentinel`** | `40` мутаций (`32` деградирующих/шумовых, `6` локальных улучшений, `2` глобальных кроссовера) | Стоимость `40.00` полных прогонов | Стоимость **`24.25`** полных прогонов (`32/32` плохих отсечено на `5%` бюджета) | **`39.4%` экономии бюджета**, **`0`** ложных отсечений кроссоверов, `32` DPO-пары |
+| **Trial 2: `SpectralFrameLifter`** | Несепарабельный повёрнутый овраг Розенброка в $\mathbb{R}^{12}$ с $\kappa(G) = 10^8$ + тест $M=4 < d=12$ | Застревает на ошибке **`0.1552`** (`score = -0.1552`) | Детектирует $\log_{10}\kappa_{\text{eff}} = 8.0$, включает `EigenRotationTransform` и сходится к **`7.92e-19`** | Улучшение точности в **`1.96e17` раз**; `0` ложных тревог при $M < d$ ($\kappa_{\text{eff}} = 1.0$) |
+| **Trial 3: `NeuroSymbolicDistiller`** | Поток из `50` зашумлённых признаков (`47` гауссовых шумов) со скрытым законом $2.5 x_1 x_4 - 1.8 \operatorname{sign}(x_7) + 1.2 \tanh(x_2)$ | Чёрный ящик: `R^2_OOS = 0.000` (переобучение на 47 шумах) | Вскрывает точный закон Python AST: **`R^2_OOS = 0.9994`**, проходит `AstPolicySafetyGate` и `2x2 Gate` | Снижает энергию непрозрачного нейронного остатка на **`99.98%`** |
+| **Trial 4: `v7 SymbolicLibrary + AstCodeSplicer + ActiveBoundary`** | 2-цикловое открытие композиционного закона глубины 3: $\tanh(1.5 x_0 x_1 - 0.8 \operatorname{sign}(x_2)) \cdot x_3 + 0.6 x_4$ | Плоский дистиллятор `v6`: **`R^2_OOS = 0.0000`** (`0%` сжатия остатка) | Изобретает `lib_0(x)` в Цикле 1, усиливает пограничный спор в **`10.39x`** и вскрывает закон в Цикле 2 (**`R^2_OOS = 1.0000`**) | **`100.00%` сжатия остатка** + автономная AST-сшивка кода (`AST IoU = 0.0`) |
+
+---
+
+## 6. Реальный стенд Bitcoin (`BTCUSDT`, `149,953` свечей, 5 таймфреймов)
+
+Папка [`btc_sleep_dag_rsi/`](btc_sleep_dag_rsi/) содержит автономный конвейер загрузки реальных рыночных данных Binance Spot (`BTCUSDT`), проверки отсутствия заглядывания в будущее (`lookahead_leak_violations == 0`) и 5-доменного непрерывного обучения `SLEEP-DAG-RSI v5` (`5m` $\to$ `15m` $\to$ `1h` $\to$ `4h` $\to$ `1d`, всего **`149,953`** свечей без пропусков с ноября 2025 по октябрь 2026):
+* **Фазово-инвариантное событийное исполнение (`extract_phase_invariant_trade_indices`)**: сделки открываются строго по событию `pos[t] != 0` с неперекрывающимся окном удержания `cooldown = h_bars`, исключая артефакты фиксированной сетки `iloc[::h_bars]`.
+* **Закон отношения комиссии к ATR горизонта (`Fee-to-ATR Wave Horizon Law`)**: на младших таймфреймах (`5m`–`1h`) при реальной комиссии + проскальзывании `7 bps` (`0.07%` round-trip) комиссия съедает от `10%` до `29%` среднего диапазона свечи. На структурных волновых горизонтах **`4h` (`48h` удержание)** и **`1d` (`7d` удержание)** отношение `ATR(H) / Fee` превышает `45x`–`78x`, что даёт статистически значимую прибыль на полностью закрытом хронологическом сейфе (`Blind Vault`, последние `20%` истории):
+  - **`4h` (`48h` Wave Horizon, Blind Vault)**: **`77` сделок**, **`WR = 64.94%`**, **`LCB95 = 55.66% > 50%`**, **`Profit Factor = 2.09`**, **`Sharpe = +3.96`**, **`Net Return = +44.08%`** (против `-13.52%` у Buy & Hold за тот же период).
+  - **`1d` (`7d` Macro Horizon, Blind Vault)**: **`14` сделок**, **`WR = 64.29%`**, **`Profit Factor = 2.66`**, **`Sharpe = +2.38`**, **`Net Return = +26.86%`** (против `-12.82%` у Buy & Hold).
+* Подробный отчёт и дашборд: [`btc_sleep_dag_rsi/BTC_TRADER_ANALYSIS_REPORT.md`](btc_sleep_dag_rsi/BTC_TRADER_ANALYSIS_REPORT.md) и [`btc_sleep_dag_rsi/btc_sleep_dag_dashboard.png`](btc_sleep_dag_rsi/btc_sleep_dag_dashboard.png).
+
+---
+
+## 7. Структура репозитория
+
+```text
+├── dream_rsi_scripts/                 # Ядро универсального движка и глобального навыка dream-rsi
+│   ├── engine.py                      # Lean-DAG-RSI v1..v4 + SLEEP-DAG-RSI v6..v7 (WaldSentinel, SpectralFrameLifter, AstCodeSplicer, ActiveBoundarySynthesizer)
+│   ├── sleep_dag_rsi.py               # SLEEP-DAG-RSI v5..v7 (HOPE DeltaRule, DAG-KS, ExpandableMoE, NeuroSymbolicDistiller, SymbolicLibrary, UniversalNeuralSleepAdapter)
+│   ├── _selftest.py                   # 18 самодостаточных тестовых наборов (Suites 1..18, 0 внешних зависимостей)
+│   ├── dreamrsi.py                    # CLI-интерфейс (init, round, prompt, apply, status, trees, ideate, sleep, demo)
+│   ├── loop.py                        # Замкнутый цикл выбора и сохранения политик исследования
+│   ├── simulator.py                   # Обёртка реплея исторических деревьев
+│   └── SKILL.md                       # Полная спецификация навыка dream-rsi (v1.7.0)
+├── heilbronn_pr_package/              # Пакет 500-значных и 10^100-рациональных сертификатов Хейльбронна (n=13..17)
+│   ├── n13_exact_500dps.json          # 500-значный KKT-сертификат для n=13 (+3.73e-14 над Stead 2026)
+│   ├── n14_exact_500dps.json          # 500-значный KKT-сертификат для n=14 (Cantrell 2007)
+│   ├── n15_exact_500dps.json          # 500-значный сертификат расщепления 12+3 и многочлена 5-й степени для n=15
+│   ├── n16_exact_500dps.json          # 500-значный KKT-сертификат расщепления 15+1 для n=16 (+5.77e-14 над Fable 5.1 / Zhang 2026)
+│   ├── n17_exact_500dps.json          # 500-значный KKT-сертификат расщепления 16+1 для n=17 (0.0158738445679149)
+│   ├── verify_pr_package.py           # Независимый верификатор пакета (ранги якобианов, множители Лагранжа, кривизна KKT)
+│   └── PR_DESCRIPTION.md              # Математическое описание для репозитория tejstead/heilbronn-site
+├── lean4_certificates/                # Двухуровневые формальные сертификаты Lean 4 (без Float и без sorryAx)
+│   ├── Defs.lean                      # Базовые определения точной целочисленной удвоенной площади в Lean 4
+│   └── Cert_Heilbronn_13_14.lean      # Теоремы native_decide для n=13 и n=14 при знаменателе 10^50
+├── btc_sleep_dag_rsi/                 # Стенд непрерывного обучения и трейдинг-аналитики на реальном BTCUSDT
+│   ├── prepare_btc_data.py            # Загрузчик и валидатор 149,953 свечей Binance (5m, 15m, 1h, 4h, 1d)
+│   ├── btc_sleep_dag_engine.py        # Движок SLEEP-DAG-RSI v5 для крипто-рядов + проверка Blind Vault
+│   ├── BTC_TRADER_ANALYSIS_REPORT.md  # Подробный отчёт для трейдера с прогнозом и анализом комиссий
+│   └── data/                          # Сжатые Parquet-файлы свечей и манифест целостности
+├── auto_dream_rsi.py                  # Автономный 8-картриджный стенд открытий (AutoDreamRunner + TaskCartridge)
+├── battle_test_sleep_dag_v6.py        # Сравнительный стресс-тест v5 vs v6 vs v7 (Trials 1..4)
+├── run_sleep_dag_experiments.py       # Экспериментальные стенды SLEEP-DAG-RSI v5 (Suites A..D)
+├── verify_extremal_cartridges_7_8.py  # Независимый Zero-Gaming верификатор (C1, C2, Phi3, Heilbronn n=13, 14)
+├── verify_dream_rsi.py                # Математическая проверка аудита Dream-RSI Eq. 1, цензурирования и C++ Lasso
+├── autocorr_c1_champion.npy           # Чемпион 1-й задачи автокорреляции C_1 <= 1.503822792008 (P=2560)
+├── autocorr_c2_champion.npy           # Чемпион 2-й задачи автокорреляции C_2 >= 0.942111374293 (P=10128)
+├── autocorr_c2_p20256_champion.npy    # Ультра-разрешение 2-й задачи автокорреляции C_2 >= 0.942158772814 (P=20256)
+├── phi3_best_candidate.npy            # Чемпион 3-й задачи автокорреляции Phi_3 <= 1.457058511867 (P=3200)
+├── heilbronn_n13_champion.npy         # Координаты чемпиона Хейльбронна n=13
+├── heilbronn_n14_champion.npy         # Координаты чемпиона Хейльбронна n=14
+├── concepts_brief.md                  # Архитектурное резюме эволюции SLEEP-DAG-RSI v5 -> v6 -> v7
+└── AGENTS.md                          # Контекстные указатели и правила верификации для ИИ-агентов
+```
+
+---
+
+## 8. Быстрый старт и команды верификации
+
+Требования: `Python 3.10+`, `numpy`, `scipy` (опционально `torch` с CUDA для GPU-картриджей и `pyarrow`/`pandas` для Parquet-файлов Bitcoin; базовое ядро [`dream_rsi_scripts/_selftest.py`](dream_rsi_scripts/_selftest.py) работает на чистом стандартном Python без внешних библиотек).
 
 ```bash
-# 1. Verify all 18 engine self-test suites (v1..v4 + SLEEP-DAG-RSI v5..v7)
+# 1. Проверить все 18 тестовых наборов ядра (v1..v4 + SLEEP-DAG-RSI v5..v7, ~0.8 сек)
 python dream_rsi_scripts/_selftest.py
 
-# 2. Run the SLEEP-DAG-RSI v6/v7 4-Trial Battle Test (WaldSentinel, SpectralFrameLifter, AstCodeSplicer, SymbolicLibrary)
+# 2. Запустить стресс-тест SLEEP-DAG-RSI v5 vs v6 vs v7 (WaldSentinel, SpectralFrameLifter, AstCodeSplicer, SymbolicLibrary, ~2 сек)
 python battle_test_sleep_dag_v6.py
 
-# 3. Verify the 500-digit & 10^100-rational Heilbronn PR package (n=13, 14, 15, 16, 17)
-python heilbronn_pr_package/verify_pr_package.py
-
-# 4. Run the standalone Zero-Gaming verifier for Cartridges 3, 7 & 8 (C1, C2, Phi3, Heilbronn n=13, 14)
+# 3. Независимая Zero-Gaming верификация экстремальных чемпионов C1, C2, Phi3 и Heilbronn n=13, 14 (~1.5 сек)
+#    Проверяет float64, 50-значный Decimal и точные рациональные дроби Fraction(10^16) и Fraction(10^50)
 python verify_extremal_cartridges_7_8.py
 
-# 5. Run the extremal math discovery cartridges (Autocorrelation C1, C2 & Heilbronn n=13, 14)
+# 4. Верифицировать 500-значный и 10^100-рациональный пакет Хейльбронна для n=13, 14, 15, 16, 17 (~0.8 сек)
+python heilbronn_pr_package/verify_pr_package.py
+
+# 5. Запустить автономный поиск Auto-Dream-RSI на экстремальных математических задачах (~4 сек)
 python auto_dream_rsi.py --task open-autocorrelation-c1
 python auto_dream_rsi.py --task extremal-math
+
+# 6. Запустить все 4 классических бенчмарка (AlgoTune RBF, Weibull BinPacking, C1, Heilbronn n=11)
+python auto_dream_rsi.py --task benchmarks
+
+# 7. Запустить CLI-демонстрацию цикла сна SLEEP-DAG-RSI
+python dream_rsi_scripts/dreamrsi.py sleep --demo
 ```
+
+---
+
+## 9. Примеры использования Python API
+
+### 9.1. Подключение `UniversalNeuralSleepAdapter` к любой обученной нейросети (`PyTorch` или `NumPy`)
+Вы можете обернуть любую уже обученную модель без изменения её замороженных базовых весов $W_0$ — быстрая адаптация идёт через `HOPE DeltaRuleFastMemory` в фазе **Wake**, а в фазе **NREM** `NeuroSymbolicDistiller` и `SymbolicLibrary` извлекают символические правила Python AST и консолидируют остаток в медленных экспертах `CMS-MoE`:
+
+```python
+import numpy as np
+from dream_rsi_scripts.sleep_dag_rsi import UniversalNeuralSleepAdapter, attach_sleep_dag_adapters
+
+# Вариант А: Прямой адаптер поверх любого feature-экстрактора (с изобретением AST-библиотеки глубины 3+)
+adapter = UniversalNeuralSleepAdapter(d_in=8, d_out=1, d_low=4, fast_lr=0.12)
+
+# Фаза Wake: онлайн-адаптация на потоке батчей (X_batch, Y_batch)
+wake_stats = adapter.wake_adapt_step(X_train, Y_train, domain_id=0)
+
+# Фаза NREM: нейро-символическая дистилляция (Lasso + SymbolicLibrary + ActiveBoundarySynthesizer)
+nrem_stats = adapter.nrem_consolidate(
+    X_val, Y_val,
+    domain_id=0,
+    enable_symbolic_distillation=True,
+    distill_r2_threshold=0.50,
+)
+print("Открытые символические правила AST:", nrem_stats["distilled_rules"])
+print("Изобретённые библиотечные примитивы:", adapter.symbolic_library.summary())
+
+# Вариант Б: Автоматическая врезка адаптеров сна во все nn.Linear слои готовой PyTorch-модели
+# wrapped_layers = attach_sleep_dag_adapters(my_pytorch_model, d_low=8, fast_lr=0.05)
+```
+
+### 9.2. Автономная сшивка AST-кода (`AstCodeSplicer`) и генерация гипотез (`ideate_over_history`)
+
+```python
+from dream_rsi_scripts.engine import DiscoveryTree, Node, Problem, ideate_over_history
+
+tree = DiscoveryTree(task="kernel-optim", baseline_score=10.0, max_parallelism=3)
+tree.add(Node(id="root", parent_id=None, branch=-1, attempt=0, score=10.0,
+              pass_mask=[1, 0, 0, 0], bucket_margins=[0.9, 0.1, 0.1, 0.1]))
+
+# Две независимые ветви, решающие разные подмножества бакетов и модифицирующие разные AST-узлы
+base_src = "def solve(x):\n    a = x + 1.0\n    b = x * 2.0\n    return a + b\n"
+src_u    = "def solve(x):\n    a = x + 5.0\n    b = x * 2.0\n    return a + b\n"
+src_v    = "def solve(x):\n    a = x + 1.0\n    b = x * 10.0\n    return a + b\n"
+
+tree.add(Node(id="b0", parent_id="root", branch=0, attempt=1, score=14.0,
+              pass_mask=[1, 1, 0, 0], bucket_margins=[0.9, 0.9, 0.1, 0.1],
+              artifact={"base_code": base_src, "code": src_u}))
+tree.add(Node(id="b1", parent_id="root", branch=1, attempt=1, score=15.0,
+              pass_mask=[1, 0, 1, 1], bucket_margins=[0.9, 0.1, 0.9, 0.9],
+              artifact={"base_code": base_src, "code": src_v}))
+
+ideas = ideate_over_history([tree], Problem("kernel-optim"))
+best_merge = ideas["hyper_crossovers"][0]
+print("Режим AST-сшивки:", best_merge["spliced_mode"])
+print("Синтезированный гибридный код:\n", best_merge["spliced_code"])
+```
+
+---
+
+## Публикации и отчёты в репозитории
+* [`Полная_Статья_Lean_DAG_RSI_v3.pdf`](Полная_Статья_Lean_DAG_RSI_v3.pdf) и [`Полная_Статья_Lean_DAG_RSI_v3.md`](Полная_Статья_Lean_DAG_RSI_v3.md) — полная статья по `Lean-DAG-RSI v1–v4`, математическому аудиту `Dream-RSI` / `DiscoveryRSI` и экстремальным задачам.
+* [`lean_dag_rsi_v5_sleep_paper.pdf`](lean_dag_rsi_v5_sleep_paper.pdf) и [`Полная_Статья_Lean_DAG_RSI_v5_SLEEP.md`](Полная_Статья_Lean_DAG_RSI_v5_SLEEP.md) — полная статья по `SLEEP-DAG-RSI v5` (`SLEEP + HOPE + CMS`).
+* [`concepts_brief.md`](concepts_brief.md) — техническое описание архитектуры `SLEEP-DAG-RSI v6 & v7` (`WaldMicroSentinel`, `SpectralFrameLifter`, `AstCodeSplicer`, `ActiveBoundarySynthesizer`, `NeuroSymbolicDistiller`, `SymbolicLibrary`).
+* [`heilbronn_pr_package/PR_DESCRIPTION.md`](heilbronn_pr_package/PR_DESCRIPTION.md) — математическое описание 500-значных сертификатов для `tejstead/heilbronn-site` ($n=13, 14, 15, 16, 17$).
+* [`btc_sleep_dag_rsi/BTC_TRADER_ANALYSIS_REPORT.md`](btc_sleep_dag_rsi/BTC_TRADER_ANALYSIS_REPORT.md) — отчёт по применению `SLEEP-DAG-RSI` на реальных рыночных данных Bitcoin (`BTCUSDT`).
