@@ -3581,26 +3581,105 @@ class WaldMicroSentinel:
         }
 
 
+def _dual_gram_eigh_from_jacobian(
+    j_mat: Sequence[Sequence[float]],
+) -> Tuple[List[float], List[List[float]]]:
+    """
+    Fast Dual Gram Eigendecomposition for Rectangular Jacobians `J in R^{M x d}` when `M < d`:
+      - Instead of forming and diagonalizing `G = (1/M) J^T J in R^{d x d}` in O(d^3) time,
+        forms the dual Gram matrix `K = (1/M) J J^T in R^{M x M}` in O(M^2 d) time,
+        diagonalizes `K u_r = lambda_r u_r` in O(M^3) time, and recovers the exact
+        orthonormal primal eigenvectors in R^d via:
+            v_r = (J^T u_r) / ||J^T u_r||_2 = (1 / sqrt(M * lambda_r)) J^T u_r.
+    Returns `(eigenvalues_ascending_M, primal_eigenvectors_M_x_d)`.
+    """
+    m_rows = len(j_mat)
+    if m_rows == 0:
+        return [], []
+    d_cols = len(j_mat[0])
+    if d_cols == 0:
+        return [], []
+
+    try:
+        import numpy as _np
+        j_np = _np.asarray(j_mat, dtype=_np.float64)
+        k_np = (j_np @ j_np.T) / float(m_rows)
+        k_np = 0.5 * (k_np + k_np.T)
+        w_np, u_np = _np.linalg.eigh(k_np)
+        evals_k = [max(0.0, float(x)) for x in w_np.tolist()]
+        # Lift dual eigenvectors u_r in R^M to primal eigenvectors v_r in R^d: W = J^T @ U
+        w_primal = j_np.T @ u_np  # shape (d, M)
+        evecs_d: List[List[float]] = []
+        for r in range(m_rows):
+            col = w_primal[:, r]
+            norm_c = float(_np.linalg.norm(col))
+            if norm_c > 1e-15:
+                evecs_d.append((col / norm_c).tolist())
+            else:
+                evecs_d.append([0.0] * d_cols)
+        return evals_k, evecs_d
+    except Exception:
+        pass
+
+    k_mat: List[List[float]] = [[0.0] * m_rows for _ in range(m_rows)]
+    for r in range(m_rows):
+        jr = j_mat[r]
+        for c in range(r, m_rows):
+            jc = j_mat[c]
+            dot_rc = sum(float(jr[i]) * float(jc[i]) for i in range(d_cols)) / float(m_rows)
+            k_mat[r][c] = dot_rc
+            k_mat[c][r] = dot_rc
+
+    evals_k, evecs_k = _jacobi_eigh_symmetric(k_mat)
+    pos_evals_k = [max(0.0, float(ev)) for ev in evals_k]
+    evecs_d = []
+    for r in range(m_rows):
+        ur = evecs_k[r]
+        wr = [sum(float(ur[b]) * float(j_mat[b][i]) for b in range(m_rows)) for i in range(d_cols)]
+        norm_w = math.sqrt(sum(val * val for val in wr))
+        if norm_w > 1e-15:
+            evecs_d.append([val / norm_w for val in wr])
+        else:
+            evecs_d.append([0.0] * d_cols)
+    return pos_evals_k, evecs_d
+
+
 def compute_spectral_diagnostics(
-    g_mat: Sequence[Sequence[float]],
+    g_mat: Optional[Sequence[Sequence[float]]] = None,
     m_buckets: Optional[int] = None,
     train_score: float = 0.0,
     oos_score: float = 0.0,
     pass_mask: Optional[Sequence[int]] = None,
     use_hutchinson_above_d: int = 30,
     seed: int = 42,
+    j_mat: Optional[Sequence[Sequence[float]]] = None,
 ) -> Dict[str, Any]:
     """
-    SLEEP-DAG-RSI v6 Regularized Spectral Diagnostics on G = (1/M) J^T J:
-      1. Computes Effective Spectral Rank `r_eff(G) = (Tr G)^2 / Tr(G^2)` (using exact
-         eigenvalues for d <= 30 or Hutchinson Rademacher trace estimator for d > 30).
-      2. Computes Regularized Condition Number `kappa_eff(G) = lambda_max / max(lambda_support, 1e-12)`
+    SLEEP-DAG-RSI v6/v7 Regularized Spectral Diagnostics on G = (1/M) J^T J:
+      1. Dual Gram Fast Path (`M < d`): When `j_mat` in R^{M x d} is provided with `M < d`
+         (e.g. `d = 2560`, `M = 16`), diagonalizes the Dual Gram matrix `K = (1/M) J J^T in R^{M x M}`
+         in O(M^2 d + M^3) time instead of O(d^3), recovering the exact non-zero spectrum
+         and lifted R^d eigenvectors without ever allocating a d x d matrix.
+      2. Computes Effective Spectral Rank `r_eff(G) = (Tr G)^2 / Tr(G^2)` (exact on the
+         dual spectrum when `j_mat` is given, or Hutchinson Rademacher trace estimator for d > 30).
+      3. Computes Regularized Condition Number `kappa_eff(G) = lambda_max / max(lambda_support, 1e-12)`
          restricted to the observable rank support `min(M, d)` so trailing zero eigenvalues
          when `M < d` NEVER trigger false-positive `kappa -> inf` singularities!
-      3. Outputs the dimensionless 4D Stall Signature:
+      4. Outputs the dimensionless 4D Stall Signature:
          `sigma = (log10(kappa_eff), r_eff / d, train_oos_gap, fingerprint_entropy)`.
     """
-    d = len(g_mat)
+    use_dual = False
+    if j_mat is not None and len(j_mat) > 0 and len(j_mat[0]) > 0:
+        m_j = len(j_mat)
+        d_j = len(j_mat[0])
+        if g_mat is None or len(g_mat) == 0 or m_j < d_j:
+            use_dual = True
+            d = d_j
+            if m_buckets is None:
+                m_buckets = m_j
+    if not use_dual:
+        d = len(g_mat) if g_mat is not None else 0
+
     if d == 0:
         return {
             "d": 0,
@@ -3610,35 +3689,49 @@ def compute_spectral_diagnostics(
             "log10_kappa_eff": 0.0,
             "stall_signature": (0.0, 0.0, 0.0, 0.0),
             "is_ill_conditioned": False,
+            "used_dual_gram": False,
         }
 
-    evals, evecs = _jacobi_eigh_symmetric([list(row) for row in g_mat])
-    pos_evals = [max(0.0, float(ev)) for ev in evals]
-    lam_max = max(pos_evals[-1] if pos_evals else 0.0, 1e-12)
-
-    if d > use_hutchinson_above_d:
-        # Hutchinson stochastic Rademacher trace estimation O(m * d^2) with m=16
-        rng_h = random.Random(seed)
-        m_probes = 16
-        tr_est = 0.0
-        tr_sq_est = 0.0
-        for _ in range(m_probes):
-            v = [1.0 if rng_h.random() >= 0.5 else -1.0 for _ in range(d)]
-            gv = [sum(float(g_mat[r][c]) * v[c] for c in range(d)) for r in range(d)]
-            v_gv = sum(v[r] * gv[r] for r in range(d))
-            gv_norm_sq = sum(x * x for x in gv)
-            tr_est += v_gv / float(m_probes)
-            tr_sq_est += gv_norm_sq / float(m_probes)
-        r_eff = (tr_est * tr_est) / max(tr_sq_est, 1e-24)
-    else:
+    if use_dual and j_mat is not None:
+        evals, evecs = _dual_gram_eigh_from_jacobian(j_mat)
+        pos_evals = [max(0.0, float(ev)) for ev in evals]
+        lam_max = max(pos_evals[-1] if pos_evals else 0.0, 1e-12)
         tr_g = sum(pos_evals)
         tr_g2 = sum(ev * ev for ev in pos_evals)
         r_eff = (tr_g * tr_g) / max(tr_g2, 1e-24)
+        observable_rank = min(d, int(m_buckets)) if (m_buckets is not None and m_buckets > 0) else len(pos_evals)
+        support_idx = max(0, len(pos_evals) - observable_rank)
+        lam_support = max(pos_evals[support_idx] if pos_evals else 0.0, 1e-12)
+    else:
+        assert g_mat is not None
+        evals, evecs = _jacobi_eigh_symmetric([list(row) for row in g_mat])
+        pos_evals = [max(0.0, float(ev)) for ev in evals]
+        lam_max = max(pos_evals[-1] if pos_evals else 0.0, 1e-12)
+
+        if d > use_hutchinson_above_d:
+            # Hutchinson stochastic Rademacher trace estimation O(m * d^2) with m=16
+            rng_h = random.Random(seed)
+            m_probes = 16
+            tr_est = 0.0
+            tr_sq_est = 0.0
+            for _ in range(m_probes):
+                v = [1.0 if rng_h.random() >= 0.5 else -1.0 for _ in range(d)]
+                gv = [sum(float(g_mat[r][c]) * v[c] for c in range(d)) for r in range(d)]
+                v_gv = sum(v[r] * gv[r] for r in range(d))
+                gv_norm_sq = sum(x * x for x in gv)
+                tr_est += v_gv / float(m_probes)
+                tr_sq_est += gv_norm_sq / float(m_probes)
+            r_eff = (tr_est * tr_est) / max(tr_sq_est, 1e-24)
+        else:
+            tr_g = sum(pos_evals)
+            tr_g2 = sum(ev * ev for ev in pos_evals)
+            r_eff = (tr_g * tr_g) / max(tr_g2, 1e-24)
+
+        observable_rank = min(d, int(m_buckets)) if (m_buckets is not None and m_buckets > 0) else d
+        support_idx = max(0, d - observable_rank)
+        lam_support = max(pos_evals[support_idx], 1e-12)
 
     r_eff = max(1.0, min(float(d), r_eff))
-    observable_rank = min(d, int(m_buckets)) if (m_buckets is not None and m_buckets > 0) else d
-    support_idx = max(0, d - observable_rank)
-    lam_support = max(pos_evals[support_idx], 1e-12)
     kappa_eff = lam_max / lam_support
     log10_kappa = math.log10(max(1.0, kappa_eff))
 
@@ -3670,6 +3763,7 @@ def compute_spectral_diagnostics(
         "fingerprint_entropy": round(fp_entropy, 6),
         "stall_signature": sig,
         "is_ill_conditioned": bool(kappa_eff >= 1e8),
+        "used_dual_gram": use_dual,
     }
 
 
@@ -3696,9 +3790,10 @@ class FrameTransform:
 class EigenRotationTransform(FrameTransform):
     """
     Preconditioned Eigen-Basis Rotation (`Phi -> Phi_eigen`):
-    Diagonalizes the ill-conditioned Gauss-Newton matrix `G = V Lambda V^T`, freezes
-    sloppy/nullspace directions (`lambda_i < null_rel_tol * lambda_max`), and scales
-    active stiff eigenvectors by `1 / sqrt(lambda_i)`.
+    Diagonalizes the ill-conditioned Gauss-Newton matrix `G = V Lambda V^T` (or the
+    Dual Gram matrix `K = (1/M) J J^T in R^{M x M}` in O(M^2 d + M^3) when `j_mat` is
+    provided with `M < d`), freezes sloppy/nullspace directions (`lambda_i < null_rel_tol * lambda_max`),
+    and scales active stiff eigenvectors by `1 / sqrt(lambda_i)`.
     Turns a narrow valley with `kappa_eff > 10^8` into an isotropic sphere (`kappa = 1`),
     while `inverse_projection(y)` maps back to exact original coordinates `theta`.
     """
@@ -3708,14 +3803,21 @@ class EigenRotationTransform(FrameTransform):
     def __init__(
         self,
         theta_anchor: Sequence[float],
-        g_mat: Sequence[Sequence[float]],
+        g_mat: Optional[Sequence[Sequence[float]]] = None,
         spans: Optional[Sequence[float]] = None,
         null_rel_tol: float = 1e-10,
+        j_mat: Optional[Sequence[Sequence[float]]] = None,
     ) -> None:
         self.theta_anchor = [float(x) for x in theta_anchor]
         self.d = len(self.theta_anchor)
         self.spans = [float(s) for s in spans] if spans is not None else [1.0] * self.d
-        evals, evecs = _jacobi_eigh_symmetric([list(r) for r in g_mat])
+        self.used_dual_gram = False
+        if j_mat is not None and len(j_mat) > 0 and (g_mat is None or len(g_mat) == 0 or len(j_mat) < self.d):
+            evals, evecs = _dual_gram_eigh_from_jacobian(j_mat)
+            self.used_dual_gram = True
+        else:
+            assert g_mat is not None
+            evals, evecs = _jacobi_eigh_symmetric([list(r) for r in g_mat])
         lam_max = max((max(0.0, float(ev)) for ev in evals), default=1.0)
         lam_max = max(lam_max, 1e-12)
 
@@ -3723,7 +3825,7 @@ class EigenRotationTransform(FrameTransform):
             m for m, ev in enumerate(evals) if max(0.0, float(ev)) >= null_rel_tol * lam_max
         ]
         if not self.active_modes:
-            self.active_modes = list(range(self.d))
+            self.active_modes = list(range(len(evals)))
 
         self.eigenvalues = [max(1e-12, float(evals[m])) for m in self.active_modes]
         self.eigenvectors = [[float(evecs[m][coord]) for coord in range(self.d)] for m in self.active_modes]
@@ -4016,7 +4118,7 @@ class SpectralFrameLifter:
         self,
         task_name: str,
         theta_anchor: Sequence[float],
-        g_mat: Sequence[Sequence[float]],
+        g_mat: Optional[Sequence[Sequence[float]]] = None,
         m_buckets: Optional[int] = None,
         spans: Optional[Sequence[float]] = None,
         train_score: float = 0.0,
@@ -4025,6 +4127,7 @@ class SpectralFrameLifter:
         has_min_tie_structure: bool = False,
         num_tie_constraints: int = 0,
         consecutive_oos_failures: int = 0,
+        j_mat: Optional[Sequence[Sequence[float]]] = None,
     ) -> Dict[str, Any]:
         diag = compute_spectral_diagnostics(
             g_mat=g_mat,
@@ -4032,6 +4135,7 @@ class SpectralFrameLifter:
             train_score=train_score,
             oos_score=oos_score,
             pass_mask=pass_mask,
+            j_mat=j_mat,
         )
         op_name = self.atlas.select_operator(
             task_name=task_name,
@@ -4060,6 +4164,7 @@ class SpectralFrameLifter:
                 theta_anchor=theta_anchor,
                 g_mat=g_mat,
                 spans=spans,
+                j_mat=j_mat,
             )
 
         return {
@@ -4182,12 +4287,19 @@ class AstCodeSplicer:
         arg_name: str,
         bucket_inputs: Sequence[Any],
         parent_bucket_margins: Sequence[Sequence[float]],
+        custom_predicates: Optional[Sequence[Tuple[str, Callable[[Any], float]]]] = None,
     ) -> Optional[Dict[str, Any]]:
         """
         Synthesizes an Out-of-Sample input-space routing predicate (`if <pred>: return p_win(x) else: return p_alt(x)`)
-        by fitting a coordinate threshold or linear half-space boundary separating inputs where
-        Parent 0 outperforms Parent 1 from inputs where Parent 1 outperforms Parent 0.
-        Eliminates the need for an oracle `bucket_idx` at test time.
+        by screening a 1-sparse dictionary of input-space features:
+          - Tier 0 (1D coordinate cuts): `x[c] >= tau`
+          - Tier 1 (1D magnitude cuts): `abs(x[c]) >= tau`
+          - Tier 2 (Custom / SymbolicLibrary primitives): `lib_k(x) >= tau`
+          - Tier 3 (Pairwise bilinear quadrant / XOR splits): `(x[i] * x[j]) >= tau`
+          - Tier 4 (Pairwise radial / circular norm splits): `(x[i] * x[i] + x[j] * x[j]) >= tau`
+        Uses an MDL complexity tie-break (`mdl_eps = 1e-5 * tier`) so simple 1D coordinate cuts
+        win on ties, while nonlinear quadrant/radial/library splits automatically take over
+        whenever axis-aligned hyperplanes cannot separate the parent specialties.
         """
         if len(parent_bucket_margins) < 2 or len(bucket_inputs) == 0:
             return None
@@ -4209,23 +4321,57 @@ class AstCodeSplicer:
         if d_in == 0:
             return None
 
+        # Build candidate 1D feature projections: (lhs_expr, values_per_bucket, complexity_tier)
+        candidates: List[Tuple[str, List[float], int]] = []
+        for c in range(d_in):
+            lhs = arg_name if is_scalar else f"{arg_name}[{c}]"
+            col_vals = [rows[b][c] for b in range(n_b)]
+            candidates.append((lhs, col_vals, 0))
+            candidates.append((f"abs({lhs})", [abs(v) for v in col_vals], 1))
+
+        if custom_predicates:
+            for expr_tmpl, fn_eval in custom_predicates:
+                try:
+                    c_vals = [float(fn_eval(bucket_inputs[b])) for b in range(n_b)]
+                    lhs_custom = expr_tmpl.replace("(x)", f"({arg_name})") if "(x)" in expr_tmpl else expr_tmpl
+                    candidates.append((lhs_custom, c_vals, 2))
+                except Exception:
+                    continue
+
+        if not is_scalar and d_in >= 2:
+            max_pair_d = min(d_in, 8)
+            for i in range(max_pair_d):
+                for j in range(i + 1, max_pair_d):
+                    prod_vals = [rows[b][i] * rows[b][j] for b in range(n_b)]
+                    candidates.append((f"({arg_name}[{i}] * {arg_name}[{j}])", prod_vals, 3))
+                    rad_vals = [rows[b][i] * rows[b][i] + rows[b][j] * rows[b][j] for b in range(n_b)]
+                    candidates.append(
+                        (f"({arg_name}[{i}] * {arg_name}[{i}] + {arg_name}[{j}] * {arg_name}[{j}])", rad_vals, 4)
+                    )
+
+        best_mdl_obj = -float("inf")
         best_gain = -float("inf")
         best_expr: Optional[str] = None
         best_p0_when_true = True
         best_acc = 0.0
+        best_tier = 0
 
-        for c in range(d_in):
-            vals = sorted({rows[b][c] for b in range(n_b)})
+        for lhs_expr, feat_vals, tier in candidates:
+            vals = sorted(set(feat_vals))
             if len(vals) < 2:
                 continue
-            thresholds = [0.5 * (vals[k] + vals[k + 1]) for k in range(len(vals) - 1)]
+            thresholds: List[float] = []
+            for k in range(len(vals) - 1):
+                if vals[k] < 0.0 < vals[k + 1]:
+                    thresholds.append(0.0)
+                thresholds.append(0.5 * (vals[k] + vals[k + 1]))
             for tau in thresholds:
                 for p0_on_ge in (True, False):
                     routed_sum = 0.0
                     correct = 0
                     informative = 0
                     for b in range(n_b):
-                        cond = rows[b][c] >= tau
+                        cond = feat_vals[b] >= tau
                         use_p0 = cond if p0_on_ge else (not cond)
                         routed_sum += m0[b] if use_p0 else m1[b]
                         if abs(m0[b] - m1[b]) > 1e-9:
@@ -4233,13 +4379,15 @@ class AstCodeSplicer:
                             if (use_p0 and m0[b] > m1[b]) or ((not use_p0) and m1[b] > m0[b]):
                                 correct += 1
                     routed_mean = routed_sum / float(n_b)
+                    mdl_obj = routed_mean - 1e-5 * float(tier)
                     acc = correct / float(max(1, informative))
-                    if routed_mean > best_gain + 1e-9:
+                    if mdl_obj > best_mdl_obj + 1e-9:
+                        best_mdl_obj = mdl_obj
                         best_gain = routed_mean
                         best_p0_when_true = p0_on_ge
                         best_acc = acc
-                        lhs = arg_name if is_scalar else f"{arg_name}[{c}]"
-                        best_expr = f"{lhs} >= {round(tau, 6)}"
+                        best_tier = tier
+                        best_expr = f"{lhs_expr} >= {round(tau, 6)}"
 
         max_single_parent = max(sum(m0[:n_b]) / float(n_b), sum(m1[:n_b]) / float(n_b))
         if best_expr is None or best_gain <= max_single_parent + 1e-6:
@@ -4249,6 +4397,7 @@ class AstCodeSplicer:
             "p0_when_true": best_p0_when_true,
             "routed_mean_score": round(best_gain, 6),
             "routing_accuracy": round(best_acc, 6),
+            "complexity_tier": best_tier,
         }
 
     def splice_parents(
@@ -4260,6 +4409,7 @@ class AstCodeSplicer:
         bucket_inputs: Optional[Sequence[Any]] = None,
         parent_bucket_margins: Optional[Sequence[Sequence[float]]] = None,
         routing_predicate_expr: Optional[str] = None,
+        custom_predicates: Optional[Sequence[Tuple[str, Callable[[Any], float]]]] = None,
     ) -> Dict[str, Any]:
         import ast
         import copy
@@ -4486,7 +4636,10 @@ class AstCodeSplicer:
                     and parent_bucket_margins is not None
                 ):
                     learned_routing = self._synthesize_input_routing_predicate(
-                        first_arg, bucket_inputs, parent_bucket_margins
+                        first_arg,
+                        bucket_inputs,
+                        parent_bucket_margins,
+                        custom_predicates=custom_predicates,
                     )
                     if learned_routing is not None:
                         routing_predicate_expr = str(learned_routing["predicate_expr"])
@@ -4549,6 +4702,7 @@ class AstCodeSplicer:
         eval_score_fn: Callable[[Callable[..., Any]], float],
         parent_scores: Sequence[float],
         tol: float = 1e-6,
+        extra_globals: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Post-Splice Epistasis Execution Gate:
@@ -4558,6 +4712,8 @@ class AstCodeSplicer:
         and verifies `spliced_score >= max(parent_scores) - tol`.
         """
         ns: Dict[str, Any] = {"math": math}
+        if extra_globals:
+            ns.update(extra_globals)
         try:
             exec(compile(spliced_code, "<ast_splice>", "exec"), ns)  # noqa: S102
             fn = ns.get(entry_func)

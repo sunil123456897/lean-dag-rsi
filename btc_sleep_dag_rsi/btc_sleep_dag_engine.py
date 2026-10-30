@@ -954,7 +954,10 @@ def run_continual_sleep_across_timeframes(
 ) -> Tuple[SleepLanguageModel, Dict[str, Any]]:
     """
     Trains `SleepLanguageModel` sequentially across the 5 real Bitcoin timeframes
-    (`5m -> 15m -> 1h -> 4h -> 1d`) comparing:
+    in macro-to-micro chronological order (`1d -> 4h -> 1h -> 15m -> 5m`) so that the
+    calendar start of each subsequent `Blind Vault` (`2025-07-03 -> 2025-11-10 -> 2026-04-05 -> 2026-09-01`)
+    is strictly non-decreasing and no earlier domain's training split ever overlaps
+    a later domain's `Blind Vault`, comparing:
       1. `Naive Unmasked (No DAG Mask / No Replay Anchor)` (forgetting + trap contamination)
       2. `SLEEP-DAG-RSI v5` (`Wake -> NREM DAG-KS -> REM Fingerprint MoE Dreaming -> 2x2 Gate`)
     """
@@ -964,22 +967,26 @@ def run_continual_sleep_across_timeframes(
         n_heads=4,
         d_ff=64,
         d_low=12,
-        consolidation_steps=14,
+        consolidation_steps=16,
         num_candidate_dreams=8,
         top_k_dreams=2,
         random_b_dreams=1,
         dream_seq_len=12,
     )
 
+    # Macro-to-micro causal order: 1d -> 4h -> 1h -> 15m -> 5m
+    # Guarantees that each domain's dev cutoff (2025-07-02 -> 2025-11-09 -> 2026-04-04 -> 2026-08-31)
+    # strictly precedes its own and all subsequent Blind Vault windows.
+    causal_tfs = list(reversed(TIMEFRAMES))
     domains = []
-    for tf_idx, tf_name in enumerate(TIMEFRAMES):
+    for step_pos, tf_name in enumerate(causal_tfs):
         d_dev = select_purged_split_bars(eval_frames[tf_name], TF_HORIZON_BARS[tf_name], "dev")
-        domains.append(build_btc_timeframe_sleep_domain(d_dev, tf_name, tf_idx, champ_theta))
+        domains.append(build_btc_timeframe_sleep_domain(d_dev, tf_name, step_pos, champ_theta))
 
     # 1. Naive Unmasked Sequential Adaptation (no DAG masking, no Replay Anchor)
     naive_orch = SleepDAGRSIOrchestrator(cfg=cfg, seed=101)
-    for tf_idx, tf_name in enumerate(TIMEFRAMES):
-        wake_seqs, win_s, trap_s, tree, traj_ids, fp_meta = domains[tf_idx]
+    for step_pos, tf_name in enumerate(causal_tfs):
+        wake_seqs, win_s, trap_s, tree, traj_ids, fp_meta = domains[step_pos]
         naive_orch.run_wake_sleep_cycle(
             domain_name=f"btc_{tf_name}",
             wake_sequences=wake_seqs,
@@ -995,22 +1002,24 @@ def run_continual_sleep_across_timeframes(
 
     naive_losses = {}
     naive_accs = {}
-    for k in range(5):
-        m_k = evaluate_timeframe_retention_metrics(naive_orch.model, domains[k][1], domains[k][2])
-        naive_losses[TIMEFRAMES[k]] = m_k["ce_loss"]
-        naive_accs[TIMEFRAMES[k]] = m_k["win_vs_trap_acc"]
+    for step_pos, tf_name in enumerate(causal_tfs):
+        m_k = evaluate_timeframe_retention_metrics(naive_orch.model, domains[step_pos][1], domains[step_pos][2])
+        naive_losses[tf_name] = m_k["ce_loss"]
+        naive_accs[tf_name] = m_k["win_vs_trap_acc"]
+    naive_losses = {tf: naive_losses[tf] for tf in TIMEFRAMES}
+    naive_accs = {tf: naive_accs[tf] for tf in TIMEFRAMES}
 
-    # 2. Full SLEEP-DAG-RSI v5 Orchestrator across 5m -> 15m -> 1h -> 4h -> 1d
+    # 2. Full SLEEP-DAG-RSI v5 Orchestrator across macro-to-micro causal order (1d -> 4h -> 1h -> 15m -> 5m)
     sleep_orch = SleepDAGRSIOrchestrator(cfg=cfg, seed=101)
     cycle_logs: List[Dict[str, Any]] = []
-    for tf_idx, tf_name in enumerate(TIMEFRAMES):
-        wake_seqs, win_s, trap_s, tree, traj_ids, fp_meta = domains[tf_idx]
+    for step_pos, tf_name in enumerate(causal_tfs):
+        wake_seqs, win_s, trap_s, tree, traj_ids, fp_meta = domains[step_pos]
 
-        def _ret_eval(m: SleepLanguageModel, upto: int = tf_idx) -> float:
+        def _ret_eval(m: SleepLanguageModel, upto_step: int = step_pos) -> float:
             vals = []
-            for d_i in range(upto + 1):
-                slot = (1, sleep_orch.model.cms_blocks[1].num_base + d_i)
-                vals.append(evaluate_timeframe_retention_metrics(m, domains[d_i][1], domains[d_i][2], forced_slot=slot)["tau_score"])
+            for s_i in range(upto_step + 1):
+                slot = (1, sleep_orch.model.cms_blocks[1].num_base + s_i)
+                vals.append(evaluate_timeframe_retention_metrics(m, domains[s_i][1], domains[s_i][2], forced_slot=slot)["tau_score"])
             return float(np.mean(vals))
 
         res = sleep_orch.run_wake_sleep_cycle(
@@ -1030,11 +1039,14 @@ def run_continual_sleep_across_timeframes(
 
     sleep_losses = {}
     sleep_accs = {}
-    for k in range(5):
-        slot_k = (1, sleep_orch.model.cms_blocks[1].num_base + k)
-        m_k = evaluate_timeframe_retention_metrics(sleep_orch.model, domains[k][1], domains[k][2], forced_slot=slot_k)
-        sleep_losses[TIMEFRAMES[k]] = m_k["ce_loss"]
-        sleep_accs[TIMEFRAMES[k]] = m_k["win_vs_trap_acc"]
+    for step_pos, tf_name in enumerate(causal_tfs):
+        slot_k = (1, sleep_orch.model.cms_blocks[1].num_base + step_pos)
+        m_k = evaluate_timeframe_retention_metrics(sleep_orch.model, domains[step_pos][1], domains[step_pos][2], forced_slot=slot_k)
+        sleep_losses[tf_name] = m_k["ce_loss"]
+        sleep_accs[tf_name] = m_k["win_vs_trap_acc"]
+    # Keep dict key ordering 5m -> 1d for reporting consistency
+    sleep_losses = {tf: sleep_losses[tf] for tf in TIMEFRAMES}
+    sleep_accs = {tf: sleep_accs[tf] for tf in TIMEFRAMES}
 
     report = {
         "naive_sequential_losses": naive_losses,
@@ -1084,15 +1096,16 @@ def generate_live_trader_forecast(
             last_sig_offset = -1
             last_sig_dir = "NEUTRAL (0)"
 
-        ctx_tokens = encode_bar_to_tokens(last_row, tf_idx, live_pos, include_outcome=False)[None, :]
-        slot_k = (1, sleep_model.cms_blocks[1].num_base + tf_idx)
+        step_pos = len(TIMEFRAMES) - 1 - tf_idx
+        ctx_tokens = encode_bar_to_tokens(last_row, step_pos, live_pos, include_outcome=False)[None, :]
+        slot_k = (1, sleep_model.cms_blocks[1].num_base + step_pos)
         logits, _, _ = sleep_model.forward(ctx_tokens, dream_mode="none", forced_slow_slot=slot_k)
         slow_probs = sleep_model.cms_blocks[1]._cache.get("probs")
         router_w = slow_probs[0, -1, :] if slow_probs is not None else (np.ones(5) / 5.0)
         last_logits = logits[0, -1, :]
 
         # Combine neural Sleep-MoE timeframe-band log-odds with causal microstructure drift
-        base_tok = 4 + tf_idx * 11
+        base_tok = 4 + step_pos * 11
         neural_win_logit = float(np.mean(last_logits[base_tok + 4 : base_tok + 8]))
         neural_trap_logit = float(np.mean(last_logits[base_tok + 8 : base_tok + 11]))
         neural_quality_logodds = float(np.clip(neural_win_logit - neural_trap_logit, -2.0, 2.0))
@@ -1464,7 +1477,7 @@ def main() -> None:
         eval_frames, discovery_res["champion_theta_pruned"]
     )
     print(
-        f"[3/4] Continual Sleep (5m -> 15m -> 1h -> 4h -> 1d) Complete:\n"
+        f"[3/4] Continual Sleep (1d -> 4h -> 1h -> 15m -> 5m) Complete:\n"
         f"      Naive Unmasked Mean Loss = {sleep_res['naive_mean_loss']:.4f} vs "
         f"SLEEP-DAG-RSI v5 Mean Loss = {sleep_res['sleep_dag_rsi_mean_loss']:.4f}"
     )

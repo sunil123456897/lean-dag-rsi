@@ -1634,6 +1634,65 @@ def main() -> int:
         f"trimmed={len(stoch_slice.trimmed_outlier_indices)} pred='{sp_oos['routing_predicate']}' c1_r2={rep_tanh_c1['r2_oos']:.4f}->c2_recon_r2={rep_tanh_c2['r2_oos']:.4f}",
     )
 
+    # 18e. Second-level review: Nonlinear quadrant/library routing in AstCodeSplicer + O(M^2 d) Dual Gram in SpectralFrameLifter
+    xor_inputs = [[-2.0, -2.0], [2.0, 2.0], [-2.0, 2.0], [2.0, -2.0]]
+    xor_margins = [[1.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 1.0]]
+    sp_xor = splicer_oos.splice_parents(
+        base_source="def solve_xor(x):\n    return 0.0\n",
+        parent_sources=[
+            ("p_same", "def solve_xor(x):\n    return x[0] * x[1]\n"),
+            ("p_opp", "def solve_xor(x):\n    return -x[0] * x[1]\n"),
+        ],
+        bucket_inputs=xor_inputs,
+        parent_bucket_margins=xor_margins,
+    )
+    ep_xor = splicer_oos.verify_spliced_epistasis(
+        spliced_code=sp_xor["spliced_code"],
+        entry_func="solve_xor",
+        eval_score_fn=lambda fn: sum(
+            1.0 if abs(fn(pt) - abs(pt[0] * pt[1])) < 1e-9 else 0.0
+            for pt in [[-3.0, -1.5], [1.5, 4.0], [-2.5, 2.0], [3.0, -2.0]]
+        )
+        / 4.0,
+        parent_scores=[0.5, 0.5],
+    )
+    # Dual Gram K = (1/M) J J^T at d = 128, M = 6
+    d_dual, m_dual = 128, 6
+    j_dual = [
+        [
+            (1000.0 ** (r / float(m_dual - 1))) * math.sin((r + 1) * (c + 1) * 0.17)
+            for c in range(d_dual)
+        ]
+        for r in range(m_dual)
+    ]
+    g_primal = [
+        [
+            sum(j_dual[b][r] * j_dual[b][c] for b in range(m_dual)) / float(m_dual)
+            for c in range(d_dual)
+        ]
+        for r in range(d_dual)
+    ]
+    diag_dual = compute_spectral_diagnostics(j_mat=j_dual, m_buckets=m_dual)
+    diag_prim = compute_spectral_diagnostics(g_mat=g_primal, m_buckets=m_dual)
+    tf_dual = EigenRotationTransform(theta_anchor=[0.0] * d_dual, j_mat=j_dual)
+    # Test round-trip projection on a point in the row space of J
+    x_rowspace = [sum(0.25 * (b + 1) * j_dual[b][c] for b in range(m_dual)) for c in range(d_dual)]
+    x_rec_dual = tf_dual.inverse_projection(tf_dual.forward_project(x_rowspace))
+    dual_inv_err = max(abs(x_rowspace[c] - x_rec_dual[c]) for c in range(d_dual))
+    check(
+        "18e. Nonlinear quadrant routing & O(M^2 d) Dual Gram K=(1/M)JJ^T",
+        sp_xor["valid"] is True
+        and sp_xor["routing_predicate"] == "(x[0] * x[1]) >= 0.0"
+        and ep_xor["passed"] is True
+        and ep_xor["spliced_score"] == 1.0
+        and diag_dual["used_dual_gram"] is True
+        and abs(diag_dual["kappa_eff"] - diag_prim["kappa_eff"]) <= 1e-3
+        and tf_dual.used_dual_gram is True
+        and tf_dual.active_dim == m_dual
+        and dual_inv_err < 1e-9,
+        f"xor_pred='{sp_xor['routing_predicate']}' dual_kappa={diag_dual['kappa_eff']:.2f} vs prim_kappa={diag_prim['kappa_eff']:.2f} active_dim={tf_dual.active_dim} inv_err={dual_inv_err:.2e}",
+    )
+
     print()
     if FAILURES:
         print(f"RESULT: {len(FAILURES)} FAILED -> {FAILURES}")

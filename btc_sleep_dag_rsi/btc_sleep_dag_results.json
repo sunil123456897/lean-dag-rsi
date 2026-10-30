@@ -127,7 +127,8 @@
       "raw_union_mean": 40.22468,
       "best_single_mean": 17.9307,
       "total_ast_collision": 0.0,
-      "rejected_candidates": {}
+      "rejected_candidates": {},
+      "spliced_artifact": null
     },
     "gauss_newton_pruning": {
       "base_score": 1.3506,
@@ -1160,27 +1161,27 @@
   },
   "continual_sleep_results": {
     "naive_sequential_losses": {
-      "5m": 6.1082,
-      "15m": 5.4066,
-      "1h": 4.379,
-      "4h": 3.0008,
-      "1d": 7.8574
+      "5m": 2.7933,
+      "15m": 3.8168,
+      "1h": 6.2525,
+      "4h": 6.3231,
+      "1d": 3.8071
     },
     "naive_win_vs_trap_acc": {
-      "5m": 62.5,
-      "15m": 50.0,
-      "1h": 75.0,
-      "4h": 50.0,
-      "1d": 0.0
+      "5m": 75.0,
+      "15m": 75.0,
+      "1h": 87.5,
+      "4h": 37.5,
+      "1d": 75.0
     },
-    "naive_mean_loss": 5.3504,
-    "naive_mean_acc_pct": 47.5,
+    "naive_mean_loss": 4.5986,
+    "naive_mean_acc_pct": 70.0,
     "sleep_dag_rsi_losses": {
-      "5m": 3.4297,
-      "15m": 1.6206,
-      "1h": 4.5215,
-      "4h": 3.094,
-      "1d": 3.9181
+      "5m": 2.8808,
+      "15m": 2.563,
+      "1h": 0.67,
+      "4h": 1.6601,
+      "1d": 2.6833
     },
     "sleep_dag_rsi_win_vs_trap_acc": {
       "5m": 100.0,
@@ -1189,34 +1190,34 @@
       "4h": 87.5,
       "1d": 100.0
     },
-    "sleep_dag_rsi_mean_loss": 3.3168,
+    "sleep_dag_rsi_mean_loss": 2.0914,
     "sleep_dag_rsi_mean_acc_pct": 97.5,
     "cycle_logs": [
       {
-        "domain": "btc_5m",
+        "domain": "btc_1d",
         "wake_loss": 7.054907,
         "pre_wake_tau": 0.7364,
         "post_wake_tau": 0.3573,
-        "post_nrem_tau": 6.8937,
-        "post_rem_tau": 7.378,
+        "post_nrem_tau": 10.0786,
+        "post_rem_tau": 10.0786,
         "ks_stats": {
-          "gkd_loss": 2.2814389818157754,
-          "lti_reward": 0.09821428571428568,
-          "total_ks_loss": 1.329577674803751,
+          "gkd_loss": 2.2227499410006106,
+          "lti_reward": 0.1015625,
+          "total_ks_loss": 1.2930249646003664,
           "supervised_trajectories": 2,
           "total_wake_trajectories": 5,
           "unlocked_expert_slot": 2
         },
         "dream_stats": {
           "selected_count": 3,
-          "positive_dreams": 2,
+          "positive_dreams": 0,
           "rejected_spikes": 0,
-          "verifier_calls_saved": 4,
+          "verifier_calls_saved": 3,
           "lora_verifier_calls": 3,
           "complementary_pair_used": false,
-          "base_tau": 6.8937,
-          "post_dream_tau": 7.378,
-          "tau_gain": 0.4843
+          "base_tau": 10.0786,
+          "post_dream_tau": 10.0786,
+          "tau_gain": 0.0
         },
         "selected_beta": 0.0,
         "gate_2x2": {
@@ -1224,7 +1225,7 @@
             "theta_sleep_plus",
             "psi_dream_plus"
           ],
-          "accepted_score": 7.698021,
+          "accepted_score": 10.398621,
           "incumbent_score": 0.9364,
           "improved": true,
           "model_updated": true,
@@ -1233,19 +1234,19 @@
           "has_negative_interference": false,
           "rejected_by_novelty": []
         },
-        "timeframe": "5m"
+        "timeframe": "1d"
       },
       {
-        "domain": "btc_15m",
-        "wake_loss": 6.609136,
-        "pre_wake_tau": 3.38995,
-        "post_wake_tau": 3.22085,
-        "post_nrem_tau": 6.60225,
-        "post_rem_tau": 6.60225,
+        "domain": "btc_4h",
+        "wake_loss": 6.597073,
+        "pre_wake_tau": 4.62005,
+        "post_wake_tau": 4.96795,
+        "post_nrem_tau": 7.6698,
+        "post_rem_tau": 7.6698,
         "ks_stats": {
-          "gkd_loss": 2.4326637028099483,
-          "lti_reward": 0.07142857142857141,
-          "total_ks_loss": 1.4310267931145406,
+          "gkd_loss": 2.4852992745462563,
+          "lti_reward": 0.076171875,
+          "total_ks_loss": 1.4607108147277539,
           "supervised_trajectories": 2,
           "total_wake_trajectories": 5,
           "unlocked_expert_slot": 3
@@ -1254,11 +1255,11 @@
           "selected_count": 3,
           "positive_dreams": 0,
           "rejected_spikes": 0,
-          "verifier_calls_saved": 2,
+          "verifier_calls_saved": 3,
           "lora_verifier_calls": 3,
           "complementary_pair_used": true,
-          "base_tau": 6.60225,
-          "post_dream_tau": 6.60225,
+          "base_tau": 7.6698,
+          "post_dream_tau": 7.6698,
           "tau_gain": 0.0
         },
         "selected_beta": 0.0,
@@ -1267,94 +1268,8 @@
             "theta_sleep_plus",
             "psi_dream_plus"
           ],
-          "accepted_score": 6.92225,
-          "incumbent_score": 3.58995,
-          "improved": true,
-          "model_updated": true,
-          "harness_updated": true,
-          "interaction_synergy": 0.12,
-          "has_negative_interference": false,
-          "rejected_by_novelty": []
-        },
-        "timeframe": "15m"
-      },
-      {
-        "domain": "btc_1h",
-        "wake_loss": 7.382557,
-        "pre_wake_tau": 4.4572,
-        "post_wake_tau": 4.4935,
-        "post_nrem_tau": 7.891767,
-        "post_rem_tau": 6.776567,
-        "ks_stats": {
-          "gkd_loss": 1.8741215098309398,
-          "lti_reward": 0.09598214285714285,
-          "total_ks_loss": 1.0860800487557065,
-          "supervised_trajectories": 2,
-          "total_wake_trajectories": 5,
-          "unlocked_expert_slot": 4
-        },
-        "dream_stats": {
-          "selected_count": 3,
-          "positive_dreams": 1,
-          "rejected_spikes": 0,
-          "verifier_calls_saved": 1,
-          "lora_verifier_calls": 3,
-          "complementary_pair_used": true,
-          "base_tau": 7.891767,
-          "post_dream_tau": 6.776567,
-          "tau_gain": -1.1152
-        },
-        "selected_beta": 0.0,
-        "gate_2x2": {
-          "accepted_pair": [
-            "theta_sleep_plus",
-            "psi_dream_plus"
-          ],
-          "accepted_score": 7.096567,
-          "incumbent_score": 4.6572,
-          "improved": true,
-          "model_updated": true,
-          "harness_updated": true,
-          "interaction_synergy": 0.12,
-          "has_negative_interference": false,
-          "rejected_by_novelty": []
-        },
-        "timeframe": "1h"
-      },
-      {
-        "domain": "btc_4h",
-        "wake_loss": 5.883215,
-        "pre_wake_tau": 4.977025,
-        "post_wake_tau": 5.0522,
-        "post_nrem_tau": 6.90385,
-        "post_rem_tau": 6.90385,
-        "ks_stats": {
-          "gkd_loss": 2.11357753629005,
-          "lti_reward": 0.10044642857142856,
-          "total_ks_loss": 1.227967950345458,
-          "supervised_trajectories": 2,
-          "total_wake_trajectories": 5,
-          "unlocked_expert_slot": 5
-        },
-        "dream_stats": {
-          "selected_count": 3,
-          "positive_dreams": 0,
-          "rejected_spikes": 0,
-          "verifier_calls_saved": 1,
-          "lora_verifier_calls": 3,
-          "complementary_pair_used": true,
-          "base_tau": 6.90385,
-          "post_dream_tau": 6.90385,
-          "tau_gain": 0.0
-        },
-        "selected_beta": 0.0,
-        "gate_2x2": {
-          "accepted_pair": [
-            "theta_sleep_plus",
-            "psi_dream_plus"
-          ],
-          "accepted_score": 7.22385,
-          "incumbent_score": 5.177025,
+          "accepted_score": 7.9898,
+          "incumbent_score": 4.82005,
           "improved": true,
           "model_updated": true,
           "harness_updated": true,
@@ -1365,16 +1280,102 @@
         "timeframe": "4h"
       },
       {
-        "domain": "btc_1d",
-        "wake_loss": 5.77847,
-        "pre_wake_tau": 5.37578,
-        "post_wake_tau": 5.45538,
-        "post_nrem_tau": 6.35108,
-        "post_rem_tau": 6.35108,
+        "domain": "btc_1h",
+        "wake_loss": 7.398089,
+        "pre_wake_tau": 5.2134,
+        "post_wake_tau": 5.001467,
+        "post_nrem_tau": 8.556033,
+        "post_rem_tau": 8.556033,
         "ks_stats": {
-          "gkd_loss": 2.483967359652604,
-          "lti_reward": 0.07142857142857144,
-          "total_ks_loss": 1.4618089872201336,
+          "gkd_loss": 1.787954431680234,
+          "lti_reward": 0.14453125,
+          "total_ks_loss": 1.0149601590081403,
+          "supervised_trajectories": 2,
+          "total_wake_trajectories": 5,
+          "unlocked_expert_slot": 4
+        },
+        "dream_stats": {
+          "selected_count": 3,
+          "positive_dreams": 0,
+          "rejected_spikes": 0,
+          "verifier_calls_saved": 1,
+          "lora_verifier_calls": 3,
+          "complementary_pair_used": true,
+          "base_tau": 8.556033,
+          "post_dream_tau": 8.556033,
+          "tau_gain": 0.0
+        },
+        "selected_beta": 0.0,
+        "gate_2x2": {
+          "accepted_pair": [
+            "theta_sleep_plus",
+            "psi_dream_plus"
+          ],
+          "accepted_score": 8.876033,
+          "incumbent_score": 5.4134,
+          "improved": true,
+          "model_updated": true,
+          "harness_updated": true,
+          "interaction_synergy": 0.12,
+          "has_negative_interference": false,
+          "rejected_by_novelty": []
+        },
+        "timeframe": "1h"
+      },
+      {
+        "domain": "btc_15m",
+        "wake_loss": 5.781844,
+        "pre_wake_tau": 6.227,
+        "post_wake_tau": 6.195475,
+        "post_nrem_tau": 8.6282,
+        "post_rem_tau": 8.6282,
+        "ks_stats": {
+          "gkd_loss": 1.990070192999694,
+          "lti_reward": 0.39453125,
+          "total_ks_loss": 1.0362296157998163,
+          "supervised_trajectories": 2,
+          "total_wake_trajectories": 5,
+          "unlocked_expert_slot": 5
+        },
+        "dream_stats": {
+          "selected_count": 3,
+          "positive_dreams": 0,
+          "rejected_spikes": 0,
+          "verifier_calls_saved": 2,
+          "lora_verifier_calls": 3,
+          "complementary_pair_used": true,
+          "base_tau": 8.6282,
+          "post_dream_tau": 8.6282,
+          "tau_gain": 0.0
+        },
+        "selected_beta": 0.0,
+        "gate_2x2": {
+          "accepted_pair": [
+            "theta_sleep_plus",
+            "psi_dream_plus"
+          ],
+          "accepted_score": 8.9482,
+          "incumbent_score": 6.427,
+          "improved": true,
+          "model_updated": true,
+          "harness_updated": true,
+          "interaction_synergy": 0.12,
+          "has_negative_interference": false,
+          "rejected_by_novelty": []
+        },
+        "timeframe": "15m"
+      },
+      {
+        "domain": "btc_5m",
+        "wake_loss": 6.257166,
+        "pre_wake_tau": 6.67648,
+        "post_wake_tau": 7.0151,
+        "post_nrem_tau": 7.80884,
+        "post_rem_tau": 7.80884,
+        "ks_stats": {
+          "gkd_loss": 2.2617015307422923,
+          "lti_reward": 0.12890625,
+          "total_ks_loss": 1.3054584184453752,
           "supervised_trajectories": 2,
           "total_wake_trajectories": 5,
           "unlocked_expert_slot": 6
@@ -1386,8 +1387,8 @@
           "verifier_calls_saved": 1,
           "lora_verifier_calls": 3,
           "complementary_pair_used": true,
-          "base_tau": 6.35108,
-          "post_dream_tau": 6.35108,
+          "base_tau": 7.80884,
+          "post_dream_tau": 7.80884,
           "tau_gain": 0.0
         },
         "selected_beta": 0.0,
@@ -1396,8 +1397,8 @@
             "theta_sleep_plus",
             "psi_dream_plus"
           ],
-          "accepted_score": 6.67108,
-          "incumbent_score": 5.57578,
+          "accepted_score": 8.12884,
+          "incumbent_score": 6.87648,
           "improved": true,
           "model_updated": true,
           "harness_updated": true,
@@ -1405,7 +1406,7 @@
           "has_negative_interference": false,
           "rejected_by_novelty": []
         },
-        "timeframe": "1d"
+        "timeframe": "5m"
       }
     ]
   },
@@ -1426,7 +1427,7 @@
       "cms_router_expert_weights": [
         0.0,
         0.0,
-        1.0,
+        0.0,
         0.0,
         0.0,
         0.0
@@ -1482,23 +1483,23 @@
       "live_bar_signal": "WAIT / NEUTRAL",
       "most_recent_signal": "SHORT (-1) (61 bars ago)",
       "cms_router_expert_weights": [
-        0.009,
-        0.009,
-        0.01,
-        0.795,
-        0.001,
-        0.17
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
       ],
       "sleep_model_probabilities_pct": {
-        "bull_scenario_pct": 35.1,
-        "range_chop_pct": 13.0,
-        "bear_scenario_pct": 51.9,
+        "bull_scenario_pct": 31.2,
+        "range_chop_pct": 8.3,
+        "bear_scenario_pct": 60.6,
         "detailed_5_state": {
-          "Strong Bull Expansion (> +0.8 ATR)": 15.7,
-          "Mild Bull Drift (+0.15 to +0.8 ATR)": 19.4,
-          "Neutral Range Chop (-0.15 to +0.15 ATR)": 13.0,
-          "Mild Bear Pullback (-0.8 to -0.15 ATR)": 25.6,
-          "Strong Bear Breakdown (< -0.8 ATR)": 26.4
+          "Strong Bull Expansion (> +0.8 ATR)": 13.9,
+          "Mild Bull Drift (+0.15 to +0.8 ATR)": 17.2,
+          "Neutral Range Chop (-0.15 to +0.15 ATR)": 8.3,
+          "Mild Bear Pullback (-0.8 to -0.15 ATR)": 27.8,
+          "Strong Bear Breakdown (< -0.8 ATR)": 32.7
         }
       },
       "key_trader_levels_usdt": {
@@ -1544,7 +1545,7 @@
         0.0,
         0.0,
         0.0,
-        1.0,
+        0.999,
         0.0
       ],
       "sleep_model_probabilities_pct": {
@@ -1598,23 +1599,23 @@
       "live_bar_signal": "WAIT / NEUTRAL",
       "most_recent_signal": "SHORT (-1) (15 bars ago)",
       "cms_router_expert_weights": [
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0
+        0.01,
+        0.01,
+        0.004,
+        0.78,
+        0.001,
+        0.189
       ],
       "sleep_model_probabilities_pct": {
-        "bull_scenario_pct": 24.8,
-        "range_chop_pct": 7.7,
-        "bear_scenario_pct": 67.5,
+        "bull_scenario_pct": 31.7,
+        "range_chop_pct": 16.8,
+        "bear_scenario_pct": 51.5,
         "detailed_5_state": {
-          "Strong Bull Expansion (> +0.8 ATR)": 10.6,
-          "Mild Bull Drift (+0.15 to +0.8 ATR)": 14.2,
-          "Neutral Range Chop (-0.15 to +0.15 ATR)": 7.7,
-          "Mild Bear Pullback (-0.8 to -0.15 ATR)": 29.8,
-          "Strong Bear Breakdown (< -0.8 ATR)": 37.7
+          "Strong Bull Expansion (> +0.8 ATR)": 14.0,
+          "Mild Bull Drift (+0.15 to +0.8 ATR)": 17.7,
+          "Neutral Range Chop (-0.15 to +0.15 ATR)": 16.8,
+          "Mild Bear Pullback (-0.8 to -0.15 ATR)": 25.3,
+          "Strong Bear Breakdown (< -0.8 ATR)": 26.2
         }
       },
       "key_trader_levels_usdt": {
@@ -1658,7 +1659,7 @@
       "cms_router_expert_weights": [
         0.0,
         0.0,
-        0.0,
+        0.999,
         0.0,
         0.0,
         0.0
@@ -1701,5 +1702,5 @@
       }
     }
   },
-  "elapsed_sec": 4.11
+  "elapsed_sec": 4.22
 }

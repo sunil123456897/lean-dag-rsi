@@ -1269,23 +1269,31 @@ class CounterfactualDreamingEngine:
             if r_dream == 1:
                 positive_dreams.append(candidates[idx])
 
-        # Stage 4: ReST^EM self-improvement update on positively rewarded dreams
+        # Stage 4: ReST^EM self-improvement update on positively rewarded dreams (with monotone rollback guard)
         if positive_dreams:
             batch_dreams = np.concatenate(positive_dreams, axis=0)
             inputs = batch_dreams[:, :-1]
-            targets = batch_dreams[:, 1:]
+            targets = dream_seq_targets = batch_dreams[:, 1:]
             last_slot = slow_blk.num_base + max(0, slow_blk.num_unlocked_low_rank - 1)
+            lre_target = (
+                slow_blk.low_rank_experts[slow_blk.num_unlocked_low_rank - 1]
+                if slow_blk.num_unlocked_low_rank > 0
+                else None
+            )
+            saved_ab = (lre_target.A.copy(), lre_target.B.copy()) if lre_target is not None else None
             for _ in range(cfg.restem_steps):
                 model.zero_grad()
                 logits, _, _ = model.forward(
                     inputs, dream_mode="none", forced_slow_slot=(target_slow_block_idx, last_slot)
                 )
-                _, grad_logits = cross_entropy_loss_and_grad(logits, targets)
+                _, grad_logits = cross_entropy_loss_and_grad(logits, dream_seq_targets)
                 model.backward(grad_logits)
-                if slow_blk.num_unlocked_low_rank > 0:
-                    lre = slow_blk.low_rank_experts[slow_blk.num_unlocked_low_rank - 1]
-                    lre.A -= rms_step(lre.grad_A, cfg.sleep_lr * 0.6)
-                    lre.B -= rms_step(lre.grad_B, cfg.sleep_lr * 0.6)
+                if lre_target is not None:
+                    lre_target.A -= rms_step(lre_target.grad_A, cfg.sleep_lr * 0.6)
+                    lre_target.B -= rms_step(lre_target.grad_B, cfg.sleep_lr * 0.6)
+            if lre_target is not None and saved_ab is not None:
+                if evaluator_fn(model) < base_score:
+                    lre_target.A, lre_target.B = saved_ab
 
         post_dream_score = evaluator_fn(model)
         return {
