@@ -331,16 +331,10 @@ def _percentile_linear(sorted_vals: Sequence[float], q: float) -> float:
     return float(sorted_vals[lo] * (1.0 - frac) + sorted_vals[hi] * frac)
 
 
-def compute_tukey_cap(
+def _collect_positive_gains(
     tree: DiscoveryTree,
     problem: Optional[Problem] = None,
-    tau_cap: float = 1.5,
-) -> float:
-    """
-    Non-parametric Tukey upper fence on positive parent->child gains:
-        U(T) = med(Delta s^+) + tau_cap * IQR(Delta s^+)
-    Used to bound counterfactual continuation gains on right-censored leaves.
-    """
+) -> List[float]:
     prob = problem or Problem()
     pos_gains: List[float] = []
     for node in tree.nodes.values():
@@ -354,6 +348,20 @@ def compute_tukey_cap(
         gain = prob.score(node) - prob.score(parent)
         if gain > 0:
             pos_gains.append(gain)
+    return pos_gains
+
+
+def compute_tukey_cap(
+    tree: DiscoveryTree,
+    problem: Optional[Problem] = None,
+    tau_cap: float = 1.5,
+) -> float:
+    """
+    Non-parametric Tukey upper fence on positive parent->child gains:
+        U(T) = med(Delta s^+) + tau_cap * IQR(Delta s^+)
+    Used to bound counterfactual continuation gains on right-censored leaves.
+    """
+    pos_gains = _collect_positive_gains(tree, problem)
     if not pos_gains:
         return 0.0
     pos_gains.sort()
@@ -361,6 +369,50 @@ def compute_tukey_cap(
     q25 = _percentile_linear(pos_gains, 0.25)
     q75 = _percentile_linear(pos_gains, 0.75)
     return med + tau_cap * (q75 - q25)
+
+
+def compute_counterfactual_step(
+    ds: float,
+    node_score: float,
+    root_score: float,
+    pos_gains: Sequence[float],
+    tukey_cap: Optional[float] = None,
+    tau_cap: float = 1.5,
+) -> float:
+    """
+    Shift-Invariant Counterfactual Step Cap with Smooth Fallback Transition (Eq. 4):
+      - Shift-invariant fallback scale:
+          S_Delta = max(mean(Delta^+), |s(u) - s(root)|, 1e-6)
+          C_fallback(Delta_u; S_Delta) = Delta_u / (1.0 + Delta_u / S_Delta)
+        Note: S_Delta depends purely on score differences, making C_fallback strictly
+        invariant to arbitrary constant score translations s -> s + C.
+      - Smooth blend weight:
+          alpha_cf = min(1.0, max(0.0, (|Delta^+| - 1) / 3.0))
+        Eliminates the step discontinuity at |Delta^+| = 4 between C_fallback and C_Tukey.
+    """
+    if ds <= 0.0:
+        return 0.0
+    gains = [float(g) for g in pos_gains if float(g) > 0.0]
+    n_pos = len(gains)
+    mean_pos = (sum(gains) / float(n_pos)) if n_pos > 0 else 0.0
+    s_delta = max(mean_pos, abs(float(node_score) - float(root_score)), 1e-6)
+    c_fallback = float(ds) / (1.0 + float(ds) / s_delta)
+    if n_pos <= 1:
+        return c_fallback
+
+    if tukey_cap is None:
+        s_gains = sorted(gains)
+        med = _percentile_linear(s_gains, 0.50)
+        q25 = _percentile_linear(s_gains, 0.25)
+        q75 = _percentile_linear(s_gains, 0.75)
+        t_cap = med + tau_cap * (q75 - q25)
+    else:
+        t_cap = float(tukey_cap)
+
+    c_tukey = min(float(ds), t_cap)
+    alpha_cf = min(1.0, max(0.0, float(n_pos - 1) / 3.0))
+    return (1.0 - alpha_cf) * c_fallback + alpha_cf * c_tukey
+
 
 
 def _get_pass_mask(node: Node) -> List[int]:
@@ -488,6 +540,7 @@ class World:
         self.gamma = gamma
         self.tau_cap = tau_cap
         self.crossover_synergy = crossover_synergy
+        self._pos_gains = _collect_positive_gains(tree, self.problem)
         self.tukey_cap = compute_tukey_cap(tree, self.problem, tau_cap)
         self.max_depth = max((n.attempt for n in tree.nodes.values()), default=1)
         self.reset()
@@ -744,7 +797,14 @@ class World:
                 parent_node = self.revealed[pid]
                 ds = self._last_positive_gain(pid)
                 if ds > 0.0 and parent_node.attempt < self.max_depth:
-                    capped_step = min(ds, self.tukey_cap)
+                    capped_step = compute_counterfactual_step(
+                        ds=ds,
+                        node_score=self.problem.score(parent_node),
+                        root_score=self.tree.baseline_score,
+                        pos_gains=self._pos_gains,
+                        tukey_cap=self.tukey_cap,
+                        tau_cap=self.tau_cap,
+                    )
                     cf_step_num = int(parent_node.meta.get("cf_step", 0)) + 1
                     gain = (self.gamma**cf_step_num) * capped_step
                     self._cf_counter += 1
@@ -1234,18 +1294,21 @@ def compute_max_tilted_objective(
     tau: float = 4.0,
     baseline: Optional[float] = None,
     prior_weights: Optional[Sequence[float]] = None,
+    normalize_by_scale: bool = False,
 ) -> Dict[str, Any]:
     """
-    TTT-Discover Extremal Max-Tilted / Entropic Objective (Tier S #7):
-        J_tau(theta) = (1 / tau) * log( sum_v exp(tau * s_v) )
-        J_{tau,norm}(theta) = (1 / tau) * log( sum_v q_tilde_v * exp(tau * s_v) )
-        w_v = q_v * exp(tau * (s_v - s_max)) / sum_u q_u * exp(tau * (s_u - s_max))
-    Properties:
-    - At tau -> 0+, J_{tau,norm} -> sum_v q_tilde_v * s_v (standard average reward)
-      and w_v -> q_tilde_v.
-    - As tau increases, J_{tau,norm} is strictly non-decreasing and monotonically
-      approaches max_v s_v, concentrating selection/consolidation weight on the
-      singular extremal breakthrough rather than diluting it across mediocre means.
+    TTT-Discover Extremal Max-Tilted / Entropic Objective (Tier S #7, Eqs. 11–13):
+      - Unweighted log-sum-exp objective:
+          J_tau(theta) = (1 / tau) * log( sum_v exp(tau * s_v) )
+      - Prior-weighted entropic expectation (variational dual over Delta^{|V|-1}):
+          J_{tau,norm}(theta) = (1 / tau) * log( sum_v q_tilde_v * exp(tau * s_v) )
+                              = max_{w in Delta} { sum_v w_v * s_v - (1 / tau) * D_KL(w || q_tilde) }
+      - Upper-tail robust scale `s_R` (detached via `stop_grad(s_R)`):
+          Computed strictly on the upper half of finite rewards `{R(v) >= median(R)}`
+          via `max(1.4826 * MAD_upper, std_upper, 1e-6 * max(1.0, |R_max|))` so a single
+          catastrophic lower-tail crash (e.g., R = -10^6) cannot inflate `s_R` and
+          collapse `tau / s_R -> 0`. Treated as `stop_grad(s_R)` so policy-gradient
+          differentiation never incentivizes reward-variance inflation.
     """
     raw_vals = [float(s) for s in scores]
     n = len(raw_vals)
@@ -1261,9 +1324,14 @@ def compute_max_tilted_objective(
             "mean_score": b_val,
             "max_score": b_val,
             "tilted_weights": [],
+            "tilted_weights_normalized": [],
             "champion_index": -1,
             "champion_weight": 0.0,
+            "champion_weight_normalized": 0.0,
             "effective_sample_size": 0.0,
+            "s_R": 1.0,
+            "stop_grad_s_R": True,
+            "kl_divergence": 0.0,
             "tau": float(tau) if math.isfinite(float(tau)) else 0.0,
         }
 
@@ -1276,9 +1344,14 @@ def compute_max_tilted_objective(
             "mean_score": b_val,
             "max_score": b_val,
             "tilted_weights": unif_w,
+            "tilted_weights_normalized": unif_w,
             "champion_index": 0,
             "champion_weight": unif_w[0],
+            "champion_weight_normalized": unif_w[0],
             "effective_sample_size": float(n),
+            "s_R": 1.0,
+            "stop_grad_s_R": True,
+            "kl_divergence": 0.0,
             "tau": float(tau) if math.isfinite(float(tau)) else 0.0,
         }
 
@@ -1303,8 +1376,24 @@ def compute_max_tilted_objective(
             for i in range(n)
         ]
 
+    finite_vals = sorted(raw_vals[i] for i in finite_indices)
+    med_r = _percentile_linear(finite_vals, 0.50)
+    upper_vals = [v for v in finite_vals if v >= med_r - 1e-12]
+    if len(upper_vals) >= 2:
+        med_up = _percentile_linear(upper_vals, 0.50)
+        abs_dev_up = sorted(abs(v - med_up) for v in upper_vals)
+        mad_up = 1.4826 * _percentile_linear(abs_dev_up, 0.50)
+        mean_up = sum(upper_vals) / float(len(upper_vals))
+        std_up = math.sqrt(
+            sum((v - mean_up) ** 2 for v in upper_vals) / float(len(upper_vals))
+        )
+    else:
+        mad_up = 0.0
+        std_up = 0.0
+
     mean_score = sum(q_tilde[i] * raw_vals[i] for i in finite_indices)
     s_max = max(raw_vals[i] for i in finite_indices)
+    s_R = max(mad_up, std_up, 1e-6 * max(1.0, abs(s_max)))
     champ_idx = max(finite_indices, key=lambda i: raw_vals[i])
     tied_champ_indices = [
         i for i in finite_indices if abs(raw_vals[i] - s_max) <= 1e-12
@@ -1321,15 +1410,23 @@ def compute_max_tilted_objective(
             "mean_score": mean_score,
             "max_score": s_max,
             "tilted_weights": w,
+            "tilted_weights_normalized": w,
             "champion_index": champ_idx,
             "champion_weight": champ_w,
+            "champion_weight_normalized": champ_w,
             "effective_sample_size": ess,
+            "s_R": round(s_R, 6),
+            "stop_grad_s_R": True,
+            "kl_divergence": 0.0,
             "tau": tau_f,
         }
 
+    eff_tau = (tau_f / s_R) if normalize_by_scale else tau_f
+    tau_norm_scale = tau_f / s_R
+
     # Log-sum-exp stabilization via shift by s_max over finite indices
     unnorm_exp = [
-        math.exp(max(-700.0, min(700.0, tau_f * (raw_vals[i] - s_max))))
+        math.exp(max(-700.0, min(700.0, eff_tau * (raw_vals[i] - s_max))))
         if i in finite_indices
         else 0.0
         for i in range(n)
@@ -1338,11 +1435,29 @@ def compute_max_tilted_objective(
     Z_raw = max(1e-300, sum(unnorm_exp[i] for i in finite_indices))
     Z_norm = max(1e-300, sum(weighted_exp[i] for i in finite_indices))
 
-    j_tau = s_max + (1.0 / tau_f) * math.log(Z_raw)
-    j_tau_expectation = s_max + (1.0 / tau_f) * math.log(Z_norm)
+    j_tau = s_max + (1.0 / eff_tau) * math.log(Z_raw)
+    j_tau_expectation = s_max + (1.0 / eff_tau) * math.log(Z_norm)
     w = [we / Z_norm for we in weighted_exp]
     ess = 1.0 / max(1e-12, sum(wi * wi for wi in w))
     champ_w = sum(w[i] for i in tied_champ_indices)
+
+    # Also compute scale-normalized weights using detached stop_grad(s_R)
+    unnorm_exp_sr = [
+        math.exp(max(-700.0, min(700.0, tau_norm_scale * (raw_vals[i] - s_max))))
+        if i in finite_indices
+        else 0.0
+        for i in range(n)
+    ]
+    weighted_exp_sr = [q_tilde[i] * unnorm_exp_sr[i] for i in range(n)]
+    Z_norm_sr = max(1e-300, sum(weighted_exp_sr[i] for i in finite_indices))
+    w_sr = [we / Z_norm_sr for we in weighted_exp_sr]
+    champ_w_sr = sum(w_sr[i] for i in tied_champ_indices)
+
+    kl_div = sum(
+        w[i] * math.log(max(1e-300, w[i]) / max(1e-300, q_tilde[i]))
+        for i in finite_indices
+        if w[i] > 0.0 and q_tilde[i] > 0.0
+    )
 
     return {
         "j_tau": j_tau,
@@ -1350,9 +1465,14 @@ def compute_max_tilted_objective(
         "mean_score": mean_score,
         "max_score": s_max,
         "tilted_weights": w,
+        "tilted_weights_normalized": w_sr,
         "champion_index": champ_idx,
         "champion_weight": champ_w,
+        "champion_weight_normalized": champ_w_sr,
         "effective_sample_size": ess,
+        "s_R": round(s_R, 6),
+        "stop_grad_s_R": True,
+        "kl_divergence": round(kl_div, 6),
         "tau": tau_f,
     }
 
@@ -3235,11 +3355,86 @@ def compute_provenance_credit(
         )
         q_raw_map[hid] = q_val
 
-    # Step 2: Local family cap F_loc (Eq. 19)
+    # Step 2: Conjunctive Clone-Family Equivalence Class C_f & Local family cap F_loc (Eq. 19)
+    # Two hypotheses u, v belong to the same clone family C_f if they share an explicit
+    # family ID OR satisfy the CONJUNCTIVE proximity criterion:
+    #   ||phi(u) - phi(v)||_inf <= 1e-3  AND  (IoU_AST(u, v) >= 0.8 or ||theta_u - theta_v||_inf <= 1e-4)
+    # Ensuring behavioral coincidence alone without AST/parameter overlap never merges distinct algorithms.
+    def _extract_hyp_vec(h_dict: Dict[str, Any]) -> List[float]:
+        mv = h_dict.get("margin_vector") or h_dict.get("pass_mask")
+        if isinstance(mv, (list, tuple)) and len(mv) > 0:
+            return [float(x) for x in mv]
+        return []
+
+    def _extract_hyp_ast(h_dict: Dict[str, Any]) -> Set[str]:
+        raw = h_dict.get("ast_touches") or h_dict.get("modified_symbols")
+        if isinstance(raw, (list, tuple, set)) and raw:
+            return {str(s) for s in raw}
+        code_str = h_dict.get("code")
+        if isinstance(code_str, str) and code_str.strip():
+            try:
+                import ast as _ast
+                tree_ast = _ast.parse(code_str)
+                syms: Set[str] = set()
+                for n_ast in _ast.walk(tree_ast):
+                    if isinstance(n_ast, _ast.FunctionDef):
+                        syms.add(f"fn:{n_ast.name}")
+                    elif isinstance(n_ast, _ast.Assign):
+                        for t_ast in n_ast.targets:
+                            if isinstance(t_ast, _ast.Name):
+                                syms.add(f"var:{t_ast.id}")
+                return syms
+            except Exception:
+                return {code_str.strip()}
+        return set()
+
+    def _extract_hyp_params(h_dict: Dict[str, Any]) -> List[float]:
+        tp = h_dict.get("tunable_params") or h_dict.get("params")
+        if isinstance(tp, dict):
+            return [float(tp[k]) for k in sorted(tp.keys()) if isinstance(tp[k], (int, float))]
+        if isinstance(tp, (list, tuple)):
+            return [float(x) for x in tp if isinstance(x, (int, float))]
+        return []
+
+    def _are_conjunctive_clones(ha: Dict[str, Any], hb: Dict[str, Any]) -> bool:
+        phi_a, phi_b = _extract_hyp_vec(ha), _extract_hyp_vec(hb)
+        if not phi_a or len(phi_a) != len(phi_b):
+            return False
+        linf_phi = max(abs(a - b) for a, b in zip(phi_a, phi_b))
+        if linf_phi > 1e-3:
+            return False
+        ast_a, ast_b = _extract_hyp_ast(ha), _extract_hyp_ast(hb)
+        ast_match = False
+        if ast_a and ast_b:
+            inter = len(ast_a & ast_b)
+            uni = max(1, len(ast_a | ast_b))
+            ast_match = (float(inter) / float(uni)) >= 0.8
+        par_a, par_b = _extract_hyp_params(ha), _extract_hyp_params(hb)
+        par_match = False
+        if par_a and len(par_a) == len(par_b):
+            par_match = max(abs(a - b) for a, b in zip(par_a, par_b)) <= 1e-4
+        return bool(ast_match or par_match)
+
+    resolved_loc_fam: Dict[str, str] = {}
+    resolved_glob_fam: Dict[str, str] = {}
+    for idx_h, h in enumerate(hypotheses):
+        hid = str(h["id"])
+        floc = str(h.get("local_family", h.get("global_family", hid)))
+        fglob = str(h.get("global_family", floc))
+        for prev_idx in range(idx_h):
+            prev_h = hypotheses[prev_idx]
+            prev_id = str(prev_h["id"])
+            if _are_conjunctive_clones(h, prev_h):
+                floc = resolved_loc_fam[prev_id]
+                fglob = resolved_glob_fam[prev_id]
+                break
+        resolved_loc_fam[hid] = floc
+        resolved_glob_fam[hid] = fglob
+
     loc_groups: Dict[str, List[str]] = {}
     for h in hypotheses:
         hid = str(h["id"])
-        floc = str(h.get("local_family", h.get("global_family", hid)))
+        floc = resolved_loc_fam[hid]
         loc_groups.setdefault(floc, []).append(hid)
 
     q_tilde_map: Dict[str, float] = {}
@@ -3283,7 +3478,7 @@ def compute_provenance_credit(
     glob_groups: Dict[str, List[str]] = {}
     for h in hypotheses:
         hid = str(h["id"])
-        fglob = str(h.get("global_family", hid))
+        fglob = resolved_glob_fam[hid]
         glob_groups.setdefault(fglob, []).append(hid)
 
     b_ih_map: Dict[Tuple[str, str], float] = {}
@@ -3596,11 +3791,19 @@ def compute_hyper_crossover(
             "rejected_candidates": {},
         }
 
-    # Sort by mean margin descending, pick anchor u*
+    # Sort by mean margin descending, pick anchor u* = argmax_u mean_j(phi_j(u))
     valid_nodes.sort(key=lambda item: (item[3], item[0].score or 0.0), reverse=True)
+    anchor_id = valid_nodes[0][0].id
+    anchor_single_mean = valid_nodes[0][3]
 
     def _eval_subset(subset_indices: List[int]) -> Tuple[float, float, float, float]:
-        best_single = max(valid_nodes[idx][3] for idx in subset_indices)
+        # For any subset S anchored at u* (index 0), max_{u in S} mean_j(phi_j(u)) == mean_j(phi_j(u*))
+        # is constant across S, so the anchored coverage gain is strictly monotone submodular.
+        best_single = (
+            anchor_single_mean
+            if (0 in subset_indices)
+            else max(valid_nodes[idx][3] for idx in subset_indices)
+        )
         union_mean = (
             sum(
                 max(valid_nodes[idx][1][j] for idx in subset_indices)
@@ -3609,8 +3812,10 @@ def compute_hyper_crossover(
             / float(m_len)
         )
         collision_sum = 0.0
-        for a_pos in range(len(subset_indices)):
-            for b_pos in range(a_pos + 1, len(subset_indices)):
+        n_sub = len(subset_indices)
+        n_pairs = max(1, (n_sub * (n_sub - 1)) // 2)
+        for a_pos in range(n_sub):
+            for b_pos in range(a_pos + 1, n_sub):
                 u_idx = subset_indices[a_pos]
                 v_idx = subset_indices[b_pos]
                 # Same-branch nodes also incur full collision
@@ -3623,8 +3828,9 @@ def compute_hyper_crossover(
                     collision_sum += _ast_iou(
                         valid_nodes[u_idx][2], valid_nodes[v_idx][2]
                     )
-        excess = (union_mean - best_single) - float(lambda_collision) * collision_sum
-        return excess, union_mean, best_single, collision_sum
+        mean_pair_collision = collision_sum / float(n_pairs)
+        excess = (union_mean - best_single) - float(lambda_collision) * mean_pair_collision
+        return excess, union_mean, best_single, mean_pair_collision
 
     selected_idx: List[int] = [0]
     current_excess, current_union, current_best_single, current_coll = _eval_subset(
@@ -3695,6 +3901,8 @@ def compute_hyper_crossover(
 
     return {
         "selected_ids": selected_ids if len(selected_ids) >= 2 else [],
+        "anchor_id": anchor_id,
+        "is_anchored_submodular": True,
         "action": action_str,
         "parent_count": len(selected_ids) if len(selected_ids) >= 2 else 0,
         "excess_hyper_gain": round(current_excess, 6),
@@ -3706,7 +3914,7 @@ def compute_hyper_crossover(
     }
 
 
-def _jacobi_eigh_symmetric(mat: List[List[float]], max_sweeps: int = 60) -> Tuple[List[float], List[List[float]]]:
+def _jacobi_eigh_symmetric(mat: List[List[float]], max_sweeps: int = 240) -> Tuple[List[float], List[List[float]]]:
     """
     Deterministic symmetric eigenvalue solver for real symmetric matrices G in R^{d x d}.
     Uses fast C-level `numpy.linalg.eigh` when NumPy is available and d > 12, with
@@ -4206,12 +4414,14 @@ class WaldMicroSentinel:
         tol_margin: float = 0.01,
         noise_regime: str = "deterministic",
         outlier_trim_quantile: Optional[float] = None,
+        hard_divergence_ceiling: float = 1e6,
     ) -> None:
         self.adv_frac = adv_frac
         self.strat_frac = strat_frac
         self.gamma_lcb = gamma_lcb
         self.tol_margin = tol_margin
         self.noise_regime = str(noise_regime).lower()
+        self.hard_divergence_ceiling = float(hard_divergence_ceiling)
         if outlier_trim_quantile is not None:
             self.outlier_trim_quantile = max(0.0, min(0.40, float(outlier_trim_quantile)))
         else:
@@ -4249,9 +4459,29 @@ class WaldMicroSentinel:
         trimmed_outliers = sorted(ranked_worst[:trim_offset]) if trim_offset > 0 else []
         adv_idx = sorted(ranked_worst[trim_offset : trim_offset + k_adv])
 
-        # Deterministic uniform stratified anchor across the full domain
+        # Deterministic uniform stratified anchor sampled without replacement from the complement of S_adv U S_trim
         stride = max(1, n_total // k_strat)
-        strat_idx = sorted({min(n_total - 1, i * stride) for i in range(k_strat)})
+        raw_strat = sorted({min(n_total - 1, i * stride) for i in range(k_strat)})
+        excluded = set(adv_idx).union(trimmed_outliers)
+        raw_disjoint = [s_i for s_i in raw_strat if s_i not in excluded]
+        if not trimmed_outliers and len(raw_disjoint) >= min(2, k_strat):
+            strat_idx = raw_disjoint
+        else:
+            strat_set = set()
+            for s_i in raw_strat:
+                if s_i not in excluded and s_i not in strat_set:
+                    strat_set.add(s_i)
+                else:
+                    for offset in range(1, n_total):
+                        cand_hi = s_i + offset
+                        if cand_hi < n_total and cand_hi not in excluded and cand_hi not in strat_set:
+                            strat_set.add(cand_hi)
+                            break
+                        cand_lo = s_i - offset
+                        if cand_lo >= 0 and cand_lo not in excluded and cand_lo not in strat_set:
+                            strat_set.add(cand_lo)
+                            break
+            strat_idx = sorted(strat_set)
 
         exempt = bool(is_crossover or is_frame_transform or beta >= 0.8)
         if exempt:
@@ -4288,7 +4518,10 @@ class WaldMicroSentinel:
     ) -> Dict[str, Any]:
         """
         Evaluates candidate `child_node` on the 5% sentinel slice:
-          - `aggregation="mean"`: Wald Sequential LCB on mean difference `delta_mu + gamma * SE >= -tol_margin`.
+          - `aggregation="mean"`: Wald Sequential Upper-Confidence-Bound (UCB95) early-veto test
+            on mean gain `UCB95(Delta) = delta_mu + gamma * SE_strat >= -tol_margin`
+            (optimism under uncertainty: vetoes a candidate only when even the optimistic
+            95% upper confidence bound of its gain falls below `-tol_margin`).
           - `aggregation="min"`: Exact extremal upper-bound filter for max-min problems (e.g. Heilbronn):
             since `min_{all}(s_child) <= min_{sentinel}(s_child)`, any candidate with
             `min_{sentinel}(s_child) < min_{all}(s_parent) - tol_margin` is provably suboptimal (0 false negatives).
@@ -4302,34 +4535,134 @@ class WaldMicroSentinel:
             is_frame_transform=is_frame_transform,
             beta=beta,
         )
-        idxs = sentinel_slice.combined_indices
+        idxs = list(sentinel_slice.combined_indices)
         if not idxs:
             return {"passed": True, "aborted": False, "cost_spent": 1.0, "node": child_node}
 
-        child_slice_scores = [float(v) for v in eval_slice_fn(idxs)]
-        parent_slice_scores = [float(parent_pointwise_scores[i]) for i in idxs]
-        k = len(idxs)
-        diffs = [child_slice_scores[j] - parent_slice_scores[j] for j in range(k)]
-        delta_mu = sum(diffs) / float(k)
+        # In stochastic mode, carve at most n_canary = max(1, floor(0.005 * N)) extreme parent-trim
+        # indices from within the 5% sentinel budget (2.25% S_adv + 2.25% S_strat + 0.5% canary = 5.0%)
+        # so Stage 1 executes a single eval_slice_fn call of total size <= 5% of N while preserving
+        # balanced strata (|S_adv|, |S_strat| >= 2 for N >= N_min = 80).
+        trimmed_idxs = list(sentinel_slice.trimmed_outlier_indices or [])
+        canary_idxs: List[int] = []
+        active_idxs = list(idxs)
+        adv_active = list(sentinel_slice.adversarial_indices)
+        strat_active = list(sentinel_slice.stratified_indices)
+        if trimmed_idxs:
+            if higher_is_better:
+                ranked_trim = sorted(trimmed_idxs, key=lambda idx: float(parent_pointwise_scores[idx]))
+            else:
+                ranked_trim = sorted(
+                    trimmed_idxs, key=lambda idx: abs(float(parent_pointwise_scores[idx])), reverse=True
+                )
+            n_canary = min(len(ranked_trim), max(1, int(0.005 * sentinel_slice.domain_size)))
+            canary_idxs = ranked_trim[:n_canary]
+            if not sentinel_slice.exempt_adversarial and (len(adv_active) + len(strat_active) > n_canary + 2):
+                min_keep = 2 if sentinel_slice.domain_size >= 80 else 1
+                max_drop_adv = max(0, len(adv_active) - min_keep)
+                max_drop_strat = max(0, len(strat_active) - min_keep)
+                drop_adv = min(max_drop_adv, (n_canary + 1) // 2)
+                drop_strat = min(max_drop_strat, n_canary - drop_adv)
+                rem_drop = n_canary - (drop_adv + drop_strat)
+                if rem_drop > 0 and drop_adv < max_drop_adv:
+                    extra = min(rem_drop, max_drop_adv - drop_adv)
+                    drop_adv += extra
+                    rem_drop -= extra
+                if rem_drop > 0 and drop_strat < max_drop_strat:
+                    extra = min(rem_drop, max_drop_strat - drop_strat)
+                    drop_strat += extra
+                if drop_adv > 0:
+                    # Drop the least-extreme adversarial indices at the end of the ranked band
+                    if higher_is_better:
+                        adv_ranked = sorted(adv_active, key=lambda idx: float(parent_pointwise_scores[idx]))
+                    else:
+                        adv_ranked = sorted(
+                            adv_active, key=lambda idx: abs(float(parent_pointwise_scores[idx])), reverse=True
+                        )
+                    adv_active = sorted(adv_ranked[: len(adv_ranked) - drop_adv])
+                if drop_strat > 0:
+                    strat_active = strat_active[: len(strat_active) - drop_strat]
+                active_idxs = sorted(set(adv_active).union(strat_active))
+            elif len(active_idxs) > n_canary + 2:
+                active_idxs = active_idxs[: len(active_idxs) - n_canary]
+
+        eval_idxs = active_idxs + [c_i for c_i in canary_idxs if c_i not in set(active_idxs)]
+        raw_eval_scores = [float(v) for v in eval_slice_fn(eval_idxs)]
+        eval_map = {eval_idxs[j]: raw_eval_scores[j] for j in range(len(eval_idxs))}
+
+        child_slice_scores = [eval_map[i] for i in active_idxs]
+        parent_slice_scores = [float(parent_pointwise_scores[i]) for i in active_idxs]
+        k = len(active_idxs)
+        actual_stage1_cost = round(len(eval_idxs) / float(max(1, sentinel_slice.domain_size)), 6)
+
+        catastrophic_blowup = any(
+            (not math.isfinite(raw_eval_scores[j]))
+            or (abs(raw_eval_scores[j] - float(parent_pointwise_scores[eval_idxs[j]])) > self.hard_divergence_ceiling)
+            for j in range(len(eval_idxs))
+        )
+        diffs = [
+            (child_slice_scores[j] - parent_slice_scores[j])
+            if math.isfinite(child_slice_scores[j])
+            else -self.hard_divergence_ceiling
+            for j in range(k)
+        ]
+        pooled_mu = sum(diffs) / float(k)
         if k > 1:
-            var_d = sum((d - delta_mu) ** 2 for d in diffs) / float(k - 1)
-            se_mu = math.sqrt(max(0.0, var_d) / float(k))
+            var_d = sum((d - pooled_mu) ** 2 for d in diffs) / float(k - 1)
+            pooled_se = math.sqrt(max(0.0, var_d) / float(k))
         else:
-            se_mu = 0.0
+            pooled_se = 0.0
+
+        # Unbiased stratified variance estimator across disjoint S_adv and S_strat
+        idx_to_diff = {active_idxs[j]: diffs[j] for j in range(k)}
+        n_df = k
+        if not sentinel_slice.exempt_adversarial:
+            diffs_adv = [idx_to_diff[i] for i in adv_active if i in idx_to_diff]
+            diffs_strat = [idx_to_diff[i] for i in strat_active if i in idx_to_diff]
+            if len(diffs_adv) >= 2 and len(diffs_strat) >= 2:
+                mu_adv = sum(diffs_adv) / float(len(diffs_adv))
+                var_adv = sum((d - mu_adv) ** 2 for d in diffs_adv) / float(len(diffs_adv) - 1)
+                se_adv_sq = max(0.0, var_adv) / float(len(diffs_adv))
+                mu_strat = sum(diffs_strat) / float(len(diffs_strat))
+                var_strat = sum((d - mu_strat) ** 2 for d in diffs_strat) / float(len(diffs_strat) - 1)
+                se_strat_sq = max(0.0, var_strat) / float(len(diffs_strat))
+                w_adv = 0.5
+                w_strat = 0.5
+                delta_mu = w_adv * mu_adv + w_strat * mu_strat
+                se_mu = math.sqrt((w_adv ** 2) * se_adv_sq + (w_strat ** 2) * se_strat_sq)
+                n_df = min(len(diffs_adv), len(diffs_strat))
+            else:
+                delta_mu = pooled_mu
+                se_mu = pooled_se
+        else:
+            delta_mu = pooled_mu
+            se_mu = pooled_se
+
+        student_t_inflation = math.sqrt(float(k) / float(k - 1.5)) if 2 <= k < 30 else 1.0
+        gamma_eff = self.gamma_lcb * student_t_inflation
 
         if aggregation == "min":
             parent_ext = min(float(v) for v in parent_pointwise_scores)
             child_slice_ext = min(child_slice_scores)
-            lcb = child_slice_ext - parent_ext
-            passed = bool(warmup_grace_remaining > 0 or lcb >= -self.tol_margin)
+            ucb_gain = child_slice_ext - parent_ext
+            passed = bool(
+                (not catastrophic_blowup)
+                and (warmup_grace_remaining > 0 or ucb_gain >= -self.tol_margin)
+            )
         elif aggregation == "max":
             parent_ext = max(float(v) for v in parent_pointwise_scores)
             child_slice_ext = max(child_slice_scores)
-            lcb = parent_ext - child_slice_ext
-            passed = bool(warmup_grace_remaining > 0 or lcb >= -self.tol_margin)
+            ucb_gain = parent_ext - child_slice_ext
+            passed = bool(
+                (not catastrophic_blowup)
+                and (warmup_grace_remaining > 0 or ucb_gain >= -self.tol_margin)
+            )
         else:
-            lcb = delta_mu + self.gamma_lcb * se_mu
-            passed = bool(warmup_grace_remaining > 0 or lcb >= -self.tol_margin)
+            ucb_gain = delta_mu + gamma_eff * se_mu
+            passed = bool(
+                (not catastrophic_blowup)
+                and (warmup_grace_remaining > 0 or ucb_gain >= -self.tol_margin)
+            )
 
         if not passed:
             child_node.fail_class = "sentinel_pruned"
@@ -4338,19 +4671,29 @@ class WaldMicroSentinel:
             child_node.delta_vs_parent = round(delta_mu, 6)
             child_node.meta = dict(child_node.meta or {})
             child_node.meta["sentinel_aborted"] = True
-            child_node.meta["sentinel_cost"] = sentinel_slice.cost_fraction
-            child_node.meta["sentinel_lcb"] = round(lcb, 6)
+            child_node.meta["sentinel_cost"] = actual_stage1_cost
+            child_node.meta["sentinel_ucb"] = round(ucb_gain, 6)
+            child_node.meta["sentinel_lcb"] = round(ucb_gain, 6)
             child_node.meta["exempt_adversarial"] = sentinel_slice.exempt_adversarial
             return {
                 "passed": False,
                 "aborted": True,
-                "cost_spent": sentinel_slice.cost_fraction,
-                "compute_saved": round(1.0 - sentinel_slice.cost_fraction, 6),
+                "cost_spent": actual_stage1_cost,
+                "compute_saved": round(1.0 - actual_stage1_cost, 6),
                 "delta_mean": round(delta_mu, 6),
                 "se": round(se_mu, 6),
-                "lcb": round(lcb, 6),
+                "se_stratified": round(se_mu, 6),
+                "se_pooled": round(pooled_se, 6),
+                "student_t_inflation": round(student_t_inflation, 4),
+                "ucb95_gain": round(ucb_gain, 6),
+                "ucb": round(ucb_gain, 6),
+                "lcb95_gain": round(ucb_gain, 6),
+                "lcb": round(ucb_gain, 6),
+                "parent_trim_locked": True,
+                "canary_trim_probed": len(canary_idxs),
+                "catastrophic_blowup": catastrophic_blowup,
                 "exempt_adversarial": sentinel_slice.exempt_adversarial,
-                "slice_size": k,
+                "slice_size": len(eval_idxs),
                 "node": child_node,
             }
 
@@ -4358,6 +4701,44 @@ class WaldMicroSentinel:
         full_cost = 1.0
         if eval_full_fn is not None:
             full_scores = [float(v) for v in eval_full_fn()]
+            if any(
+                (not math.isfinite(full_scores[i]))
+                or (
+                    i < len(parent_pointwise_scores)
+                    and abs(full_scores[i] - float(parent_pointwise_scores[i])) > self.hard_divergence_ceiling
+                )
+                for i in range(len(full_scores))
+            ):
+                catastrophic_blowup = True
+                child_node.fail_class = "sentinel_pruned"
+                child_node.valid = False
+                child_node.score = round(float(parent_node.score) - self.hard_divergence_ceiling, 6)
+                child_node.delta_vs_parent = round(-self.hard_divergence_ceiling, 6)
+                child_node.meta = dict(child_node.meta or {})
+                child_node.meta["sentinel_aborted"] = True
+                child_node.meta["sentinel_cost"] = full_cost
+                child_node.meta["sentinel_ucb"] = round(ucb_gain, 6)
+                child_node.meta["sentinel_lcb"] = round(ucb_gain, 6)
+                child_node.meta["exempt_adversarial"] = sentinel_slice.exempt_adversarial
+                return {
+                    "passed": False,
+                    "aborted": True,
+                    "cost_spent": full_cost,
+                    "compute_saved": 0.0,
+                    "delta_mean": round(delta_mu, 6),
+                    "se": round(se_mu, 6),
+                    "se_stratified": round(se_mu, 6),
+                    "se_pooled": round(pooled_se, 6),
+                    "ucb95_gain": round(ucb_gain, 6),
+                    "ucb": round(ucb_gain, 6),
+                    "lcb95_gain": round(ucb_gain, 6),
+                    "lcb": round(ucb_gain, 6),
+                    "parent_trim_locked": True,
+                    "catastrophic_blowup": True,
+                    "exempt_adversarial": sentinel_slice.exempt_adversarial,
+                    "slice_size": k,
+                    "node": child_node,
+                }
             full_mean = sum(full_scores) / float(max(1, len(full_scores)))
             child_node.score = round(full_mean, 6)
             child_node.delta_vs_parent = round(full_mean - float(parent_node.score), 6)
@@ -4366,7 +4747,8 @@ class WaldMicroSentinel:
         child_node.meta = dict(child_node.meta or {})
         child_node.meta["sentinel_aborted"] = False
         child_node.meta["sentinel_cost"] = 1.0
-        child_node.meta["sentinel_lcb"] = round(lcb, 6)
+        child_node.meta["sentinel_ucb"] = round(ucb_gain, 6)
+        child_node.meta["sentinel_lcb"] = round(ucb_gain, 6)
         child_node.meta["exempt_adversarial"] = sentinel_slice.exempt_adversarial
         return {
             "passed": True,
@@ -4375,7 +4757,14 @@ class WaldMicroSentinel:
             "compute_saved": 0.0,
             "delta_mean": round(delta_mu, 6),
             "se": round(se_mu, 6),
-            "lcb": round(lcb, 6),
+            "se_stratified": round(se_mu, 6),
+            "se_pooled": round(pooled_se, 6),
+            "ucb95_gain": round(ucb_gain, 6),
+            "ucb": round(ucb_gain, 6),
+            "lcb95_gain": round(ucb_gain, 6),
+            "lcb": round(ucb_gain, 6),
+            "parent_trim_locked": True,
+            "catastrophic_blowup": catastrophic_blowup,
             "exempt_adversarial": sentinel_slice.exempt_adversarial,
             "slice_size": k,
             "node": child_node,
@@ -4454,19 +4843,20 @@ def compute_spectral_diagnostics(
     use_hutchinson_above_d: int = 30,
     seed: int = 42,
     j_mat: Optional[Sequence[Sequence[float]]] = None,
+    null_rel_tol: float = 1e-12,
 ) -> Dict[str, Any]:
     """
-    SLEEP-DAG-RSI v6/v7 Regularized Spectral Diagnostics on G = (1/M) J^T J:
+    SLEEP-DAG-RSI v6/v7/v8 Regularized Spectral Diagnostics on G = (1/M) J^T J:
       1. Dual Gram Fast Path (`M < d`): When `j_mat` in R^{M x d} is provided with `M < d`
          (e.g. `d = 2560`, `M = 16`), diagonalizes the Dual Gram matrix `K = (1/M) J J^T in R^{M x M}`
          in O(M^2 d + M^3) time instead of O(d^3), recovering the exact non-zero spectrum
          and lifted R^d eigenvectors without ever allocating a d x d matrix.
-      2. Computes Effective Spectral Rank `r_eff(G) = (Tr G)^2 / Tr(G^2)` (exact on the
-         dual spectrum when `j_mat` is given, or Hutchinson Rademacher trace estimator for d > 30).
-      3. Computes Regularized Condition Number `kappa_eff(G) = lambda_max / max(lambda_support, 1e-12)`
-         restricted to the observable rank support `min(M, d)` so trailing zero eigenvalues
-         when `M < d` NEVER trigger false-positive `kappa -> inf` singularities!
-      4. Outputs the dimensionless 4D Stall Signature:
+      2. Computes Relative-Threshold Numerical Rank `r_sup = |{r : lambda_r > tau_null * lambda_max}|`
+         (`tau_null = 1e-12`) to index `lambda_{r_sup}` for `kappa_eff(G) = lambda_max / max(lambda_{r_sup}, 1e-12)`.
+         Unlike participation-ratio indexing `r_eff = (Tr G)^2 / Tr(G^2)` (which is blinded to
+         small stiff eigenvalues like `(1.0, 0.8, 1e-8)` where `r_eff < 2`), `r_sup` detects
+         every non-zero multi-scale valley while excluding structural rank-deficient zeros (`M < d`).
+      3. Retains `r_eff` as an auxiliary trace diagnostic and outputs the 4D Stall Signature:
          `sigma = (log10(kappa_eff), r_eff / d, train_oos_gap, fingerprint_entropy)`.
     """
     use_dual = False
@@ -4484,6 +4874,8 @@ def compute_spectral_diagnostics(
     if d == 0:
         return {
             "d": 0,
+            "r_sup": 0,
+            "r_sup_ratio": 0.0,
             "r_eff": 0.0,
             "r_eff_ratio": 0.0,
             "kappa_eff": 1.0,
@@ -4501,8 +4893,6 @@ def compute_spectral_diagnostics(
         tr_g2 = sum(ev * ev for ev in pos_evals)
         r_eff = (tr_g * tr_g) / max(tr_g2, 1e-24)
         observable_rank = min(d, int(m_buckets)) if (m_buckets is not None and m_buckets > 0) else len(pos_evals)
-        support_idx = max(0, len(pos_evals) - observable_rank)
-        lam_support = max(pos_evals[support_idx] if pos_evals else 0.0, 1e-12)
     else:
         assert g_mat is not None
         evals, evecs = _jacobi_eigh_symmetric([list(row) for row in g_mat])
@@ -4529,8 +4919,11 @@ def compute_spectral_diagnostics(
             r_eff = (tr_g * tr_g) / max(tr_g2, 1e-24)
 
         observable_rank = min(d, int(m_buckets)) if (m_buckets is not None and m_buckets > 0) else d
-        support_idx = max(0, d - observable_rank)
-        lam_support = max(pos_evals[support_idx], 1e-12)
+
+    candidate_evals = pos_evals[-observable_rank:] if observable_rank > 0 else pos_evals
+    active_support_evals = [ev for ev in candidate_evals if ev > float(null_rel_tol) * lam_max]
+    r_sup = max(1, len(active_support_evals))
+    lam_support = max(min(active_support_evals) if active_support_evals else 0.0, 1e-12)
 
     r_eff = max(1.0, min(float(d), r_eff))
     kappa_eff = lam_max / lam_support
@@ -4554,6 +4947,8 @@ def compute_spectral_diagnostics(
     return {
         "d": d,
         "observable_rank": observable_rank,
+        "r_sup": r_sup,
+        "r_sup_ratio": round(r_sup / float(d), 6),
         "eigenvalues": [round(ev, 10) for ev in pos_evals],
         "eigenvectors": evecs,
         "r_eff": round(r_eff, 6),
@@ -4606,7 +5001,7 @@ class EigenRotationTransform(FrameTransform):
         theta_anchor: Sequence[float],
         g_mat: Optional[Sequence[Sequence[float]]] = None,
         spans: Optional[Sequence[float]] = None,
-        null_rel_tol: float = 1e-10,
+        null_rel_tol: float = 1e-12,
         j_mat: Optional[Sequence[Sequence[float]]] = None,
     ) -> None:
         self.theta_anchor = [float(x) for x in theta_anchor]
@@ -4639,6 +5034,16 @@ class EigenRotationTransform(FrameTransform):
     @property
     def active_dim(self) -> int:
         return len(self.active_modes)
+
+    @property
+    def preconditioned_condition_number(self) -> float:
+        """Condition number of the preconditioned Gauss-Newton metric in lifted coordinates u."""
+        if not self.eigenvalues:
+            return 1.0
+        lifted_evals = [
+            ev * (sc * sc) for ev, sc in zip(self.eigenvalues, self.scales)
+        ]
+        return max(lifted_evals) / max(min(lifted_evals), 1e-24)
 
     def forward_project(self, x_orig: Sequence[float]) -> List[float]:
         dx_norm = [
@@ -5152,10 +5557,12 @@ class AstCodeSplicer:
 
         best_mdl_obj = -float("inf")
         best_gain = -float("inf")
+        best_loo_gain = -float("inf")
         best_expr: Optional[str] = None
         best_p0_when_true = True
         best_acc = 0.0
         best_tier = 0
+        max_single_parent = max(sum(m0[:n_b]) / float(n_b), sum(m1[:n_b]) / float(n_b))
 
         for lhs_expr, feat_vals, tier in candidates:
             vals = sorted(set(feat_vals))
@@ -5180,23 +5587,52 @@ class AstCodeSplicer:
                             if (use_p0 and m0[b] > m1[b]) or ((not use_p0) and m1[b] > m0[b]):
                                 correct += 1
                     routed_mean = routed_sum / float(n_b)
+
+                    # Out-of-fold / leave-one-bucket-out (LOO) holdout check for small M (n_b <= 8)
+                    # on high-degree Tier 3/4 predicates to prevent random quadratic shattering.
+                    loo_mean = routed_mean
+                    if n_b <= 8 and tier >= 3 and n_b >= 3:
+                        loo_sum = 0.0
+                        for hold_b in range(n_b):
+                            p0_f = [
+                                feat_vals[i]
+                                for i in range(n_b)
+                                if i != hold_b and (m0[i] > m1[i] if p0_on_ge else m1[i] > m0[i])
+                            ]
+                            p1_f = [
+                                feat_vals[i]
+                                for i in range(n_b)
+                                if i != hold_b and (m1[i] > m0[i] if p0_on_ge else m0[i] > m1[i])
+                            ]
+                            if p0_f and p1_f and min(p0_f) > max(p1_f):
+                                tau_loo = 0.0 if (max(p1_f) < 0.0 < min(p0_f)) else 0.5 * (min(p0_f) + max(p1_f))
+                                cond_h = feat_vals[hold_b] >= tau_loo
+                                use_p0_h = cond_h if p0_on_ge else (not cond_h)
+                                loo_sum += m0[hold_b] if use_p0_h else m1[hold_b]
+                            else:
+                                loo_sum += max_single_parent
+                        loo_mean = loo_sum / float(n_b)
+                        if loo_mean <= max_single_parent + 1e-6:
+                            continue
+
                     mdl_obj = routed_mean - 1e-5 * float(tier)
                     acc = correct / float(max(1, informative))
                     if mdl_obj > best_mdl_obj + 1e-9:
                         best_mdl_obj = mdl_obj
                         best_gain = routed_mean
+                        best_loo_gain = loo_mean
                         best_p0_when_true = p0_on_ge
                         best_acc = acc
                         best_tier = tier
                         best_expr = f"{lhs_expr} >= {round(tau, 6)}"
 
-        max_single_parent = max(sum(m0[:n_b]) / float(n_b), sum(m1[:n_b]) / float(n_b))
         if best_expr is None or best_gain <= max_single_parent + 1e-6:
             return None
         return {
             "predicate_expr": best_expr,
             "p0_when_true": best_p0_when_true,
             "routed_mean_score": round(best_gain, 6),
+            "loo_holdout_score": round(best_loo_gain, 6),
             "routing_accuracy": round(best_acc, 6),
             "complexity_tier": best_tier,
         }
@@ -5846,15 +6282,20 @@ class ActiveBoundarySynthesizer:
         num_challengers: int = 4,
         bounds: Optional[Sequence[Tuple[float, float]]] = None,
         consensus_var_tol: float = 0.05,
+        lambda_var: float = 2.0,
+        ground_truth_oracle_fn: Optional[Callable[[Sequence[float]], float]] = None,
     ) -> Dict[str, Any]:
         """
-        VeriHarness Second Head — `Consensus Challenger` (Tier A #8):
+        VeriHarness Second Head — `Consensus Challenger` (Tier A #8, Eq. 16):
         Targets regions where all top candidates agree (`variance ~ 0`), so standard
         disagreement maximization (`grad_x Var_k`) has zero gradient and is blind.
-        Perturbs consensus anchors along the shared adversarial margin-collapse direction
-        `-sign(f_bar(x_anc)) * grad_x f_bar(x)` (while penalizing committee variance)
-        to expose collective blind spots where a small perturbation collapses or flips
-        the unanimous prediction.
+        Minimizes the smooth signed consensus margin anchored at `s_anc = sign(f_bar(x_anc))`:
+            M_cons(x) = s_anc * f_bar(x) + lambda_var * sqrt(Var_k(f_k(x)) + eps)
+        so the gradient does not flip when crossing `f_bar(x) = 0`, pushing the unanimous
+        committee across the decision boundary together while keeping inter-model variance low.
+        When `ground_truth_oracle_fn` is provided, verifies whether the synthesized point
+        is a genuine collective blind spot where unanimous committee predictions disagree
+        with the exact oracle.
         """
         n_anc = len(anchor_points)
         if n_anc == 0 or len(committee_fns) < 1:
@@ -5865,6 +6306,7 @@ class ActiveBoundarySynthesizer:
                 "margin_collapse_ratio": 1.0,
                 "collective_blind_spots_found": 0,
                 "unanimous_flips_found": 0,
+                "oracle_verified_blind_spots": 0,
             }
 
         d = len(anchor_points[0])
@@ -5914,8 +6356,8 @@ class ActiveBoundarySynthesizer:
 
         active_dims = self._screen_active_coordinates(anchors[consensus_indices[0]], col_stds, committee_fns)
 
-        challenged_candidates: List[Tuple[float, float, bool, bool, List[float]]] = []
-        for idx_pos in range(max(num_challengers, len(consensus_indices))):
+        challenged_candidates: List[Tuple[float, float, bool, bool, bool, List[float]]] = []
+        for idx_pos in range(min(num_challengers * 2, max(num_challengers, len(consensus_indices)))):
             anc_i = consensus_indices[idx_pos % len(consensus_indices)]
             center_x = list(anchors[anc_i])
             curr_x = list(center_x)
@@ -5932,8 +6374,8 @@ class ActiveBoundarySynthesizer:
             ]
 
             for _ in range(self.ascent_steps):
-                # Minimize signed consensus prediction `orig_sign * mean_pred(x) + 2.0 * variance(x)`
-                # so the step pushes the unanimous committee across the 0-boundary together.
+                # Minimize smooth signed consensus margin (Eq. 16):
+                #   M_cons(x) = s_anc * mean_pred(x) + lambda_var * sqrt(variance(x) + eps)
                 grad = [0.0] * d
                 for c in active_dims:
                     h = max(1e-5, self.fd_eps * col_stds[c])
@@ -5948,8 +6390,12 @@ class ActiveBoundarySynthesizer:
                     ev_m = self.evaluate_consensus_fragility(
                         x_m, committee_fns, consensus_var_tol=consensus_var_tol
                     )
-                    loss_p = orig_sign * ev_p["mean_pred"] + 2.0 * ev_p["variance"]
-                    loss_m = orig_sign * ev_m["mean_pred"] + 2.0 * ev_m["variance"]
+                    loss_p = orig_sign * ev_p["mean_pred"] + float(lambda_var) * math.sqrt(
+                        ev_p["variance"] + 1e-12
+                    )
+                    loss_m = orig_sign * ev_m["mean_pred"] + float(lambda_var) * math.sqrt(
+                        ev_m["variance"] + 1e-12
+                    )
                     grad[c] = (loss_p - loss_m) / denom
 
                 g_norm = math.sqrt(sum(g * g for g in grad))
@@ -5967,6 +6413,13 @@ class ActiveBoundarySynthesizer:
             margin_collapsed = bool(
                 unanimous_flip or (ev_fin["consensus_margin"] < 0.5 * orig_margin)
             )
+            oracle_blind_spot = False
+            if ground_truth_oracle_fn is not None:
+                oracle_val = float(ground_truth_oracle_fn(curr_x))
+                oracle_sign = 1.0 if oracle_val >= 0.0 else -1.0
+                oracle_blind_spot = bool(
+                    ev_fin["is_unanimous_sign"] and (new_sign != oracle_sign)
+                )
             score_key = (
                 (1000.0 + abs(ev_fin["mean_pred"]))
                 if unanimous_flip
@@ -5978,16 +6431,18 @@ class ActiveBoundarySynthesizer:
                     ev_fin["consensus_margin"],
                     margin_collapsed,
                     unanimous_flip,
+                    oracle_blind_spot,
                     curr_x,
                 )
             )
 
         challenged_candidates.sort(key=lambda item: item[0], reverse=True)
         chosen = challenged_candidates[:num_challengers]
-        chal_points = [item[4] for item in chosen]
+        chal_points = [item[5] for item in chosen]
         chal_mean_margin = sum(item[1] for item in chosen) / float(max(1, len(chosen)))
         blind_spots = sum(1 for item in chosen if item[2])
         unanimous_flips = sum(1 for item in chosen if item[3])
+        oracle_blind_spots = sum(1 for item in chosen if item[4])
         collapse_ratio = chal_mean_margin / max(anchor_mean_margin, 1e-9)
 
         return {
@@ -5997,6 +6452,7 @@ class ActiveBoundarySynthesizer:
             "margin_collapse_ratio": round(collapse_ratio, 6),
             "collective_blind_spots_found": blind_spots,
             "unanimous_flips_found": unanimous_flips,
+            "oracle_verified_blind_spots": oracle_blind_spots,
         }
 
     def synthesize_dual_head_verification(
@@ -6008,6 +6464,7 @@ class ActiveBoundarySynthesizer:
         bounds: Optional[Sequence[Tuple[float, float]]] = None,
         consensus_var_tol: float = 0.05,
         num_challenger: Optional[int] = None,
+        ground_truth_oracle_fn: Optional[Callable[[Sequence[float]], float]] = None,
     ) -> Dict[str, Any]:
         """
         VeriHarness Dual-Head Verification (`Disagreement Resolver + Consensus Challenger`, Tier A #8):
@@ -6030,6 +6487,7 @@ class ActiveBoundarySynthesizer:
             num_challengers=n_chal,
             bounds=bounds,
             consensus_var_tol=consensus_var_tol,
+            ground_truth_oracle_fn=ground_truth_oracle_fn,
         )
         combined = list(head_disagreement["synthetic_points"]) + list(
             head_consensus["challenger_points"]
@@ -6045,6 +6503,9 @@ class ActiveBoundarySynthesizer:
                 head_consensus["collective_blind_spots_found"]
             ),
             "unanimous_flips_found": int(head_consensus["unanimous_flips_found"]),
+            "oracle_verified_blind_spots": int(
+                head_consensus["oracle_verified_blind_spots"]
+            ),
         }
 
 

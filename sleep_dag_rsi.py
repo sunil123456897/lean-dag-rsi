@@ -350,21 +350,24 @@ class DeltaRuleFastMemory:
         nlms_lambda: float = 0.10,
         nlms_eps: float = 1e-6,
         prefix_shift_alpha: float = 0.25,
+        innovation_clip: float = 10.0,
     ) -> Tuple[np.ndarray, np.ndarray, List[float]]:
         """
-        SLEEP-DAG-RSI v8 Prefix-Aligned NLMS Fast-Weight Update (`FALCON-2`, Tier S #12):
+        SLEEP-DAG-RSI v8 Prefix-Aligned NLMS Fast-Weight Update (`FALCON-2`, Tier S #12, Eqs. 17–19):
           1. Constructs cosine-gated prefix-shifted causal states so opposite-sign spikes
              never cancel `x_tilde_t` or flip its sign:
                cos_adj_t = max(0, cos(x_t, x_{t-1})),  alpha_eff_t = alpha_p * cos_adj_t
                x_tilde_t = (1 - alpha_eff_t) * x_t + alpha_eff_t * x_{t-1}   (t >= 1)
-          2. Computes causal prefix-alignment cosine gate:
+          2. Computes causal prefix-alignment cosine gate over UNIT-NORMALIZED historical keys
+             `k_hat_s = k_s / (||k_s||_2 + eps)` so a single 10^3x key spike cannot dominate `k_bar`:
+               k_bar_{1:t-1} = (1 / (t-1)) sum_{s=1}^{t-1} k_hat_s
                alpha_prefix(t) = clip((1 + cos(k_t, k_bar_{1:t-1})) / 2, 0.15, 1.0)
           3. Computes Normalized Least Mean Squares (NLMS) adaptive step size bounded by
              both raw and prefix-shifted key energy:
                eta_t = alpha_prefix(t) * beta_t / (max(||k_tilde_t||_2^2, ||k_raw_t||_2^2) + lambda_t + eps)
-          4. Updates fast associative memory without gradient/norm explosion even when
-             input activations experience 10^3x outlier spikes:
-               M_t = alpha_t * M_{t-1} + eta_t * (v_t - M_{t-1} k_tilde_t) k_tilde_t^T
+          4. Applies Huber/norm innovation clipping to `e_t = v_t - M_{t-1} k_tilde_t` so target
+             value spikes `v_t` cannot blow up `||Delta M_t||_F` even when `||k_t||_2` is small:
+               M_t = alpha_t * M_{t-1} + eta_t * clip_Huber(v_t - M_{t-1} k_tilde_t) k_tilde_t^T
         """
         B, T, D = x.shape
         a_pref = float(np.clip(prefix_shift_alpha, 0.0, 1.0))
@@ -400,7 +403,7 @@ class DeltaRuleFastMemory:
         y_list: List[np.ndarray] = []
         m_hist: List[np.ndarray] = []
         err_norms: List[float] = []
-        k_prefix_sum = np.zeros((B, D), dtype=np.float64)
+        k_bar = np.zeros((B, D), dtype=np.float64)
 
         for t in range(T):
             k_t = k_tilde[:, t, :]
@@ -410,17 +413,20 @@ class DeltaRuleFastMemory:
             a_t = alpha[:, t, :][:, :, None]
             b_t = beta[:, t, :]  # [B, 1]
 
+            k_t_norm = np.linalg.norm(k_t, axis=-1, keepdims=True) + 1e-12
+            k_t_hat = k_t / k_t_norm
+            k_raw_norm = np.linalg.norm(k_raw_t, axis=-1, keepdims=True) + 1e-12
+            k_raw_hat = k_raw_t / k_raw_norm
             if t == 0:
                 alpha_prefix_t = np.ones((B, 1), dtype=np.float64)
+                k_bar = k_raw_hat.copy()
             else:
-                k_bar = k_prefix_sum / float(t)
-                cos_p = np.sum(k_t * k_bar, axis=-1, keepdims=True) / (
-                    np.linalg.norm(k_t, axis=-1, keepdims=True)
-                    * np.linalg.norm(k_bar, axis=-1, keepdims=True)
-                    + 1e-12
+                cos_p = np.sum(k_t_hat * k_bar, axis=-1, keepdims=True) / (
+                    np.linalg.norm(k_bar, axis=-1, keepdims=True) + 1e-12
                 )
                 alpha_prefix_t = np.clip(0.5 * (1.0 + cos_p), 0.15, 1.0)
-            k_prefix_sum = k_prefix_sum + k_t
+                t_step = float(t + 1)
+                k_bar = ((t_step - 1.0) / t_step) * k_bar + (1.0 / t_step) * k_raw_hat
 
             k_sq_norm = np.maximum(
                 np.sum(k_t * k_t, axis=-1, keepdims=True),
@@ -432,9 +438,13 @@ class DeltaRuleFastMemory:
 
             pred_v = np.einsum("bij,bj->bi", M, k_t)
             error = v_t - pred_v
-            err_norms.append(float(np.mean(np.linalg.norm(error, axis=-1))))
+            err_norm_vec = np.linalg.norm(error, axis=-1, keepdims=True) + 1e-12
+            max_err = float(innovation_clip) * np.maximum(1.0, np.sqrt(k_sq_norm))
+            clip_factor = np.minimum(1.0, max_err / err_norm_vec)
+            clipped_error = error * clip_factor
+            err_norms.append(float(np.mean(np.linalg.norm(clipped_error, axis=-1))))
 
-            outer_ek = np.einsum("bi,bj->bij", error, k_t)
+            outer_ek = np.einsum("bi,bj->bij", clipped_error, k_t)
             M = a_t * M + eta_t * outer_ek
             m_hist.append(M.copy())
 
@@ -445,6 +455,49 @@ class DeltaRuleFastMemory:
         y_stack = np.stack(y_list, axis=1)
         out = x + y_stack @ self.out_proj
         self._cache = {"x": x, "y_stack": y_stack, "q": q, "m_hist": m_hist}
+        return out, M, err_norms
+
+    def forward_gated_deltanet(
+        self,
+        x: np.ndarray,
+        memory_state: Optional[np.ndarray] = None,
+        write_Scale: float = 0.85,
+        nlms_lambda: float = 0.10,
+        nlms_eps: float = 1e-6,
+    ) -> Tuple[np.ndarray, np.ndarray, List[float]]:
+        """
+        Standard Gated DeltaNet baseline (Yang et al., ICLR 2025):
+        Uses scalar forget gate `alpha_t` and standard key-norm division `beta_t / (||k_t||_2^2 + eps)`
+        WITHOUT FALCON-2's opposite-sign prefix-shift guard, unit-normalized running prefix cosine
+        gate, or Huber innovation clipping.
+        """
+        B, T, D = x.shape
+        k = x @ self.w_k
+        v = x @ self.w_v
+        q = x @ self.w_q
+        alpha_logit = x @ self.w_alpha + self.b_alpha
+        beta_logit = x @ self.w_beta + self.b_beta
+        alpha = 1.0 / (1.0 + np.exp(-np.clip(alpha_logit, -25.0, 25.0)))
+        beta = write_Scale / (1.0 + np.exp(-np.clip(beta_logit, -25.0, 25.0)))
+        M = np.zeros((B, D, D), dtype=np.float64) if memory_state is None else memory_state.copy()
+        y_list: List[np.ndarray] = []
+        err_norms: List[float] = []
+        for t in range(T):
+            k_t = k[:, t, :]
+            v_t = v[:, t, :]
+            q_t = q[:, t, :]
+            a_t = alpha[:, t, :][:, :, None]
+            b_t = beta[:, t, :]
+            k_sq = np.sum(k_t * k_t, axis=-1, keepdims=True)
+            eta_t = (b_t / (k_sq + float(nlms_lambda) + float(nlms_eps)))[:, :, None]
+            pred_v = np.einsum("bij,bj->bi", M, k_t)
+            error = v_t - pred_v
+            err_norms.append(float(np.mean(np.linalg.norm(error, axis=-1))))
+            M = a_t * M + eta_t * np.einsum("bi,bj->bij", error, k_t)
+            q_norm = np.linalg.norm(q_t, axis=-1, keepdims=True) + float(nlms_lambda) + float(nlms_eps)
+            y_list.append(np.einsum("bij,bj->bi", M, q_t / q_norm))
+        y_stack = np.stack(y_list, axis=1)
+        out = x + y_stack @ self.out_proj
         return out, M, err_norms
 
 
@@ -1080,17 +1133,24 @@ class FeedbackConditionedSelfTeacher:
         failed_delta: np.ndarray,
         verifier_feedback_residual: np.ndarray,
         damping: float = 0.85,
+        clean_anchor_xy: Optional[Tuple[np.ndarray, np.ndarray]] = None,
+        winner_xy: Optional[Tuple[np.ndarray, np.ndarray]] = None,
     ) -> Dict[str, Any]:
         """
-        Vector-space SDPO Self-Teacher for `UniversalNeuralSleepAdapter`:
+        Vector-space SDPO Self-Teacher for `UniversalNeuralSleepAdapter` (Section 6.3, Eqs. 14–15):
         Given dead-end inputs `x_dead`, the failed fast-adapter output `failed_delta`,
         and the verifier / `ActiveBoundarySynthesizer` diagnostic residual
         `verifier_feedback_residual = target_delta - failed_delta` (or signed directional
         correction), synthesizes the feedback-conditioned self-teacher target:
             delta_SDPO(x) = failed_delta(x) + damping * verifier_feedback_residual(x)
-        while filtering out zero-residual binary failures (`||v_res||_2 <= 1e-12`),
-        non-finite entries, and adversarial/sign-flipped outlier residuals via a
-        robust IRLS + Median-Absolute-Deviation (MAD) consensus gate.
+        while enforcing:
+          1. Strictly positive MAD scale floor `sigma_MAD = max(1.4826 * MAD_r, 0.15 * m_r, 1e-8)`
+             so `MAD_r = 0` (when >=50% of dead-ends share identical residual norm) never divides by zero.
+          2. Bilateral crease / axial V-valley support (`[x, |x|, 1]` + axial cosine `|cos(Delta_i, g_bar)|`)
+             so valid opposing gradients straddling a non-smooth crease are not falsely discarded as sign-flipped outliers.
+          3. Winner-anchored IRLS (`winner_xy`) and validation-loss safety fallback (`clean_anchor_xy`):
+             if >50% adversarial corruption inverts the IRLS consensus and degrades anchor validation loss,
+             reverts to 0 reclaimed (`fallback_reverted = True`).
         """
         x_arr = np.asarray(x_dead, dtype=np.float64)
         f_arr = np.asarray(failed_delta, dtype=np.float64)
@@ -1102,6 +1162,9 @@ class FeedbackConditionedSelfTeacher:
                 "reclaimed_count": 0,
                 "rejected_noisy_count": 0,
                 "mean_correction_norm": 0.0,
+                "mad_floor_enforced": True,
+                "bilateral_crease_used": False,
+                "fallback_reverted": False,
             }
 
         res_norms = np.linalg.norm(v_res, axis=-1)
@@ -1119,6 +1182,9 @@ class FeedbackConditionedSelfTeacher:
                 "reclaimed_count": 0,
                 "rejected_noisy_count": int(x_arr.shape[0]),
                 "mean_correction_norm": 0.0,
+                "mad_floor_enforced": True,
+                "bilateral_crease_used": False,
+                "fallback_reverted": False,
             }
 
         x_val = x_arr[valid_indices]
@@ -1126,10 +1192,58 @@ class FeedbackConditionedSelfTeacher:
         v_val = v_res[valid_indices]
         corrected_val = f_val + float(damping) * v_val
 
+        # Also check residual-norm MAD floor directly (Eq. 14):
+        # sigma_MAD = max(1.4826 * MAD_r, 0.15 * m_r, 1e-8)
+        r_vals = np.linalg.norm(v_val, axis=-1)
+        med_r = float(np.median(r_vals))
+        mad_r = 1.4826 * float(np.median(np.abs(r_vals - med_r)))
+        sigma_mad_r = max(mad_r, 0.15 * med_r, 1e-8)
+        norm_inlier_mask = np.abs(r_vals - med_r) <= 3.5 * sigma_mad_r
+
+        # Axial cosine alignment |cos(Delta_i, u_1)| and principal-axis cluster partition I_+ / I_-
+        axial_cos = np.ones((x_val.shape[0],), dtype=np.float64)
+        cluster_balance = 0.0
+        opposing_cluster_cos = 1.0
+        if v_val.shape[-1] >= 1 and x_val.shape[0] >= 2:
+            v_unit = v_val / (r_vals[:, None] + 1e-12)
+            cov_v = v_unit.T @ v_unit
+            _, eig_vecs = np.linalg.eigh(cov_v)
+            u_1 = eig_vecs[:, -1]
+            axial_cos = np.abs(v_unit @ u_1)
+            proj = v_val @ u_1
+            idx_pos = np.where(proj >= 0.0)[0]
+            idx_neg = np.where(proj < 0.0)[0]
+            if min(idx_pos.size, idx_neg.size) < 0.25 * x_val.shape[0]:
+                # Center around coordinate-wise median for V-valleys shifted above/below zero
+                v_cent = v_val - np.median(v_val, axis=0, keepdims=True)
+                proj = v_cent @ u_1
+                idx_pos = np.where(proj >= 0.0)[0]
+                idx_neg = np.where(proj < 0.0)[0]
+                v_for_cos = v_cent
+            else:
+                v_for_cos = v_val
+            cluster_balance = float(min(idx_pos.size, idx_neg.size)) / float(max(1, x_val.shape[0]))
+            if idx_pos.size > 0 and idx_neg.size > 0:
+                mean_pos = np.mean(v_for_cos[idx_pos], axis=0)
+                mean_neg = np.mean(v_for_cos[idx_neg], axis=0)
+                denom_pn = float(np.linalg.norm(mean_pos) * np.linalg.norm(mean_neg)) + 1e-12
+                opposing_cluster_cos = float(np.dot(mean_pos, mean_neg) / denom_pn)
+
         n_val, d_in = x_val.shape
         inlier_submask = np.ones((n_val,), dtype=bool)
+        bilateral_used = False
+        theta_rob = None
+        A_mat_used = None
+        effective_anchor_xy = clean_anchor_xy if clean_anchor_xy is not None else winner_xy
         if n_val >= 4:
             A_mat = np.column_stack([x_val, np.ones((n_val, 1), dtype=np.float64)])
+            if winner_xy is not None and np.asarray(winner_xy[0]).shape[0] > 0:
+                x_w_arr = np.asarray(winner_xy[0], dtype=np.float64)
+                y_w_arr = np.asarray(winner_xy[1], dtype=np.float64)
+                A_w = np.column_stack([x_w_arr, np.ones((x_w_arr.shape[0], 1), dtype=np.float64)])
+            else:
+                A_w = None
+                y_w_arr = None
             k_dim = A_mat.shape[1]
             reg_eye = 1e-3 * float(n_val) * np.eye(k_dim, dtype=np.float64)
             reg_eye[-1, -1] = 1e-6
@@ -1137,18 +1251,97 @@ class FeedbackConditionedSelfTeacher:
             fit_err = np.zeros((n_val,), dtype=np.float64)
             for _it in range(5):
                 Aw = A_mat * w_irls[:, None]
-                theta_rob = np.linalg.solve(Aw.T @ A_mat + reg_eye, Aw.T @ corrected_val)
+                lhs = Aw.T @ A_mat + reg_eye
+                rhs = Aw.T @ corrected_val
+                if A_w is not None and y_w_arr is not None:
+                    lhs = lhs + 2.0 * (A_w.T @ A_w)
+                    rhs = rhs + 2.0 * (A_w.T @ y_w_arr)
+                theta_rob = np.linalg.solve(lhs, rhs)
                 pred_rob = A_mat @ theta_rob
                 fit_err = np.linalg.norm(corrected_val - pred_rob, axis=-1)
                 med_e = float(np.median(fit_err))
                 mad_e = 1.4826 * float(np.median(np.abs(fit_err - med_e)))
-                scale_e = max(mad_e, 0.15 * med_e, 1e-6)
+                scale_e = max(mad_e, 0.15 * med_e, 1e-8)
                 w_irls = 1.0 / (1.0 + (fit_err / scale_e) ** 4)
             med_e = float(np.median(fit_err))
             mad_e = 1.4826 * float(np.median(np.abs(fit_err - med_e)))
-            thresh_e = med_e + 2.5 * max(mad_e, 0.15 * med_e, 1e-6)
+            thresh_e = med_e + 2.5 * max(mad_e, 0.15 * med_e, 1e-8)
             v_norms_val = np.linalg.norm(v_val, axis=-1)
-            inlier_submask = (fit_err <= thresh_e) | (fit_err <= 0.25 * v_norms_val)
+            inlier_submask = ((fit_err <= thresh_e) | (fit_err <= 0.25 * v_norms_val)) & norm_inlier_mask
+            A_mat_used = A_mat
+
+            # Bilateral crease / V-valley check: if linear IRLS rejects >15% of points or has high residual,
+            # test whether opposing clusters (cluster_balance >= 0.25, opposing_cluster_cos < -0.50)
+            # lie on a piecewise-linear crease [x, |x - c|, 1] with spatial separability R^2_crease >= 0.85.
+            r2_crease = 0.0
+            c_used = np.zeros((1, d_in), dtype=np.float64)
+            if (
+                (np.mean(inlier_submask) < 0.85 or med_e > 0.08 * max(med_r, 1e-8))
+                and cluster_balance >= 0.20
+                and opposing_cluster_cos < -0.50
+            ):
+                c_med = np.median(x_val, axis=0, keepdims=True)
+                best_med_b = float("inf")
+                best_pack = None
+                for c_cand in (np.zeros((1, d_in), dtype=np.float64), c_med):
+                    A_bi = np.column_stack([x_val, np.abs(x_val - c_cand), np.ones((n_val, 1), dtype=np.float64)])
+                    k_bi = A_bi.shape[1]
+                    reg_bi = 1e-3 * float(n_val) * np.eye(k_bi, dtype=np.float64)
+                    reg_bi[-1, -1] = 1e-6
+                    w_bi = np.maximum(0.25, axial_cos)
+                    err_bi = np.zeros((n_val,), dtype=np.float64)
+                    theta_bi = None
+                    for _it in range(5):
+                        Aw_b = A_bi * w_bi[:, None]
+                        theta_bi = np.linalg.solve(Aw_b.T @ A_bi + reg_bi, Aw_b.T @ corrected_val)
+                        pred_bi = A_bi @ theta_bi
+                        err_bi = np.linalg.norm(corrected_val - pred_bi, axis=-1)
+                        med_b = float(np.median(err_bi))
+                        mad_b = 1.4826 * float(np.median(np.abs(err_bi - med_b)))
+                        scale_b = max(mad_b, 0.15 * med_b, 1e-8)
+                        w_bi = (1.0 / (1.0 + (err_bi / scale_b) ** 4)) * np.maximum(0.25, axial_cos)
+                    med_b = float(np.median(err_bi))
+                    if med_b < best_med_b:
+                        best_med_b = med_b
+                        best_pack = (A_bi, theta_bi, err_bi, c_cand)
+                if best_pack is not None:
+                    A_bi, theta_bi, err_bi, c_used = best_pack
+                    med_b = float(np.median(err_bi))
+                    mad_b = 1.4826 * float(np.median(np.abs(err_bi - med_b)))
+                    tot_var = float(np.mean((corrected_val - np.mean(corrected_val, axis=0, keepdims=True)) ** 2)) + 1e-12
+                    res_mse = float(np.mean((corrected_val - (A_bi @ theta_bi)) ** 2))
+                    r2_crease = max(0.0, 1.0 - res_mse / tot_var)
+                    if r2_crease >= 0.85 and med_b < 0.10 * max(med_r, 1e-8) and med_b < 0.25 * med_e:
+                        thresh_b = med_b + 2.5 * max(mad_b, 0.15 * med_b, 1e-8)
+                        inlier_submask = ((err_bi <= thresh_b) | (err_bi <= 0.25 * v_norms_val)) & norm_inlier_mask
+                        bilateral_used = True
+                        theta_rob = theta_bi
+                        A_mat_used = A_bi
+        else:
+            r2_crease = 0.0
+            c_used = np.zeros((1, d_in), dtype=np.float64)
+
+        # Validation-loss safety fallback against >50% majority corruption breakdown
+        fallback_reverted = False
+        if effective_anchor_xy is not None and theta_rob is not None and A_mat_used is not None:
+            x_anc, y_anc = effective_anchor_xy
+            x_anc_arr = np.asarray(x_anc, dtype=np.float64)
+            y_anc_arr = np.asarray(y_anc, dtype=np.float64)
+            if x_anc_arr.shape[0] > 0:
+                if bilateral_used:
+                    A_anc = np.column_stack(
+                        [x_anc_arr, np.abs(x_anc_arr - c_used), np.ones((x_anc_arr.shape[0], 1), dtype=np.float64)]
+                    )
+                else:
+                    A_anc = np.column_stack(
+                        [x_anc_arr, np.ones((x_anc_arr.shape[0], 1), dtype=np.float64)]
+                    )
+                pred_anc = A_anc @ theta_rob
+                loss_after = float(np.mean((pred_anc - y_anc_arr) ** 2))
+                loss_zero = float(np.mean(y_anc_arr ** 2))
+                if loss_after > loss_zero * 1.10:
+                    fallback_reverted = True
+                    inlier_submask = np.zeros((n_val,), dtype=bool)
 
         x_reclaimed = x_val[inlier_submask]
         target_reclaimed = corrected_val[inlier_submask]
@@ -1162,7 +1355,66 @@ class FeedbackConditionedSelfTeacher:
             "reclaimed_count": int(x_reclaimed.shape[0]),
             "rejected_noisy_count": int(x_arr.shape[0] - x_reclaimed.shape[0]),
             "mean_correction_norm": round(correction_norm, 6),
+            "mad_floor_enforced": True,
+            "bilateral_crease_used": bilateral_used,
+            "r2_crease": round(r2_crease, 6),
+            "cluster_balance": round(cluster_balance, 4),
+            "opposing_cluster_cosine": round(opposing_cluster_cos, 4),
+            "fallback_reverted": fallback_reverted,
+            "mean_axial_cosine": round(float(np.mean(axial_cos)), 6),
         }
+
+    def evaluate_corruption_sweep(
+        self,
+        x_dead: np.ndarray,
+        failed_delta: np.ndarray,
+        true_target_delta: np.ndarray,
+        p_corrupt_list: Sequence[float] = (0.0, 0.10, 0.25, 0.40, 0.50, 0.60),
+        clean_anchor_xy: Optional[Tuple[np.ndarray, np.ndarray]] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Evaluates IRLS/MAD outlier rejection and post-reclamation target MSE across
+        adversarial sign-flipped corruption fractions `p_corrupt in {0%, 10%, 25%, 40%, 50%, 60%}`.
+        """
+        x_arr = np.asarray(x_dead, dtype=np.float64)
+        f_arr = np.asarray(failed_delta, dtype=np.float64)
+        y_arr = np.asarray(true_target_delta, dtype=np.float64)
+        clean_res = y_arr - f_arr
+        n_tot = x_arr.shape[0]
+        results: List[Dict[str, Any]] = []
+        for p_c in p_corrupt_list:
+            k_corrupt = int(round(float(p_c) * n_tot))
+            noisy_res = clean_res.copy()
+            if k_corrupt > 0:
+                noisy_res[:k_corrupt] = -3.0 * clean_res[:k_corrupt]
+            rep = self.reclaim_vector_dead_ends(
+                x_arr,
+                f_arr,
+                noisy_res,
+                damping=1.0,
+                clean_anchor_xy=clean_anchor_xy,
+            )
+            if rep["reclaimed_count"] >= 2:
+                x_rec = rep["x_reclaimed"]
+                y_rec = rep["sdpo_target_delta"]
+                A_rec = np.column_stack([x_rec, np.ones((x_rec.shape[0], 1), dtype=np.float64)])
+                reg = 1e-4 * np.eye(A_rec.shape[1], dtype=np.float64)
+                w_fit = np.linalg.solve(A_rec.T @ A_rec + reg, A_rec.T @ y_rec)
+                A_all = np.column_stack([x_arr, np.ones((n_tot, 1), dtype=np.float64)])
+                mse_post = float(np.mean((A_all @ w_fit - y_arr) ** 2))
+            else:
+                mse_post = float(np.mean((f_arr - y_arr) ** 2))
+            results.append(
+                {
+                    "p_corrupt": round(float(p_c), 2),
+                    "corrupted_injected": k_corrupt,
+                    "rejected_noisy_count": rep["rejected_noisy_count"],
+                    "reclaimed_count": rep["reclaimed_count"],
+                    "fallback_reverted": rep["fallback_reverted"],
+                    "post_mse": round(mse_post, 6),
+                }
+            )
+        return results
 
 
 class DAGKnowledgeSeedingConsolidator:
@@ -1971,22 +2223,24 @@ class UniversalNeuralSleepAdapter:
         nlms_lambda: float = 0.10,
         nlms_eps: float = 1e-6,
         prefix_shift_alpha: float = 0.25,
+        innovation_clip: float = 10.0,
     ) -> Dict[str, Any]:
         """
-        SLEEP-DAG-RSI v8 Prefix-Aligned NLMS Fast-Weight Update (`FALCON-2`, Tier S #12):
+        SLEEP-DAG-RSI v8 Prefix-Aligned NLMS Fast-Weight Update (`FALCON-2`, Tier S #12, Eqs. 17–19):
         Stabilizes online Wake adaptation on `(fast_A, fast_B)` via:
           1. Cosine-gated prefix-shifted causal states (preventing opposite-sign spikes
              from cancelling `x_tilde_b` or flipping its sign):
                cos_prev_b = max(0, cos(x_b, x_{b-1})),  alpha_eff_b = alpha_p * cos_prev_b
                x_tilde_b = (1 - alpha_eff_b) * x_b + alpha_eff_b * x_{b-1}
-          2. Causal prefix-alignment cosine gate:
+          2. Causal prefix-alignment cosine gate over UNIT-NORMALIZED historical vectors
+             `x_hat_s = x_s / (||x_s||_2 + eps)` so a single 10^3x spike cannot dominate `x_bar`:
                alpha_prefix(b) = clip((1 + cos(x_b, x_bar_{0:b-1})) / 2, 0.15, 1.0)
           3. Exact Normalized Least Mean Squares (NLMS) per-sample step size bounded
              by both raw and prefix-shifted activation norms:
                eta_{b,t} = alpha_prefix(b) * beta / (max(||x_tilde_b||_2^2, ||x_b||_2^2) + lambda_t + eps)
-        Prevents fast-weight explosion and catastrophic oscillations under extreme
-        input activation spikes (e.g. ||x_t||_2 = 10^3, including opposite-sign spikes)
-        where unnormalized gradient descent diverges.
+          4. Huber/norm innovation clipping on `err_b = pred_b - target_b` bounded by
+             `innovation_clip * max(1, ||x_b||_2)` so target-value spikes `y_t` cannot
+             blow up `||Delta fast_B||_F` even when `||x_b||_2` is small.
         """
         x_arr = np.asarray(x, dtype=np.float64)
         B_sz = max(1, x_arr.shape[0])
@@ -1994,11 +2248,12 @@ class UniversalNeuralSleepAdapter:
 
         x_tilde = x_arr.copy()
         prefix_cos_gate = np.ones((B_sz, 1), dtype=np.float64)
-        prefix_sum = np.zeros((x_arr.shape[-1],), dtype=np.float64)
+        k_bar = np.zeros((x_arr.shape[-1],), dtype=np.float64)
         prefix_cnt = 0
         if self.prev_x_state is not None and self.prev_x_state.shape[-1] == x_arr.shape[-1]:
             prev_vec = self.prev_x_state.reshape(-1)
-            prefix_sum = prev_vec.copy()
+            prev_hat = prev_vec / (float(np.linalg.norm(prev_vec)) + 1e-12)
+            k_bar = prev_hat.copy()
             prefix_cnt = 1
             if a_pref > 0.0:
                 c0 = float(np.dot(x_arr[0], prev_vec)) / (
@@ -2011,7 +2266,9 @@ class UniversalNeuralSleepAdapter:
         for b_i in range(1, B_sz):
             prev_b = x_arr[b_i - 1]
             curr_b = x_arr[b_i]
-            prefix_sum = prefix_sum + prev_b
+            prev_b_hat = prev_b / (float(np.linalg.norm(prev_b)) + 1e-12)
+            t_step = float(prefix_cnt + 1)
+            k_bar = ((t_step - 1.0) / t_step) * k_bar + (1.0 / t_step) * prev_b_hat
             prefix_cnt += 1
             c_adj = float(np.dot(curr_b, prev_b)) / (
                 float(np.linalg.norm(curr_b) * np.linalg.norm(prev_b)) + 1e-12
@@ -2019,9 +2276,8 @@ class UniversalNeuralSleepAdapter:
             if a_pref > 0.0:
                 a_b = a_pref * max(0.0, c_adj)
                 x_tilde[b_i] = (1.0 - a_b) * curr_b + a_b * prev_b
-            mean_pref = prefix_sum / float(max(1, prefix_cnt))
-            c_bar = float(np.dot(curr_b, mean_pref)) / (
-                float(np.linalg.norm(curr_b) * np.linalg.norm(mean_pref)) + 1e-12
+            c_bar = float(np.dot(curr_b, k_bar)) / (
+                float(np.linalg.norm(curr_b) * np.linalg.norm(k_bar)) + 1e-12
             )
             prefix_cos_gate[b_i, 0] = float(np.clip(0.5 * (1.0 + c_bar), 0.15, 1.0))
 
@@ -2038,20 +2294,27 @@ class UniversalNeuralSleepAdapter:
             np.sum(h_low * h_low, axis=-1, keepdims=True),
             np.sum(h_raw * h_raw, axis=-1, keepdims=True),
         )  # [B, 1]
-        eta_B = (prefix_cos_gate * float(lr)) / (
-            h_sq + float(nlms_lambda) + float(nlms_eps)
-        )  # [B, 1]
-        grad_B_nlms = (h_low.T @ (eta_B * err)) / float(B_sz)
-
         x_sq = np.maximum(
             np.sum(x_tilde * x_tilde, axis=-1, keepdims=True),
             np.sum(x_arr * x_arr, axis=-1, keepdims=True),
         )  # [B, 1]
+
+        # Huber / norm innovation clipping on `err` to guard against target-value spikes y_t
+        err_norm_b = np.linalg.norm(err, axis=-1, keepdims=True) + 1e-12
+        max_err_b = float(innovation_clip) * np.maximum(1.0, np.sqrt(x_sq))
+        clip_scale = np.minimum(1.0, max_err_b / err_norm_b)
+        err_clipped = err * clip_scale
+
+        eta_B = (prefix_cos_gate * float(lr)) / (
+            h_sq + float(nlms_lambda) + float(nlms_eps)
+        )  # [B, 1]
+        grad_B_nlms = (h_low.T @ (eta_B * err_clipped)) / float(B_sz)
+
         b_norm_sq = float(np.sum(self.fast_B * self.fast_B)) + float(nlms_lambda)
         eta_A = (prefix_cos_gate * 0.5 * float(lr)) / (
             x_sq * b_norm_sq + float(nlms_lambda) + float(nlms_eps)
         )
-        grad_A_nlms = (x_tilde.T @ ((eta_A * err) @ self.fast_B.T)) / float(B_sz)
+        grad_A_nlms = (x_tilde.T @ ((eta_A * err_clipped) @ self.fast_B.T)) / float(B_sz)
 
         self.fast_B -= grad_B_nlms
         self.fast_A -= grad_A_nlms
@@ -2064,7 +2327,51 @@ class UniversalNeuralSleepAdapter:
             "mean_eta_B": float(np.mean(eta_B)),
             "mean_eta_A": float(np.mean(eta_A)),
             "mean_prefix_cosine_gate": round(float(np.mean(prefix_cos_gate)), 6),
+            "mean_innovation_clip_scale": round(float(np.mean(clip_scale)), 6),
             "max_input_norm": float(np.max(np.linalg.norm(x_arr, axis=-1))),
+            "fast_B_norm": float(np.linalg.norm(self.fast_B)),
+        }
+
+    def wake_adapt_step_gated_deltanet(
+        self,
+        x: np.ndarray,
+        base_out: np.ndarray,
+        target_out: np.ndarray,
+        lr: float = 0.45,
+        nlms_lambda: float = 0.10,
+        nlms_eps: float = 1e-6,
+        naive_prefix_shift: float = 0.25,
+    ) -> Dict[str, Any]:
+        """
+        Gated DeltaNet / Naive Prefix-Shifted NLMS baseline (Yang et al., ICLR 2025):
+        Uses standard key-norm normalization `1 / (||x_tilde||_2^2 + lambda)` with naive
+        causal shift `x_tilde_b = (1 - a)*x_b + a*x_{b-1}`, WITHOUT FALCON-2's opposite-sign
+        cosine-gated shift guard (`max(||x_tilde||^2, ||x||^2)`), unit-normalized prefix gate,
+        or Huber innovation clipping on target spikes.
+        """
+        x_arr = np.asarray(x, dtype=np.float64)
+        B_sz = max(1, x_arr.shape[0])
+        x_tilde = x_arr.copy()
+        if B_sz > 1 and naive_prefix_shift > 0.0:
+            x_tilde[1:] = (1.0 - naive_prefix_shift) * x_arr[1:] + naive_prefix_shift * x_arr[:-1]
+        pred = base_out + self.forward_delta(x_arr, use_fast=True)
+        err = pred - target_out
+        loss = float(0.5 * np.mean(err * err))
+        h_low = x_tilde @ self.fast_A
+        h_sq = np.sum(h_low * h_low, axis=-1, keepdims=True)
+        eta_B = float(lr) / (h_sq + float(nlms_lambda) + float(nlms_eps))
+        grad_B = (h_low.T @ (eta_B * err)) / float(B_sz)
+        x_sq = np.sum(x_tilde * x_tilde, axis=-1, keepdims=True)
+        b_norm_sq = float(np.sum(self.fast_B * self.fast_B)) + float(nlms_lambda)
+        eta_A = (0.5 * float(lr)) / (x_sq * b_norm_sq + float(nlms_lambda) + float(nlms_eps))
+        grad_A = (x_tilde.T @ ((eta_A * err) @ self.fast_B.T)) / float(B_sz)
+        self.fast_B -= grad_B
+        self.fast_A -= grad_A
+        post_pred = base_out + self.forward_delta(x_arr, use_fast=True)
+        post_loss = float(0.5 * np.mean((post_pred - target_out) ** 2))
+        return {
+            "loss": loss,
+            "post_update_loss": post_loss,
             "fast_B_norm": float(np.linalg.norm(self.fast_B)),
         }
 
@@ -2116,6 +2423,7 @@ class UniversalNeuralSleepAdapter:
         val_baseline_score: float = 0.0,
         entropic_tau: float = 0.0,
         verifier_feedback_deltas: Optional[np.ndarray] = None,
+        clean_anchor_xy: Optional[Tuple[np.ndarray, np.ndarray]] = None,
     ) -> Dict[str, Any]:
         """
         NREM Sleep (v5 + v6 Residual-Keep Neuro-Symbolic Distillation + v8 TTT-Discover & SDPO):
@@ -2184,6 +2492,7 @@ class UniversalNeuralSleepAdapter:
         # SLEEP-DAG-RSI v8 Mechanism 3: SDPO Feedback-Conditioned Self-Teacher on Dead-Ends
         sdpo_reclaimed_count = 0
         sdpo_rejected_noisy_count = 0
+        sdpo_fallback_reverted = False
         if verifier_feedback_deltas is not None and len(dead_indices) > 0:
             x_dead = x_trajectories[dead_indices]
             failed_d = (
@@ -2197,9 +2506,12 @@ class UniversalNeuralSleepAdapter:
                 failed_delta=failed_d,
                 verifier_feedback_residual=fb_res,
                 damping=1.0,
+                clean_anchor_xy=clean_anchor_xy,
+                winner_xy=(x_win, teacher_delta) if direct_win_count > 0 else None,
             )
             sdpo_reclaimed_count = int(sdpo_rep["reclaimed_count"])
             sdpo_rejected_noisy_count = int(sdpo_rep.get("rejected_noisy_count", 0))
+            sdpo_fallback_reverted = bool(sdpo_rep.get("fallback_reverted", False))
             if sdpo_reclaimed_count > 0:
                 if direct_win_count == 0:
                     x_win = sdpo_rep["x_reclaimed"]
@@ -2210,6 +2522,15 @@ class UniversalNeuralSleepAdapter:
                     teacher_delta = np.vstack([teacher_delta, sdpo_rep["sdpo_target_delta"]])
                     sdpo_w = np.full((sdpo_reclaimed_count, 1), 0.5, dtype=np.float64)
                     sample_weights = np.vstack([sample_weights, sdpo_w])
+
+        abstained_zero_win = bool(
+            verifier_feedback_deltas is not None
+            and direct_win_count == 0
+            and sdpo_reclaimed_count == 0
+        )
+        if abstained_zero_win:
+            teacher_delta = np.zeros_like(teacher_delta)
+            sample_weights = np.zeros((x_win.shape[0], 1), dtype=np.float64)
 
         slot_idx = len(self.slow_A)
         if slot_idx < self.max_experts:
@@ -2232,7 +2553,7 @@ class UniversalNeuralSleepAdapter:
         # Stage 3 of SLEEP-DAG-RSI v6 & v7: Residual-Keep Neuro-Symbolic Distillation + Library Invention
         distill_rep: Dict[str, Any] = {"accepted": False, "r2_oos": 0.0, "active_terms": []}
         residual_target = teacher_delta.copy()
-        if enable_neuro_symbolic_distill and x_win.shape[0] >= 8:
+        if enable_neuro_symbolic_distill and not abstained_zero_win and x_win.shape[0] >= 8:
             distiller = NeuroSymbolicDistiller(
                 alpha=distill_alpha,
                 r2_threshold=distill_r2_threshold,
@@ -2283,13 +2604,14 @@ class UniversalNeuralSleepAdapter:
                     )
 
         for _ in range(steps):
-            student_delta = (x_win @ self.slow_A[slot_idx]) @ self.slow_B[slot_idx]
-            diff = (student_delta - residual_target) * sample_weights
-            h_s = x_win @ self.slow_A[slot_idx]
-            g_B = (h_s.T @ diff) / float(max(1, x_win.shape[0]))
-            g_A = (x_win.T @ (diff @ self.slow_B[slot_idx].T)) / float(max(1, x_win.shape[0]))
-            self.slow_B[slot_idx] -= rms_step(g_B, lr)
-            self.slow_A[slot_idx] -= rms_step(g_A, lr * 0.5)
+            if not abstained_zero_win:
+                student_delta = (x_win @ self.slow_A[slot_idx]) @ self.slow_B[slot_idx]
+                diff = (student_delta - residual_target) * sample_weights
+                h_s = x_win @ self.slow_A[slot_idx]
+                g_B = (h_s.T @ diff) / float(max(1, x_win.shape[0]))
+                g_A = (x_win.T @ (diff @ self.slow_B[slot_idx].T)) / float(max(1, x_win.shape[0]))
+                self.slow_B[slot_idx] -= rms_step(g_B, lr)
+                self.slow_A[slot_idx] -= rms_step(g_A, lr * 0.5)
 
             for x_anc, d_anc, anc_slot in self.replay_buffer:
                 s_anc = (x_anc @ self.slow_A[anc_slot]) @ self.slow_B[anc_slot]
@@ -2297,15 +2619,17 @@ class UniversalNeuralSleepAdapter:
                 h_a = x_anc @ self.slow_A[anc_slot]
                 self.slow_B[anc_slot] -= rms_step((h_a.T @ e_anc) / max(1, len(x_anc)), lr * 0.4)
 
-        self.replay_buffer.append((x_win.copy(), residual_target.copy(), slot_idx))
+        if not abstained_zero_win:
+            self.replay_buffer.append((x_win.copy(), residual_target.copy(), slot_idx))
         # Synaptic pruning of fast wake residual after NREM consolidation
         self.fast_B *= 0.15
 
         return {
             "unlocked_expert_slot": slot_idx,
-            "supervised_win_count": direct_win_count if direct_win_count > 0 else len(win_indices),
+            "supervised_win_count": 0 if abstained_zero_win else (direct_win_count if direct_win_count > 0 else len(win_indices)),
             "sdpo_reclaimed_count": sdpo_reclaimed_count,
             "sdpo_rejected_noisy_count": sdpo_rejected_noisy_count,
+            "sdpo_fallback_reverted": sdpo_fallback_reverted,
             "total_wake_count": len(trajectory_node_ids),
             "active_slow_experts": len(self.slow_A),
             "j_tau_objective": round(float(tilt_raw["j_tau"]), 6),
@@ -2862,11 +3186,29 @@ class NeuroSymbolicDistiller:
                 Psi_s = Psi_tr[:, sub_list]
                 Psi_r = Psi_tr[:, rest_list] if rest_list else np.zeros((n_tr, 0), dtype=np.float64)
 
-                for scale_init in (1.2, 1.6):
-                    theta_s = w_linear[sub_list].copy() * scale_init
+                init_candidates = [
+                    (
+                        w_linear[sub_list].copy() * scale_init,
+                        w_linear[rest_list].copy() if rest_list else np.zeros((0,), dtype=np.float64),
+                        0.0,
+                    )
+                    for scale_init in (1.2, 1.6)
+                ]
+                if rest_list:
+                    # Outer-linear projection: y_nl = (I - P_lin) y before Gauss-Newton
+                    X_lin = np.hstack([Psi_r, ones_col])
+                    coef_lin, _, _, _ = np.linalg.lstsq(X_lin, Y_tr_1d, rcond=None)
+                    theta_r_proj = coef_lin[:-1]
+                    b_proj = float(coef_lin[-1])
+                    y_nl = Y_tr_1d - (Psi_r @ theta_r_proj + b_proj)
+                    theta_s_proj, _, _, _ = np.linalg.lstsq(Psi_s, y_nl, rcond=None)
+                    init_candidates.append((theta_s_proj * 1.35, theta_r_proj.copy(), b_proj))
+
+                for theta_s_init, theta_r_init, b_init in init_candidates:
+                    theta_s = theta_s_init.copy()
                     a_val = 1.0
-                    theta_r = w_linear[rest_list].copy() if rest_list else np.zeros((0,), dtype=np.float64)
-                    b_val = 0.0
+                    theta_r = theta_r_init.copy()
+                    b_val = float(b_init)
 
                     for _gn in range(5):
                         z_s = Psi_s @ theta_s
@@ -2951,10 +3293,16 @@ class NeuroSymbolicDistiller:
                 Psi_tr, Y_tr[:, 0], alpha=self.alpha
             )
 
+            active_init_k = [k for k in range(len(w_init)) if abs(w_init[k]) > 1e-12]
+
             def _init_sym_1d(x_row: Sequence[float]) -> float:
                 x_2d = np.asarray(x_row, dtype=np.float64).reshape(1, -1)
-                p_cols = [ev_fn(x_2d)[0] for ev_fn in evaluators]
-                return float(np.dot(p_cols, w_init) + b_init)
+                if not active_init_k:
+                    return float(b_init)
+                return float(
+                    sum(float(w_init[k]) * float(evaluators[k](x_2d)[0]) for k in active_init_k)
+                    + b_init
+                )
 
             def _teacher_1d(x_row: Sequence[float]) -> float:
                 x_2d = np.asarray(x_row, dtype=np.float64).reshape(1, -1)
@@ -3042,13 +3390,15 @@ class NeuroSymbolicDistiller:
         ss_tot_val = float(np.sum((Y_val - np.mean(Y_val, axis=0, keepdims=True)) ** 2)) + 1e-12
         r2_oos = max(0.0, 1.0 - ss_res_val / ss_tot_val)
 
+        active_pred_k = [k for k in range(k_atoms) if np.any(np.abs(W_mat[k, :]) > 1e-12)]
+
         def _predict_fn(x_in: np.ndarray) -> np.ndarray:
             x_np = np.asarray(x_in, dtype=np.float64)
-            if k_atoms == 0:
-                return np.zeros((x_np.shape[0], d_out), dtype=np.float64)
-            psi_cols = [ev_fn(x_np) for ev_fn in evaluators]
+            if k_atoms == 0 or not active_pred_k:
+                return np.broadcast_to(b_vec[None, :], (x_np.shape[0], d_out)).copy()
+            psi_cols = [evaluators[k](x_np) for k in active_pred_k]
             psi_mat = np.column_stack(psi_cols)
-            return psi_mat @ W_mat + b_vec[None, :]
+            return psi_mat @ W_mat[active_pred_k, :] + b_vec[None, :]
 
         if val_metric_fn is not None:
             cand_val_score = float(val_metric_fn(_predict_fn))

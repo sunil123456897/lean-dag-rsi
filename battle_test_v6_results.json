@@ -6,9 +6,9 @@
     "v5_triangle_evals": 33600,
     "v6_triangle_evals": 5540,
     "triangle_eval_savings_pct": 83.51,
-    "v5_wall_ms": 9.71,
-    "v6_wall_ms": 6.41,
-    "speedup_x": 1.52,
+    "v5_wall_ms": 9.63,
+    "v6_wall_ms": 8.49,
+    "speedup_x": 1.13,
     "v6_aborted_candidates": 53,
     "v6_survivor_candidates": 7,
     "winner_agreement": true,
@@ -29,8 +29,8 @@
     "operator_selected": "eigen_rotation",
     "initial_loss": 56022986.3499,
     "v5_loss_after_40_steps": 13.053421,
-    "v6_loss_after_15_lifted_steps": 2.136843e-06,
-    "loss_reduction_factor": 6108742.6
+    "v6_loss_after_15_lifted_steps": 2.45583e-07,
+    "loss_reduction_factor": 53152865.6
   },
   "trial_3_dynamical_control": {
     "total_trajectory_steps": 2400,
@@ -100,6 +100,240 @@
     "falcon2_spike_loss_before": 98228.58,
     "falcon2_spike_loss_after": 61376.91,
     "falcon2_opposite_spike_loss_before": 7372.4,
-    "falcon2_opposite_spike_loss_after": 4465.51
+    "falcon2_opposite_spike_loss_after": 4727.01
+  },
+  "trial_6_deepreview_multiseed": {
+    "n_seeds": 10,
+    "trial_1_multiseed": {
+      "triangle_eval_savings_pct": {
+        "mean": 76.44,
+        "std": 9.23
+      },
+      "speedup_x": {
+        "mean": 1.12,
+        "std": 0.12
+      },
+      "winner_agreement_rate": 1.0,
+      "sentinel_wall_ms": {
+        "mean": 8.63,
+        "std": 1.03
+      }
+    },
+    "trial_2_multiseed": {
+      "v5_loss_40_steps": {
+        "mean": 7.1761,
+        "std": 5.2062
+      },
+      "v6_lifted_loss_15_steps": {
+        "mean": 3e-10,
+        "std": 5e-10
+      },
+      "lift_and_solve_ms": {
+        "mean": 1.23,
+        "std": 0.05
+      }
+    },
+    "trial_3_multiseed_and_sindy": {
+      "naive_vault_r2": {
+        "mean": 0.2837,
+        "std": 0.0127
+      },
+      "sindy_stlsq_vault_r2": {
+        "mean": 0.9876,
+        "std": 0.0014
+      },
+      "sindy_stlsq_vault_mse": {
+        "mean": 0.01232,
+        "std": 0.00129
+      },
+      "sleep_dag_hybrid_vault_r2": {
+        "mean": 0.9946,
+        "std": 0.0009
+      },
+      "sleep_dag_hybrid_vault_mse": {
+        "mean": 0.00535,
+        "std": 0.00096
+      },
+      "nrem_sleep_overhead_ms": {
+        "mean": 15.62,
+        "std": 1.4
+      }
+    },
+    "trial_4_multiseed_and_sindy": {
+      "v6_flat_r2_oos": {
+        "mean": 0.04,
+        "std": 0.0717
+      },
+      "sindy_stlsq_r2_oos": {
+        "mean": 0.0251,
+        "std": 0.0793
+      },
+      "tree_gp_matched_r2_oos": {
+        "mean": 0.3464,
+        "std": 0.2404
+      },
+      "tree_gp_matched_ms": {
+        "mean": 15.87,
+        "std": 1.12
+      },
+      "tree_gp_extended_r2_oos": {
+        "mean": 0.8486,
+        "std": 0.2397
+      },
+      "tree_gp_extended_ms": {
+        "mean": 583.69,
+        "std": 52.86
+      },
+      "v7_v8_hierarchical_r2_oos": {
+        "mean": 1.0,
+        "std": 0.0
+      },
+      "two_cycle_sleep_overhead_ms": {
+        "mean": 31.07,
+        "std": 2.37
+      }
+    },
+    "falcon2_vs_gated_deltanet": {
+      "covariate_1000x_spike_post_loss": {
+        "standard_gd": {
+          "mean": 37443.71,
+          "std": 62835.46
+        },
+        "gated_deltanet": {
+          "mean": 14965.92,
+          "std": 22477.18
+        },
+        "falcon2_nlms": {
+          "mean": 23203.01,
+          "std": 32730.16
+        }
+      },
+      "opposite_sign_cancellation_spike_post_loss": {
+        "gated_deltanet_naive_shift": {
+          "mean": 564478.28,
+          "std": 1072629.31
+        },
+        "falcon2_cosine_gated": {
+          "mean": 41816.21,
+          "std": 54392.19
+        }
+      },
+      "target_1000x_outlier_spike_fast_B_norm": {
+        "standard_gd": {
+          "mean": 0.23,
+          "std": 0.0
+        },
+        "gated_deltanet_unclipped": {
+          "mean": 331.04,
+          "std": 106.95
+        },
+        "falcon2_huber_clipped": {
+          "mean": 3.25,
+          "std": 1.09
+        }
+      }
+    },
+    "sdpo_corruption_breakdown_sweep": {
+      "0pct": {
+        "post_mse": {
+          "mean": 0.0,
+          "std": 0.0
+        },
+        "fallback_trigger_rate": 0.0
+      },
+      "10pct": {
+        "post_mse": {
+          "mean": 0.0,
+          "std": 0.0
+        },
+        "fallback_trigger_rate": 0.0
+      },
+      "25pct": {
+        "post_mse": {
+          "mean": 0.0,
+          "std": 0.0
+        },
+        "fallback_trigger_rate": 0.0
+      },
+      "40pct": {
+        "post_mse": {
+          "mean": 6.62257,
+          "std": 10.6046
+        },
+        "fallback_trigger_rate": 0.3
+      },
+      "50pct": {
+        "post_mse": {
+          "mean": 17.73849,
+          "std": 9.68051
+        },
+        "fallback_trigger_rate": 0.8
+      },
+      "60pct": {
+        "post_mse": {
+          "mean": 21.9471,
+          "std": 4.08005
+        },
+        "fallback_trigger_rate": 1.0
+      }
+    },
+    "v8_six_module_ablation": {
+      "cumulative": {
+        "0_v7_baseline": {
+          "mean": 3.33,
+          "std": 0.0
+        },
+        "1_plus_ttt_discover": {
+          "mean": 16.67,
+          "std": 0.0
+        },
+        "2_plus_bes_ladder": {
+          "mean": 33.33,
+          "std": 0.0
+        },
+        "3_plus_sdpo_irls": {
+          "mean": 50.0,
+          "std": 0.0
+        },
+        "4_plus_skill_state": {
+          "mean": 66.27,
+          "std": 0.0
+        },
+        "5_plus_veriharness": {
+          "mean": 82.94,
+          "std": 0.0
+        },
+        "6_full_v8_plus_falcon2": {
+          "mean": 97.38,
+          "std": 0.32
+        }
+      },
+      "leave_one_out": {
+        "minus_ttt_discover": {
+          "mean": 84.04,
+          "std": 0.32
+        },
+        "minus_bes_ladder": {
+          "mean": 80.71,
+          "std": 0.32
+        },
+        "minus_sdpo_irls": {
+          "mean": 80.71,
+          "std": 0.32
+        },
+        "minus_skill_state": {
+          "mean": 81.11,
+          "std": 0.32
+        },
+        "minus_veriharness": {
+          "mean": 80.71,
+          "std": 0.32
+        },
+        "minus_falcon2": {
+          "mean": 82.94,
+          "std": 0.0
+        }
+      }
+    }
   }
 }

@@ -1,0 +1,818 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=2.0cm]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage[colorlinks=true,linkcolor=blue!70!black,urlcolor=blue!70!black,citecolor=blue!70!black]{hyperref}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{proposition}{Proposition}
+\newtheorem{definition}{Definition}
+\newtheorem{remark}{Remark}
+
+\lstset{
+  language=Python,
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{blue!80!black}\bfseries,
+  commentstyle=\color{green!50!black}\itshape,
+  stringstyle=\color{red!60!black},
+  frame=single,
+  breaklines=true,
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false
+}
+
+\title{\textbf{SLEEP-DAG-RSI v8: Unifying Extremal Counterfactual DAG Discovery,\\
+Spectral Frame-Lifting, Hierarchical Neuro-Symbolic Distillation,\\
+and Continual Sleep Consolidation}}
+\author{\textbf{Auto-Dream-RSI \& SLEEP-DAG-RSI Research Group}\\
+\texttt{dream\_rsi\_scripts/engine.py} $\cdot$ \texttt{sleep\_dag\_rsi.py} $\cdot$ \texttt{auto\_dream\_rsi.py} $\cdot$ \texttt{heilbronn\_pr\_package/} $\cdot$ \texttt{lean4\_certificates/}}
+\date{October 30, 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Evolutionary code search and recursive self-improvement (RSI) frameworks powered by large language models (\emph{FunSearch}, \emph{AlphaEvolve}, \emph{Dream-RSI}, \emph{DiscoveryRSI}) and continual parametric consolidation architectures (\emph{SLEEP}, \emph{HOPE / Continuum Memory System}) have demonstrated strong results in isolated domains, yet suffer from structural failure modes when deployed over long horizons or non-smooth mathematical manifolds. First, we conduct a formal mathematical and forensic audit of baseline RSI architectures, proving that: (i) Equation (1) of \emph{Dream-RSI} exhibits a positive partial derivative with respect to wasted verifier probes ($\partial V_i^m / \partial N_i^m = -\beta_1 + \beta_2 / k_i^{m,\star} > 0$ whenever $k_i^{m,\star} < \beta_2/\beta_1$), actively rewarding policies for padding parallel batches with dummy evaluations; (ii) offline tree replay suffers from \emph{Support Censorship} and topological branch isolation; (iii) Equation (17) of \emph{DiscoveryRSI} (\texttt{arXiv:2610.23839v1}) assigns identical credit bonuses ($\lambda_p = 0.25$) to trivial syntax repairs and substantive breakthroughs, inducing a \emph{Cautious A-Student Collapse} where repair frequency inflates while novelty and importance degrade below the base model; and (iv) naive parametric sleep (\emph{Vanilla SLEEP}, \texttt{arXiv:2606.03979v2}) contaminates slow memory experts with unverified dead-end trajectories ($39.49\%$ trap contamination) and explodes under heavy-tailed input spikes.
+
+To resolve these vulnerabilities within a single mathematically unified architecture, we introduce \textbf{Lean-DAG-RSI \& SLEEP-DAG-RSI (v1--v8)}. Our framework replaces isolated search trees with a \textbf{Directed Acyclic Graph (DAG)} governed by an \textbf{Extremal Max-Tilted Entropic Objective} ($J_\tau(\theta) = \frac{1}{\tau}\log \mathbb{E}[\exp(\tau R(y))]$, \emph{TTT-Discover} with upper-tail robust scale $s_R$), \textbf{Backward Sub-Goal Decomposition} of dead regime buckets (\emph{BES / LADDER}), \textbf{Error-Fingerprint \& Anchored Multi-Parent Submodular Hyper-Crossover}, and \textbf{Autonomous AST Code Splicing} (\texttt{AstCodeSplicer}) with leave-one-bucket-out (LOO) validated nonlinear routing predicate synthesis. To overcome ill-conditioned optimization valleys ($\kappa_{\text{eff}}(G) \ge 10^8$) and non-smooth equiareal tie traps, we introduce a \textbf{5\% Multi-Fidelity Sequential UCB Wald Micro-Sentinel} (\texttt{WaldMicroSentinel}, cutting verifier evaluations by $\mathbf{76.44\% \pm 9.23\%}$ across 10 seeds and $\mathbf{83.51\%}$ on the canonical seed with $100\%$ winner agreement) and a \textbf{Spectral Frame Lifter} (\texttt{SpectralFrameLifter}) featuring an $\mathcal{O}(M^2 d + M^3)$ dual Gram decomposition ($K = \frac{1}{M}J J^\top$) for $M < d$, relative-threshold numerical rank $r_{\sup}(\varepsilon_{\text{null}})$, eigen-basis preconditioning ($\kappa(P^\top H P) = 1$), and KKT slack lifting with active-set condensation. During continual \textbf{Wake $\to$ NREM $\to$ REM $\to$ $2\times 2$ Gate} sleep cycles, online adaptation uses \textbf{FALCON-2 Prefix-Aligned Normalized Least-Mean-Squares (NLMS)} fast memory (\texttt{DeltaRuleFastMemory.forward\_falcon2}) with unit-normalized prefix tracking and Huber innovation clipping, while NREM consolidation integrates \textbf{DAG-Masked Knowledge Seeding}, a \textbf{Feedback-Conditioned Self-Teacher on 100\%-Dead-End Batches} (\emph{SDPO}) hardened by a Tukey biweight IRLS/MAD outlier gate, zero-win abstention guard, and validation-anchor fallback, \textbf{VeriHarness Dual-Head Verification} (\texttt{Disagreement Resolver} + smooth signed-margin \texttt{Consensus Challenger}), \textbf{Full-Target Hierarchical Neuro-Symbolic Distillation} (\texttt{NeuroSymbolicDistiller} + \texttt{SymbolicLibrary} inventing depth-$3+$ reusable AST primitives), and a fixed-capacity \textbf{Mutable Skill State} (\texttt{SKILL.state}, compressing 50-round history by $\mathbf{-98.20\%}$).
+
+Across algorithmic benchmarks, 10-seed continual neural streams, and open problems in extremal discrete geometry and harmonic analysis, \texttt{SLEEP-DAG-RSI v8} achieves rigorously verified results:
+(1) Outperforms \emph{Dream-RSI} \texttt{OptimalPolicy} by \textbf{37 : 2} on a 50-task benchmark ($-30.6\%$ verifier probes), accelerates the 847-line C++ active-set Lasso solver of \emph{Dream-RSI} (\texttt{Listing 3}) by $\mathbf{2.50\times}$ geomean across all 6 regimes, achieves a $\mathbf{33.36\times}$ speedup over SciPy on \texttt{algotune-rbf-kernel-solver}, reduces Weibull 5k online bin-packing excess to $\mathbf{0.3690\%}$ over the $L_2$ lower bound (vs.\ $0.68\%$ in \emph{FunSearch}), and reaches $\mathbf{100.00\%}$ OOS accuracy ($188,416 / 188,416$ exact steps across horizons $T=64\dots 1024$ and $2,000$ OOD API rules) on a 1.58-bit ternary neural network (\texttt{SimVQCoprimeGPT}).
+(2) From scratch (\texttt{std::mt19937\_64} with zero external coordinate seeds), we prove a \textbf{Corank-1 Equiareal Manifold Theorem} explaining why damped Gauss-Newton on the area-equality tie system $A_1(\boldsymbol{\theta}) = \dots = A_M(\boldsymbol{\theta})$ halts $10^{-14}$ below the true local optimum on a 1D curve $\Gamma(s)$ with positive KKT curvature $c > 0$. Solving the full bordered KKT-Newton system to \textbf{500 decimal places} (\texttt{heilbronn\_pr\_package/}) and $10^{100}$-denominator exact rationals (\texttt{fractions.Fraction} + formal \texttt{Lean 4} \texttt{native\_decide} theorems with zero \texttt{Float} and zero \texttt{sorryAx}), we establish new certified KKT stationary records at $n = 13$ ($\Delta_{13}^\star = \mathbf{0.026556528919775580138\dots}$, $\mathbf{+3.7316\times 10^{-14}}$ above Stead 2026, $c_{13} = 0.03607878\dots > 0$), $n = 14$ ($\Delta_{14}^\star = \mathbf{0.023775773107573057671\dots}$), $n = 15$ ($\Delta_{15}^\star = \mathbf{0.021090769460266687959\dots}$, $12+3$ floater split, degree-5 algebraic root), $n = 16$ ($\Delta_{16}^\star = \mathbf{0.018355546355461140412\dots}$, $\mathbf{+5.7690\times 10^{-14}}$ above Fable 5.1 \& Zhang 2026, proving an unnoticed $15+1$ interior floater split and corank-1 frame curve $\Gamma_{16}(s)$ with $c_{16} = 0.01123456\dots > 0$), and $n = 17$ ($\Delta_{17}^\star = \mathbf{0.015873844567914898559\dots}$, $\mathbf{+3.4455\%}$ gain, proving a full-rank $16+1$ isostatic floater split with 27 active triangles).
+(3) Within the single-grid step-function regime, establishes upper bound $C_1 \le \mathbf{1.503822792008}$ at $P=2560$ (certified in exact \texttt{fractions.Fraction} across all $5,119$ convolution shifts, improving upon Matolcsi \& Vinuesa $1.5098$ and AlphaEvolve v1 $1.5053$ at $P \le 2560$, complementary to variable-interval / $P \ge 30,000$ bounds in AlphaEvolve v2 $1.50314$ and TTT-Discover $1.50286$), lower bound $C_2 \ge \mathbf{0.942158772814}$ at $P=20,256$ via Boltzmann Roof-Bundle Subgradient (surpassing Jaech \& Joseph 2025 $0.94136$ at $P=2399$, complementary to $P \ge 50,000$ searches in TTT-Discover $0.9595$ and AlphaEvolve v2 $0.9610$), and signed autoconvolution bound $\Phi_3 \le \mathbf{1.457058511867}$ at $P=3200$ (beating Cilleruelo--Ruzsa--Vinuesa $1.4581$ and ShinkaEvolve $1.4578$).
+(4) Retains $\mathbf{97.63\%}$ Domain-1 accuracy across 5 sequential domains ($97.82\%$ 5-domain mean vs.\ $51.09\%$ in Vanilla SLEEP), reduces NREM dead-end consolidation MSE by $\mathbf{161.15\times}$ ($15.8726 \to 0.0985$) via SDPO self-teaching with $\mathbf{0\%}$ breakdown up to $25\%$ adversarial corruption and $\mathbf{100\%}$ safe fallback at $60\%$ corruption, cracks depth-3 nonlinear dynamical laws with $\mathbf{R^2_{\text{OOS}} = 1.0000 \pm 0.0000}$ across 10 seeds (vs.\ $0.0400 \pm 0.0717$ in flat depth-2 distillation and $0.0251 \pm 0.0793$ in \emph{SINDy} STLSQ), achieves $\mathbf{2.30\times}$ lower Blind Vault MSE than \emph{SINDy} on stochastic control ($0.00535$ vs.\ $0.01232$ across 10 seeds), and outperforms \emph{Gated DeltaNet} by $\mathbf{13.5\times}$ on opposite-sign cancellation spikes and $\mathbf{101.9\times}$ on target-outlier fast-weight stability.
+\end{abstract}
+
+\section{Introduction}
+
+Recent progress in automated scientific discovery has been driven by coupling large language models (LLMs) with executable evaluators in evolutionary loops, including \emph{FunSearch} \cite{funsearch2024}, \emph{Evolution of Heuristics (EoH)} \cite{eoh2024}, \emph{ReEvo} \cite{reevo2024}, \emph{LLM-SR} \cite{llmsr2024}, \emph{AlgoTune} \cite{algotune2025}, \emph{AlphaEvolve v1/v2} \cite{alphaevolve2025,alphaevolve2_2025}, \emph{ThetaEvolve} \cite{thetaevolve2025}, \emph{TTT-Discover} \cite{tttdiscover2026}, \emph{Dream-RSI} \cite{dreamrsi2026}, and \emph{DiscoveryRSI} \cite{discoveryrsi2026}, extending classical symbolic regression and sparse dynamical discovery (\emph{SINDy} \cite{brunton2016}, \emph{AI Feynman} \cite{udrescu2020}, \emph{PySR} \cite{cranmer2020}). In parallel, continual parametric learning architectures such as \emph{EWC} \cite{kirkpatrick2017}, \emph{SLEEP} \cite{sleep2026}, \emph{HOPE / Continuum Memory System (CMS)} \cite{hope2025}, \emph{DeltaNet} \cite{yang2024}, and \emph{Gated DeltaNet} \cite{yang2025} have sought to endow neural networks with online fast-weight adaptation during ``Wake'' cycles and offline slow-weight consolidation during ``Sleep'' cycles.
+
+Despite their conceptual appeal, deploying these systems on long-horizon discovery tasks reveals a fundamental disconnect between high-level algorithmic descriptions and the underlying optimization geometry:
+\begin{enumerate}
+\item \textbf{Pathological Replay \& Credit Objectives:} As we prove in Section~\ref{sec:audit}, the counterfactual replay objective in Equation (1) of \emph{Dream-RSI} and the hypothesis credit weighting in Equation (17) of \emph{DiscoveryRSI} contain incentive inversions that actively reward dummy batch inflation and risk-averse syntax repairs over genuine structural crossovers.
+\item \textbf{Tree Isolation \& Textual Blindness to Ill-Conditioned Manifolds:} Strictly tree-structured search graphs prevent recombining orthogonal breakthroughs discovered in sibling branches. Furthermore, when a discrete code structure depends on continuous parameters $\boldsymbol{\theta} \in \mathbb{R}^d$ lying in a rotated epistatic valley ($\kappa_{\text{eff}}(G) \ge 10^8$) or a non-smooth minimax crease ($\min_{1 \le m \le M} A_m(\boldsymbol{\theta})$), random LLM text edits and naive first-order solvers stall completely.
+\item \textbf{Black-Box Drift \& Dead-End Contamination in Neural Sleep:} Standard parametric consolidation (\emph{Vanilla SLEEP}) indiscriminately distills all wake trajectories into slow Mixture-of-Experts (MoE) weights, imprinting rejected dead-ends into long-term memory, while unnormalized fast associative memories (\emph{Hebbian / Delta-Rule}) diverge quadratically ($\propto \|\mathbf{x}_t\|_2^2$) under heavy-tailed sensor spikes. Conversely, pure DAG-based code masks ($\text{loss\_mask} = 0$ on failures) waste $100\%$ of compute whenever an exploratory round yields zero passing candidates.
+\end{enumerate}
+
+\subsection{Summary of Contributions (\texttt{Lean-DAG-RSI} $\to$ \texttt{SLEEP-DAG-RSI v8})}
+
+We present a unified, self-contained discovery and continual adaptation engine that bridges discrete symbolic search, spectral numerical optimization, and parametric neural sleep around a shared mathematical core: the \textbf{Empirical Gauss-Newton Sensitivity Matrix} $G = \frac{1}{M}J^\top J$, the \textbf{Bucket Margin Matrix} $\Phi \in \mathbb{R}^{N \times M}$, and \textbf{Exact Multi-Precision / Formal Verification}. Specifically:
+\begin{itemize}
+\item \textbf{Mathematical Audit \& Hardened DAG Foundation (\texttt{v1--v4}, Section~\ref{sec:audit}):} We prove the probe-spam incentive inversion in \emph{Dream-RSI} Eq.~(1) (Proposition~\ref{prop:probe_spam}) and the clone-inflation / cautious A-student bias in \emph{DiscoveryRSI} Eq.~(17) (Proposition~\ref{prop:credit_cap}). We introduce a strictly monotone replay value function $V_{\text{Lean}}$, shift-invariant damped cumulative Tukey counterfactual continuation $s_{\text{cf}}$, anchored multi-parent submodular hyper-crossover \texttt{compute\_hyper\_crossover} with pair-normalized AST collision penalties, scale-invariant Gauss-Newton epistatic pruning \texttt{prune\_epistatic\_gauss\_newton}, prefix-aligned \texttt{export\_dag\_dpo\_pairs}, and two-layer formal \texttt{Lean 4} rational verification certificates (\texttt{export\_lean4\_certificate}).
+\item \textbf{DAG-Guided Parametric Sleep (\texttt{v5}, Section~\ref{sec:v5}):} We couple \emph{SLEEP + HOPE + CMS} with \texttt{Lean-DAG-RSI} via four mathematical bridges: (1) DAG-Masked Knowledge Seeding ($\mathcal{L}_{\text{DAG-KS}}$) with DPO dead-end repulsion and zero base-expert drift; (2) Error-Fingerprint Guided MoE Expert Crossover (\texttt{ExpandableMoEMLP}); (3) Two-stage Counterfactual + 20-Direction Flat-Plateau REM Dream Filtering; and (4) a $2\times 2$ Model $\times$ Policy Joint Acceptance Gate (\texttt{accept\_joint\_2x2}).
+\item \textbf{Wald Micro-Sentinel, Dual Gram Spectral Lifting \& Hierarchical AST Distillation (\texttt{v6--v7}, Sections~\ref{sec:v6}--\ref{sec:v7}):} We introduce \texttt{WaldMicroSentinel} (a 5\% adversarial + stratified sequential UCB95 early-veto test with locked stochastic quantile trimming), \texttt{SpectralFrameLifter} (with Proposition~\ref{prop:dual_gram} proving exact $\mathcal{O}(M^2 d + M^3)$ dual Gram eigendecomposition for $M < d$, relative-threshold numerical rank $r_{\sup}(\varepsilon_{\text{null}})$, $\kappa_{\text{eff}}(G)$, and KKT active-set condensation), \texttt{AstCodeSplicer} (synthesizing executable hybrid ASTs with LOO-validated OOS bilinear/radial routing predicates), \texttt{ActiveBoundarySynthesizer}, and \texttt{NeuroSymbolicDistiller} + \texttt{SymbolicLibrary} (DreamCoder-style \cite{dreamcoder2021} hierarchical primitive invention with outer-linear residual projection and \textbf{Full-Target Multi-Cycle Re-Consolidation}).
+\item \textbf{Extremal Tilting, Backward Sub-Goals, SDPO Self-Teaching, Bounded Skill State, Consensus Challenger \& FALCON-2 (\texttt{v8}, Section~\ref{sec:v8}):} We integrate six frontier mechanisms: (1) \emph{TTT-Discover} Max-Tilted Entropic Objective with upper-tail robust scale $s_R$ (Proposition~\ref{prop:max_tilt}); (2) \emph{BES / LADDER} \texttt{BackwardSubGoalDecomposer} for dead buckets; (3) \emph{SDPO} \texttt{FeedbackConditionedSelfTeacher} with a Tukey biweight IRLS/MAD outlier gate, zero-win abstention guard, principal-axis bilateral crease model, and validation-anchor fallback reclaiming $100\%$-dead-end batches; (4) fixed-capacity \texttt{MutableSkillState} (\texttt{SKILL.state}); (5) \emph{VeriHarness} dual-head \texttt{Consensus Challenger} optimizing a smooth signed consensus margin to expose unanimous ensemble blind spots; and (6) \emph{FALCON-2} prefix-aligned NLMS fast memory (\texttt{forward\_falcon2}, \texttt{wake\_adapt\_step\_falcon2}).
+\item \textbf{Breakthroughs in Extremal Geometry \& Analysis (Section~\ref{sec:extremal}):} Using a transparent \textbf{Two-Stage Protocol} (Stage A Cold-Start C++/GPU Discovery from random seeds $\to$ Stage B Fast Deterministic Replay \& Multi-Precision Certification), we prove the \textbf{Corank-1 Equiareal Manifold Theorem} at Heilbronn $n=13$ and $n=16$ via the bordered KKT-Newton system (Theorem~\ref{thm:heilbronn_corank1}), establish a 500-digit \textbf{$16+1$ isostatic certificate at $n=17$} (Theorem~\ref{thm:heilbronn_n17}), and obtain certified bounds for autocorrelation inequalities $C_1, C_2$, and $\Phi_3$ \cite{matolcsi2010,cilleruelo2010,jaech2025,cantrell2007,stead2026}.
+\end{itemize}
+
+\section{Mathematical Audit of Baseline RSI Architectures \& \texttt{Lean-DAG-RSI v1--v4}}
+\label{sec:audit}
+
+\subsection{Proposition 1: Probe-Spam Incentive Inversion in \emph{Dream-RSI} Equation (1)}
+
+In Section 3 (p.~6, Eq.~(1)) of \emph{Dream-RSI} \cite{dreamrsi2026}, the counterfactual replay value of exploration policy $m$ on historical discovery tree $\mathcal{T}_i$ is defined as:
+\begin{equation}
+V_i^m = \max_{v \in \mathcal{T}_i^{m, < k_i^{m,\star}}} s_v - \beta_1 N_i^m + \beta_2 \frac{N_i^m}{\max\{1, k_i^{m,\star}\}},
+\tag{1}\label{eq:dreamrsi_eq1}
+\end{equation}
+where $\mathcal{T}_i^{m, < k_i^{m,\star}}$ is the revealed subtree up to stopping round $k_i^{m,\star} \ge 1$, $s_v$ is the verifier score of node $v$, $N_i^m$ is the total number of non-root nodes opened (verifier probes consumed), and $\beta_1, \beta_2 \ge 0$ are scalar weights penalizing total probes and rewarding average batch parallelism $N_i^m / k_i^{m,\star}$ (or equivalently under the min-max normalized objective $Q(V_i^m) = \alpha_1(\max_v s_v - s_{\text{root}}) - \beta_1 N_i^m + \beta_2 N_i^m / \max\{1, k_i^{m,\star}\}$ when $\alpha_2 = 0$).
+
+\begin{proposition}[Positive Gradient for Wasted Parallel Probes]
+\label{prop:probe_spam}
+Let $\beta_2 > \beta_1 > 0$ (e.g., standard weights $\beta_1 = 0.01, \beta_2 = 0.05$). For any replay trajectory terminating in $k_i^{m,\star} < \beta_2 / \beta_1$ sequential rounds, the partial derivative of $V_i^m$ in Eq.~\eqref{eq:dreamrsi_eq1} with respect to the number of consumed verifier probes $N_i^m$ at fixed best score $\max_v s_v$ is strictly positive:
+\begin{equation}
+\frac{\partial V_i^m}{\partial N_i^m} = -\beta_1 + \frac{\beta_2}{k_i^{m,\star}} > 0 \qquad \forall\, k_i^{m,\star} \in \left\{1, \dots, \left\lceil \frac{\beta_2}{\beta_1} \right\rceil - 1\right\}.
+\tag{2}\label{eq:probe_spam_grad}
+\end{equation}
+\end{proposition}
+\begin{proof}
+Differentiating Eq.~\eqref{eq:dreamrsi_eq1} with respect to $N_i^m$ while holding $\max_v s_v$ and $k_i^{m,\star} \ge 1$ constant yields $\partial V_i^m / \partial N_i^m = -\beta_1 + \beta_2 / k_i^{m,\star}$. Whenever $k_i^{m,\star} < \beta_2 / \beta_1$, we have $\beta_2 / k_i^{m,\star} > \beta_1$. In particular, at $k_i^{m,\star} = 1$ with $\beta_1 = 0.01, \beta_2 = 0.05$, appending $\Delta N$ completely useless dummy probes with zero score improvement ($\Delta \max s_v = 0$) strictly increases the objective by $+0.04\,\Delta N > 0$.
+\end{proof}
+
+Furthermore, forensic inspection of \emph{Dream-RSI} Appendix B.2 (\texttt{Listing 2}, \texttt{evaluate\_policy}) reveals that the reference code does not implement Eq.~\eqref{eq:dreamrsi_eq1} at all, optimizing instead \texttt{pareto.auc - lambda * (1.0 / mean\_parallelism)}, which similarly penalizes narrow batches and encourages redundant parallel probes.
+
+\paragraph{Resolution in \texttt{Lean-DAG-RSI} (\texttt{engine.py:726}).}
+We replace Eq.~\eqref{eq:dreamrsi_eq1} with a strictly monotone replay objective:
+\begin{equation}
+V_{\text{Lean}}(\mathcal{T}, \pi) = \max_{v \in \tau(\pi)} s_v - \beta_1 N_{\text{probes}}(\pi) - \beta_2 k_{\text{rounds}}(\pi), \qquad \frac{\partial V_{\text{Lean}}}{\partial N_{\text{probes}}} = -\beta_1 < 0, \quad \frac{\partial V_{\text{Lean}}}{\partial k_{\text{rounds}}} = -\beta_2 < 0.
+\tag{3}\label{eq:v_lean}
+\end{equation}
+
+\subsection{Overcoming Support Censorship via Shift-Invariant Damped Tukey Continuation (\texttt{s\_cf})}
+
+When an alternative policy $\pi'$ replays a fixed historical tree $\mathcal{T}$ and chooses to deepen a rapidly improving branch node $u$ ($\Delta_u = s(u) - s(\text{parent}(u)) > 0$) that was prematurely halted at depth $d_u < D_{\max}$ in the recorded log, standard replay returns a no-op ($\Delta_{\text{next}} = 0$). This \emph{Support Censorship} systematically penalizes policies that prioritize high-slope under-explored branches.
+
+In \texttt{LeanDAGWorld} (\texttt{engine.py:678}), probing an unexpanded frontier node $u$ with $\Delta_u > 0$ spawns up to $m \in \{1, 2\}$ virtual counterfactual continuation steps with damped cumulative Tukey fencing:
+\begin{equation}
+s_{\text{cf}}(u, m) = s(u) + \left(\sum_{j=1}^m \gamma^j\right) \min\bigl(\Delta_u, C_{\text{Tukey}}(\Delta^+; \Delta_u)\bigr), \qquad \gamma = 0.55,
+\tag{4}\label{eq:s_cf}
+\end{equation}
+\begin{equation}
+C_{\text{Tukey}}(\Delta^+; \Delta_u) = (1 - \alpha_{\text{cf}})\,C_{\text{comp}}(\Delta_u) + \alpha_{\text{cf}}\bigl(Q_{75}(\Delta^+) + 1.5\,\operatorname{IQR}(\Delta^+)\bigr), \qquad C_{\text{comp}}(\Delta_u) = \frac{\Delta_u}{1 + \Delta_u / S_\Delta},
+\tag{4a}\label{eq:s_cf_interp}
+\end{equation}
+where $\alpha_{\text{cf}} = \min\bigl(1,\, \max(0, (|\Delta^+| - 1)/3)\bigr) \in [0, 1]$ smoothly interpolates between the small-sample compression barrier ($|\Delta^+| = 1 \implies \alpha_{\text{cf}} = 0$) and the empirical interquartile fence ($|\Delta^+| \ge 4 \implies \alpha_{\text{cf}} = 1$), and $S_\Delta = \max\bigl(\operatorname{mean}(\Delta^+),\; |s(u) - s(\text{root})|,\; 10^{-6}\bigr)$ depends solely on score differences, guaranteeing exact \textbf{shift invariance} $s_{\text{cf}}(u, m; s + c) = s_{\text{cf}}(u, m; s) + c$ for any $c \in \mathbb{R}$ (\texttt{Suite 19h}). Across our 50-task synthetic benchmark (\texttt{lean\_dag\_rsi\_benchmark.py}), $V_{\text{Lean}} + s_{\text{cf}}$ defeats \emph{Dream-RSI} \texttt{OptimalPolicy} by \textbf{37 : 2} (11 ties) while reducing verifier calls by \textbf{30.6\%}.
+
+\subsection{Error-Fingerprint DAG Crossover \& Anchored Multi-Parent Hyper-Crossover (\texttt{v2--v4})}
+
+To break tree isolation without triggering combinatorial junk merges, every evaluated node $u$ records a binary pass mask $\mathbf{m}(u) \in \{0, 1\}^M$ (\texttt{pass\_mask}) and continuous normalized bucket margins $\boldsymbol{\phi}(u) \in [-1, 1]^M$ (\texttt{bucket\_margins}) across $M$ diagnostic regime slices, along with the set of modified AST symbols $\mathcal{A}_{\text{AST}}(u)$ (\texttt{ast\_touches} and line hotspots from nanosecond profiler \texttt{profile\_callable\_lines}).
+
+Given the top-scoring anchor parent $u^\star = \arg\max_{u \in \mathcal{V}_{\text{succ}}} \bar{\phi}(u)$ and a candidate parent subset $S = \{u^\star, u_2, \dots, u_k\}$ ($k \ge 1$, anchored at the singleton seed $S_0 = \{u^\star\}$ where $\Delta_{\text{Hyper}}(S_0 \mid u^\star) = 0$), \texttt{compute\_hyper\_crossover} (\texttt{engine.py:2715}) defines the \textbf{Anchored Submodular Excess Margin Gain}:
+\begin{equation}
+\Delta_{\text{Hyper}}(S \mid u^\star) = \underbrace{\frac{1}{M}\sum_{j=1}^M \max_{u \in S} \phi_j(u) - \frac{1}{M}\sum_{j=1}^M \phi_j(u^\star)}_{f_{\text{cov}}(S) \text{ (monotone submodular)}} - \underbrace{\frac{\lambda_{\text{coll}}}{\max\!\bigl(1, \binom{|S|}{2}\bigr)} \sum_{\{u, v\} \subseteq S} \operatorname{IoU}\bigl(\mathcal{A}_{\text{AST}}(u), \mathcal{A}_{\text{AST}}(v)\bigr)}_{P_{\text{AST}}(S) \in [0, \lambda_{\text{coll}}] \text{ (pair-normalized AST collision penalty)}}.
+\tag{5}\label{eq:hyper_xover}
+\end{equation}
+Anchoring the reference term at the fixed seed $u^\star \in S$ ensures that the coverage term $f_{\text{cov}}(S) = \frac{1}{M}\sum_{j=1}^M \max_{u \in S} \phi_j(u) - \frac{1}{M}\sum_{j=1}^M \phi_j(u^\star)$ is a genuine monotone non-negative submodular set function for all $S \supseteq \{u^\star\}$ ($f_{\text{cov}}(\{u^\star\}) = 0$), while the pair-normalized AST collision regularizer $P_{\text{AST}}(S)$ is a bounded non-submodular structural penalty in $[0, \lambda_{\text{coll}}]$ regardless of subset cardinality $|S|$ (so $\Delta_{\text{Hyper}}(S \mid u^\star) = f_{\text{cov}}(S) - P_{\text{AST}}(S)$ is a regularized submodular objective). Initialized at the singleton anchor $S_0 = \{u^\star\}$, greedy forward selection iteratively adds $w \notin S_t$ if and only if its penalized marginal gain satisfies $\Delta_{\text{Hyper}}(S_t \cup \{w\} \mid u^\star) - \Delta_{\text{Hyper}}(S_t \mid u^\star) > \tau_{\text{hyper}}$ ($\tau_{\text{hyper}} = 0.05$) with mean pairwise $\operatorname{IoU}(\mathcal{A}_{\text{AST}}(u), \mathcal{A}_{\text{AST}}(v)) < 0.5$.
+
+\subsection{Scale-Invariant Gauss-Newton Epistatic Pruner (\texttt{v3--v4})}
+
+When numerical solvers polish tunable continuous parameters $\boldsymbol{\theta} \in [\mathbf{l}, \mathbf{u}] \subset \mathbb{R}^d$, over-parameterized models overfit training noise or drift along coupled epistatic ridges (e.g., $g(\theta_0, \theta_1) = \theta_0 / \theta_1$). We apply a two-stage regularizer:
+\begin{enumerate}
+\item \textbf{Single-Coordinate Backward Elimination (\texttt{prune\_tunable\_params}, \texttt{engine.py:1609}):} Greedily resets coordinates $\theta_i^\star \to \theta_i^{(0)}$ whenever the cumulative drop from the unpruned optimum satisfies $f(\boldsymbol{\theta}^\star) - f(\boldsymbol{\theta}_{\text{try}}) \le \delta_{\text{tol}}$.
+\item \textbf{Scale-Invariant Epistatic Gauss-Newton Pruner (\texttt{prune\_epistatic\_gauss\_newton}, \texttt{engine.py:2989}):} Maps $\boldsymbol{\theta}$ to the dimensionless unit hypercube $\tilde{\theta}_i = (\theta_i - l_i)/(u_i - l_i) \in [0, 1]^d$ and constructs the positive semi-definite sensitivity matrix over $M$ buckets at macro-stencil $\delta = 0.04$ (chosen at $4\%$ of the unit box to step across micro-discretization jitter while capturing local curvature):
+\begin{equation}
+G_{\text{ep}} = \frac{1}{M} J(\tilde{\boldsymbol{\theta}}^\star)^\top J(\tilde{\boldsymbol{\theta}}^\star) + \frac{1}{M}\sum_{j=1}^M \Bigl(H^{(j)}(\tilde{\boldsymbol{\theta}}^\star)\Bigr)^\top H^{(j)}(\tilde{\boldsymbol{\theta}}^\star) \succeq 0.
+\tag{6}\label{eq:g_ep}
+\end{equation}
+Because $\tilde{\boldsymbol{\theta}} \in [0, 1]^d$ is dimensionless and bucket margins $\phi_j \in [-1, 1]$ are normalized, both terms in Eq.~\eqref{eq:g_ep} share compatible dimensionless units; moreover, at a local interior optimum where $J(\tilde{\boldsymbol{\theta}}^\star) \approx \mathbf{0}$, the squared Hessian term $(H^{(j)})^\top H^{(j)} \succeq 0$ prevents false pruning of quadratically active ridges (\texttt{Suite 15}). Eigenvectors $\mathbf{q}_m$ with $\lambda_m \le 10^{-3}\lambda_{\max}$ loading on $\ge 2$ coordinates identify coupled epistatic ridges and freeze redundant degrees of freedom, followed by a 20-direction $\pm 5\%$ flat-plateau stress test (\texttt{evaluate\_flat\_plateau}).
+\end{enumerate}
+
+\subsection{Proposition 2: Credit Conservation \& Conjunctive Clone-Family Equivalence in \emph{DiscoveryRSI}}
+
+In \emph{DiscoveryRSI} (\texttt{arXiv:2610.23839v1}, Appendix B.2, Eq.~(17), p.~27) \cite{discoveryrsi2026}, trajectory quality weights are computed as:
+\begin{equation}
+q_h = \min\Bigl(q_{\max},\; q_{\min} + (q_{\max} - q_{\min}) r_h \rho_{\text{cov}, h} \rho_{\text{unc}, h} + \lambda_p p_h\Bigr),
+\tag{7}\label{eq:discoveryrsi_eq17}
+\end{equation}
+where $\lambda_p = 0.25$ is identical for \texttt{necessary-repair} and \texttt{substantive-progress}. Because localized syntax repairs have lower evaluation variance $\sigma_h$, conservative TrueSkill ranking $s_h = \mu_h - 2\sigma_h$ systematically favors repairs over crossovers. Empirically (\emph{DiscoveryRSI} Fig.~6b \& 7a, p.~15), repair share inflates from $20\%$ to $28\%$, crossover share collapses to $3\%$, and out-of-distribution \texttt{Importance} ($6.48 \to 6.04$) and \texttt{Novelty} ($4.87 \to 4.58$) degrade below the unadapted base model.
+
+\begin{proposition}[Bounded Clone-Family Credit Conservation under Conjunctive Equivalence]
+\label{prop:credit_cap}
+In \texttt{compute\_provenance\_credit} (\texttt{engine.py:2241}), let the progress bonus be split into $\lambda_{\text{breakthrough}} = 0.35 > \lambda_{\text{repair}} = 0.10$, let lineage passengers with zero verified diff receive weight $w_{\text{passenger}} = 0$, and define the \textbf{conjunctive clone-family equivalence relation} $h \sim_{\text{clone}} h'$ if and only if trajectories $h, h'$ share identical behavioral \texttt{pass\_mask} ($\mathbf{m}(h) = \mathbf{m}(h')$) \textbf{and} structural similarity $\operatorname{IoU}(\mathcal{A}_{\text{AST}}(h), \mathcal{A}_{\text{AST}}(h')) \ge 0.80$ (or identical normalized AST / parameter hash when \texttt{ast\_touches} is empty). Let each equivalence class $\mathcal{C}_f$ be normalized by local and global family caps $C_{\text{loc}} = C_{\text{glob}} = W_{\max} = 2.0$:
+\begin{equation}
+\tilde{w}_h = w_h \cdot \min\!\left(1.0,\; \frac{C_{\text{glob}}}{\sum_{h' \in \mathcal{C}_f} w_{h'}}\right).
+\tag{8}\label{eq:credit_cap}
+\end{equation}
+Then: (i) for any number $K \ge 1$ of near-duplicate clones injected into $\mathcal{C}_f$, the total credit mass of $\mathcal{C}_f$ is strictly upper-bounded by $\sum_{h' \in \mathcal{C}_f} \tilde{w}_{h'} \le C_{\text{glob}} = 2.0$; (ii) algorithmically distinct solutions achieving the same \texttt{pass\_mask} via disjoint AST structures ($\operatorname{IoU} < 0.80$, e.g., Cholesky vs.\ Conjugate Gradient) occupy distinct equivalence classes $\mathcal{C}_f \ne \mathcal{C}_{f'}$ and suffer zero cross-family credit dilution; and (iii) breakthrough/crossover trajectories strictly dominate routine repairs of equal base rank.
+\end{proposition}
+\begin{proof}
+Summing Eq.~\eqref{eq:credit_cap} over $h \in \mathcal{C}_f$ gives $\sum_{h \in \mathcal{C}_f} \tilde{w}_h = \min\bigl(\sum_{h \in \mathcal{C}_f} w_h,\, C_{\text{glob}}\bigr) \le C_{\text{glob}} = 2.0$ for all $K \ge 1$. Under the conjunctive condition, $\operatorname{IoU}(\mathcal{A}_{\text{AST}}(h), \mathcal{A}_{\text{AST}}(h')) < 0.80 \implies h \not\sim_{\text{clone}} h'$, preserving full credit for distinct algorithms. Finally, $q_{\text{breakthrough}} - q_{\text{repair}} = \lambda_{\text{breakthrough}} - \lambda_{\text{repair}} = 0.25 > 0$.
+\end{proof}
+
+\subsection{Two-Layer Formal Verification in \texttt{Lean 4} (\texttt{Defs.lean} \& \texttt{Cert\_Heilbronn\_13\_14.lean})}
+
+To eliminate floating-point grader exploits (\emph{Grader Gaming}) and establish machine-checked mathematical certainty, \texttt{export\_lean4\_certificate} (\texttt{engine.py:3152}) implements a \textbf{Two-Layer Formal Verification Architecture} in \texttt{Lean 4}:
+\begin{enumerate}
+\item \textbf{Layer 1 --- Immutable Static Specification (\texttt{lean4\_certificates/Defs.lean}):} Defines the exact integer scaled cross-product area \texttt{unitTriangleNormAreaScaled (p1 p2 p3 : Int $\times$ Int) : Int} and explicit simplex boundary predicates over arbitrary-precision integers $\mathbb{Z}$ with zero \texttt{Float} types and zero \texttt{sorryAx} axioms:
+\begin{equation}
+A_{\text{scaled}}(\mathbf{p}_i, \mathbf{p}_j, \mathbf{p}_k) = \bigl|X_i(Y_j - Y_k) + X_j(Y_k - Y_i) + X_k(Y_i - Y_j)\bigr| \in \mathbb{Z}_{\ge 0}, \qquad (X_i, Y_i) = \lfloor D \cdot (u_i, v_i) \rfloor,
+\tag{8a}\label{eq:lean4_area}
+\end{equation}
+\begin{equation}
+0 \le X_i, \qquad 0 \le Y_i, \qquad X_i + Y_i \le D \qquad \forall\, i \in \{0, \dots, n-1\},
+\tag{8b}\label{eq:lean4_simplex}
+\end{equation}
+where $D = 10^{50}$ (and $D = 10^{100}$ in \texttt{heilbronn\_pr\_package/}). Because floor truncation is monotone non-increasing ($X_i = \lfloor D u_i \rfloor \le D u_i$ and $Y_i = \lfloor D v_i \rfloor \le D v_i$), any continuous vertex $(u_i, v_i)$ in the unit right triangle $T = \{(u, v) \in \mathbb{R}^2 : u \ge 0,\, v \ge 0,\, u + v \le 1\}$ automatically satisfies $X_i + Y_i \le D(u_i + v_i) \le D$. Writing $X_i = D u_i - \delta_i^x$ and $Y_i = D v_i - \delta_i^y$ with $\delta_i^x, \delta_i^y \in [0, 1)$, expanding Eq.~\eqref{eq:lean4_area} over $T$ ($|u_j - u_k| \le 1, |v_j - v_k| \le 1$) bounds the worst-case scaled area perturbation by $\bigl|A_{\text{scaled}}(\mathbf{p}_i, \mathbf{p}_j, \mathbf{p}_k) - 2 D^2 \operatorname{Area}(\mathbf{p}_i^\star, \mathbf{p}_j^\star, \mathbf{p}_k^\star)\bigr| \le 4 D$, so the normalized rational area $\underline{\Delta}_n = \min_{i<j<k} \operatorname{Area}(\hat{\mathbf{p}}_i, \hat{\mathbf{p}}_j, \hat{\mathbf{p}}_k)$ differs from the exact continuous area $\Delta_n^\star$ by at most $4 D / (2 D^2) = 2 D^{-1}$ (at most $2 \times 10^{-50}$ at $D = 10^{50}$ and $2 \times 10^{-100}$ at $D = 10^{100}$, strictly smaller than the $+3.73 \times 10^{-14}$ and $+5.77 \times 10^{-14}$ KKT improvements by 36 to 86 orders of magnitude).
+\item \textbf{Layer 2 --- Generated Coordinate \& Bound Theorems (\texttt{lean4\_certificates/Cert\_Heilbronn\_13\_14.lean}):} Embeds the exact integer coordinates \texttt{pts\_heilbronn\_n13\_beats\_stead2026} and \texttt{pts\_heilbronn\_n14\_beats\_cantrell2007} and proves both simplex containment Eq.~\eqref{eq:lean4_simplex} for all $n$ points and strict minimum-area inequality over all $\binom{n}{3}$ triangles via the \texttt{Lean 4} kernel's compiled decision procedure \texttt{by native\_decide}.
+\end{enumerate}
+
+\section{\texttt{SLEEP-DAG-RSI v5}: Coupling Parametric Sleep (\texttt{SLEEP + HOPE + CMS}) with Counterfactual DAG Search}
+\label{sec:v5}
+
+While \texttt{Lean-DAG-RSI v1--v4} stores discovery state in external DAG logs, \emph{SLEEP} \cite{sleep2026} updates parametric weights via a Continuum Memory System (\texttt{CMS}) and fast associative memory (\texttt{HOPE}) \cite{hope2025}. However, \emph{Vanilla SLEEP} suffers from four vulnerabilities on reasoning and optimization tasks: (1) \emph{Dead-End Contamination} (consolidating all wake trajectories, including traps, into slow experts); (2) \emph{Blind Random MoE Dreaming} (sampling a single random MoE expert during REM dreaming); (3) \emph{Sharp-Spike Vulnerability} (ranking dreams by raw delta-rule gradient norm $\|g_{\text{DR}}\|_2$, which favors narrow overfitted spikes); and (4) \emph{Sleep $\times$ Policy Interference}.
+
+In \texttt{sleep\_dag\_rsi.py}, \texttt{SLEEP-DAG-RSI v5} couples both frameworks via four mathematical bridges:
+\begin{enumerate}
+\item \textbf{Bridge 1 --- Selectively Masked \texttt{DAG Knowledge Seeding} (\texttt{DAG-KS}) + Contrastive Repulsion (\texttt{DAG-DPO}):}
+During NREM consolidation, all $100\%$ of DAG nodes remain in context ($\text{in\_context} = \text{True}$), but token/trajectory supervision mask $m_{\text{win}}(u) \in \{0, 1\}$ is non-zero strictly on the verified winning lineage (\texttt{export\_masked\_sft\_dataset}) or SDPO-reclaimed trajectories (Section~\ref{sec:v8}). In the discrete token / probability-distribution setting (\texttt{DAGKnowledgeSeedingConsolidator}), the loss combines Generalized Jensen-Shannon Divergence $\mathcal{L}_{\text{GKD}}$ \cite{sleep2026} with prefix-aligned DPO repulsion (\texttt{export\_dag\_dpo\_pairs}). In the continuous slow-expert adapter (\texttt{UniversalNeuralSleepAdapter.nrem\_consolidate}, \texttt{sleep\_dag\_rsi.py:2363}), the active low-rank slow expert $f_{\text{slow}}(\mathbf{x}; A_k, B_k) = \operatorname{GELU}(\mathbf{x} A_k) B_k$ minimizes the weighted residual objective:
+\begin{equation}
+\mathcal{L}_{\text{DAG-KS}}(A_k, B_k) = \frac{1}{2B}\sum_{b=1}^B \omega_b \,\bigl\|f_{\text{slow}}(\mathbf{x}_b; A_k, B_k) - \mathbf{y}_b^{\text{target}}\bigr\|_2^2 + \mathcal{R}_{\text{DPO}}(A_k, B_k), \qquad \omega_b = m_{\text{win}}(u_b)\,q_{\text{prov}}(u_b)\,w_b(\tau),
+\tag{9}\label{eq:dag_ks}
+\end{equation}
+\begin{equation}
+\mathcal{R}_{\text{DPO}}(A_k, B_k) = \lambda_{\text{DPO}}\sum_{(u \to v^+, v^-)} \log\!\Bigl(1 + \exp\bigl(-\beta_{\text{DPO}}\bigl(\|f_{\text{slow}}(\mathbf{x}_b) - \Delta\mathbf{y}_b^-\|_2^2 - \|f_{\text{slow}}(\mathbf{x}_b) - \Delta\mathbf{y}_b^+\|_2^2\bigr)\bigr)\Bigr),
+\tag{9a}\label{eq:dag_dpo}
+\end{equation}
+which repels the slow expert from sibling dead-end residuals $\Delta\mathbf{y}_b^-$ while base weights $\theta_{\text{base}}$ and previously consolidated slow experts $\{A_1, B_1, \dots, A_{k-1}, B_{k-1}\}$ are strictly frozen ($\text{drift} = 0.0$). When an exploratory round yields zero winning nodes and zero SDPO-reclaimed trajectories ($\sum_b \omega_b = 0$), \texttt{nrem\_consolidate} triggers the \textbf{Zero-Win Abstention Guard} ($\text{abstained\_zero\_win} = \text{True}$, holding $\Delta A_k = \mathbf{0}, \Delta B_k = \mathbf{0}$ so unanchored DPO repulsion cannot push weights into arbitrary directions), while any rejected candidate $v^-$ branched from a previously verified parent or root anchor $u^+$ is buffered as a prefix-aligned pair $(u^+ \to v^+, v^-)$ in \texttt{export\_dag\_dpo\_pairs} for the next NREM cycle with an active positive anchor.
+\item \textbf{Bridge 2 --- Error-Fingerprint Guided MoE Expert Crossover (\texttt{ExpandableMoEMLP}):}
+Each unlocked low-rank slow expert $e_i = \{A_i, B_i\}$ stores an \texttt{ExpertFingerprintMeta} record containing its \texttt{pass\_mask} $\in \{0, 1\}^M$ and modified AST symbol set $\mathcal{A}_{\text{AST}}(e_i)$. During REM dreaming, the router deterministically selects the complementary expert pair $(i^\star, j^\star)$ maximizing union coverage minus AST collision:
+\begin{equation}
+(i^\star, j^\star) = \arg\max_{i < j} \Bigl[\Delta_{\cup}(e_i, e_j) - \lambda_{\text{coll}} \operatorname{IoU}\bigl(\mathcal{A}_{\text{AST}}(e_i), \mathcal{A}_{\text{AST}}(e_j)\bigr)\Bigr] > 0.
+\tag{9b}\label{eq:moe_xover}
+\end{equation}
+\item \textbf{Bridge 3 --- Counterfactual + 20-Direction Flat-Plateau REM Dream Filter (\texttt{CounterfactualDreamingEngine}):}
+Candidate dreams are first pre-screened by the \texttt{LeanDAGWorld} counterfactual model (saving $\approx 64\%$ of heavy verifier evaluations), and the top-$K$ survivors ($K = 3$, \texttt{top\_k\_verify = 3}) undergo a 20-direction $\pm 5\%$ weight perturbation test (\texttt{evaluate\_flat\_plateau}); sharp spikes ($\text{is\_sharp\_spike} = \text{True}$) have their reward zeroed ($r_{\text{dream}} = 0$).
+\item \textbf{Bridge 4 --- Joint $2\times 2$ Acceptance Gate (\texttt{accept\_joint\_2x2}):}
+Evaluates all four combinations $\{\theta_{\text{pre}}, \theta_{\text{sleep}}\} \times \{\psi_{\text{inc}}, \psi_{\text{dream}}\}$ on held-out validation slices and blocks any update that regresses synergy or drops below \texttt{min\_novelty\_floor}.
+\end{enumerate}
+
+\section{\texttt{SLEEP-DAG-RSI v6--v7}: Multi-Fidelity Wald Sentinel \& Dual Gram Spectral Frame-Lifting}
+\label{sec:v6}
+
+\subsection{\texttt{WaldMicroSentinel}: 5\% Multi-Fidelity Sequential UCB95 Early-Veto with Locked Stochastic Trimming}
+
+Evaluating doomed candidate mutations across fine grids ($P = 20,256$) or large geometric constraint sets ($\binom{16}{3} = 560$ triangles) wastes $80\text{--}95\%$ of compute. Given a parent node $u$ with pointwise evaluation vector $\mathbf{e}_u \in \mathbb{R}^N$ (activated whenever $N \ge N_{\min} = 80$, so each stratum contains $\ge 2$ samples for unbiased variance estimation; for small grids $N < 80$, all $N$ points are evaluated directly):
+\begin{enumerate}
+\item \textbf{Deterministic vs.\ Locked Stochastic Adversarial Core ($S_{\text{adv}}$) \& Canary Carving ($\le 5.0\%$ Single-Call Budget):} In deterministic tasks, $S_{\text{adv}}$ selects the $k = \lfloor 0.025 N \rfloor$ worst residual indices of parent $u$ and $S_{\text{strat}}$ selects $k = \lfloor 0.025 N \rfloor$ uniformly spaced indices disjoint from $S_{\text{adv}}$. In heavy-tailed stochastic dynamical systems ($\text{noise\_regime}=\texttt{"stochastic"}$), selecting the raw worst $2.5\%$ captures irreducible sensor spikes (flash crashes / Cauchy outliers), causing the optimizer to overfit noise. Therefore, \texttt{WaldMicroSentinel} trims the extreme top $q_{\text{trim}} = 5\%$ quantile (\texttt{parent\_trimmed\_indices}) \textbf{locked once on the parent node $u$} and selects $S_{\text{adv}}$ from the informative $92.5\%\text{--}95\%$ error band ($\text{adv\_spike\_overlap} = 0$). To enforce the hard $\le 5.0\%$ evaluation budget in a \textbf{single \texttt{eval\_slice\_fn} call} while still guarding against numerical explosions inside the locked parent trim region, stochastic mode carves $n_{\text{canary}} = \max(1, \lfloor 0.005 N \rfloor)$ ($0.5\%$) canary indices from the active slice (allocating $|S_{\text{adv}}| \approx 2.25\% N$, $|S_{\text{strat}}| \approx 2.25\% N$, and $|S_{\text{canary}}| \approx 0.5\% N$, totaling $|S_{\text{eval}}| \le \lfloor 0.05 N \rfloor$, $\text{cost\_fraction} \le 0.05$ with $\ge 2$ samples per stratum for all $N \ge 80$); any candidate whose raw error on $S_{\text{canary}}$ exceeds $\text{hard\_divergence\_ceiling} = 10^6$ is immediately vetoed (\texttt{Suite 19h}).
+\item \textbf{Stratified Anchor ($S_{\text{strat}}$):} Uniformly spaced indices disjoint from $S_{\text{adv}}$ anchoring global scale ($S_{\text{adv}} \cap S_{\text{strat}} = \emptyset$).
+\item \textbf{Sequential Upper-Confidence-Bound ($\operatorname{UCB}_{95}$) Early-Veto Test with Unbiased Stratified SE:} On $S_{\text{sentinel}} = S_{\text{adv}} \cup S_{\text{strat}}$, let $\Delta_i = s_v(i) - s_u(i)$ denote the pointwise score gain of candidate $v$ over parent $u$ (higher is better), with within-stratum sample variances $s_{\text{adv}}^2, s_{\text{strat}}^2$. We compute the \textbf{tail-risk-averse composite sentinel mean} $\hat{\mu}_\Delta = w_{\text{adv}}\bar{\Delta}_{\text{adv}} + w_{\text{strat}}\bar{\Delta}_{\text{strat}}$ (where $w_{\text{adv}} = |S_{\text{adv}}|/|S_{\text{sentinel}}| \approx 1/2$ and $w_{\text{strat}} = |S_{\text{strat}}|/|S_{\text{sentinel}}| \approx 1/2$ deliberately weight worst-case bottleneck performance equally with the global average to screen out candidates that regress the adversarial tail) and the \textbf{unbiased two-stratum standard error} $\operatorname{SE}_{\text{strat}}(\Delta)$, vetoing candidate $v$ whenever its Student-$t$-inflated $95\%$ \textbf{Upper Confidence Bound ($\operatorname{UCB}_{95}$)} is strictly negative:
+\begin{equation}
+\operatorname{UCB}_{95}(\Delta) = \hat{\mu}_\Delta + \gamma_{\text{UCB}}\,c_t(\nu)\,\operatorname{SE}_{\text{strat}}(\Delta) < -\epsilon_{\text{tol}}, \qquad \operatorname{SE}_{\text{strat}}(\Delta) = \sqrt{w_{\text{adv}}^2 \frac{s_{\text{adv}}^2}{|S_{\text{adv}}|} + w_{\text{strat}}^2 \frac{s_{\text{strat}}^2}{|S_{\text{strat}}|}},
+\tag{10}\label{eq:ucb95_sentinel}
+\end{equation}
+where $\gamma_{\text{UCB}} = 1.96$ and $c_t(\nu) = 1 + 2.4/\nu + 3.5/\nu^2$ ($\nu = \max(1, \min(|S_{\text{adv}}|, |S_{\text{strat}}|) - 1)$ for small strata $< 30$, else $1.0$). When $\operatorname{UCB}_{95}(\Delta) < -\epsilon_{\text{tol}}$, evaluation aborts at $5\%$ cost, marking \texttt{node.fail\_class = "sentinel\_pruned"} ($\text{is\_success()} = \text{False}$) and exporting $(u \to v^+, v_{\text{aborted}})$ to \texttt{export\_dag\_dpo\_pairs}. Multi-parent crossovers and newly lifted coordinate frames are exempt from $S_{\text{adv}}$ and tested solely on $S_{\text{strat}}$. Across 10 random seeds on Heilbronn $n=16$ (\texttt{Trial 1}), \texttt{WaldMicroSentinel} reduces triangle evaluations by $\mathbf{76.44\% \pm 9.23\%}$ ($83.51\%$ canonical) with $\mathbf{100.0\%}$ ($10/10$) exact winner agreement.
+\end{enumerate}
+
+\subsection{Proposition 3: Dual Gram Spectral Equivalence \& Numerical-Rank $\kappa_{\text{eff}}(G)$ in \texttt{SpectralFrameLifter}}
+
+When optimizing $d$ parameters across $M$ regime buckets with Jacobian $J \in \mathbb{R}^{M \times d}$ and primal Gauss-Newton matrix $G = \frac{1}{M}J^\top J \in \mathbb{R}^{d \times d}$, two classical pathologies arise when $M < d$ (e.g., $M = 6$ buckets and $d = 128$ or $2,560$ parameters):
+(1) \emph{Rank-Deficient False Alarms:} Because $\operatorname{rank}(G) \le \min(M, d) < d$, the smallest $d - M$ eigenvalues of $G$ are identically zero ($\lambda_{\min}(G) = 0$), causing the naive condition number $\kappa(G) = \lambda_{\max}/\lambda_{\min} \to \infty$ even on perfectly isotropic objectives; and
+(2) \emph{Cubic $\mathcal{O}(d^3)$ Diagonalization Bottleneck:} Forming and diagonalizing $G \in \mathbb{R}^{d \times d}$ requires $\mathcal{O}(M d^2 + d^3)$ operations.
+
+\begin{proposition}[Dual Gram Eigendecomposition \& Relative-Threshold Condition Number]
+\label{prop:dual_gram}
+Let $J \in \mathbb{R}^{M \times d}$ with $M < d$, and define the $M \times M$ Dual Gram matrix $K = \frac{1}{M} J J^\top \in \mathbb{R}^{M \times M}$ (\texttt{\_dual\_gram\_eigh\_from\_jacobian}, \texttt{engine.py:3380}). Let $K = U \Lambda_M U^\top$ be the eigendecomposition of $K$ with eigenvalues $\lambda_1 \ge \dots \ge \lambda_M \ge 0$ and orthonormal eigenvectors $\mathbf{u}_1, \dots, \mathbf{u}_M \in \mathbb{R}^M$. Then:
+\begin{enumerate}
+\item The non-zero spectrum of $G = \frac{1}{M}J^\top J \in \mathbb{R}^{d \times d}$ coincides identically with the non-zero spectrum of $K$, and for every $\lambda_r > 10^{-12}$, the vector
+\begin{equation}
+\mathbf{v}_r = \frac{1}{\sqrt{M \lambda_r}} J^\top \mathbf{u}_r \in \mathbb{R}^d
+\tag{11}\label{eq:dual_eigvec}
+\end{equation}
+is an exact unit-norm eigenvector of $G$ with eigenvalue $\lambda_r$, computable in $\mathcal{O}(M^2 d + M^3)$ time instead of $\mathcal{O}(d^3)$.
+\item Define the \textbf{relative-threshold numerical rank} $r_{\sup}(\varepsilon_{\text{null}}) = \bigl|\{m \in \{1, \dots, \min(M, d)\} : \lambda_m(G) > \varepsilon_{\text{null}}\lambda_{\max}(G)\}\bigr|$ with $\varepsilon_{\text{null}} = 10^{-12}$. Then the \textbf{Regularized Effective Condition Number} restricted to $r_{\sup}(\varepsilon_{\text{null}})$:
+\begin{equation}
+\kappa_{\text{eff}}(G) = \frac{\lambda_{\max}(G)}{\max\bigl(\lambda_{r_{\sup}(\varepsilon_{\text{null}})}(G),\, 10^{-12}\bigr)}
+\tag{12}\label{eq:kappa_eff}
+\end{equation}
+equals $1.0$ on any isotropic subspace of rank $M < d$ (zero false-positive triggers) while accurately detecting extreme multi-scale valleys ($\kappa_{\text{eff}} = 10^8$) even when a single dominant eigenvalue ($\lambda_1 = 1, \lambda_2 = \dots = \lambda_M = 10^{-8}$) causes the participation ratio $r_{\text{eff}} = (\operatorname{Tr} G)^2/\operatorname{Tr}(G^2) \approx 1.0$ to collapse (\texttt{Suite 19h}).
+\end{enumerate}
+\end{proposition}
+\begin{proof}
+Multiply $\mathbf{v}_r$ by $G$: $G \mathbf{v}_r = \frac{1}{M} J^\top J \left(\frac{1}{\sqrt{M\lambda_r}} J^\top \mathbf{u}_r\right) = \frac{1}{\sqrt{M\lambda_r}} J^\top \left(\frac{1}{M} J J^\top \mathbf{u}_r\right) = \frac{1}{\sqrt{M\lambda_r}} J^\top (\lambda_r \mathbf{u}_r) = \lambda_r \mathbf{v}_r$. Orthonormality follows from $\mathbf{v}_r^\top \mathbf{v}_s = \frac{1}{M\sqrt{\lambda_r \lambda_s}} \mathbf{u}_r^\top (J J^\top) \mathbf{u}_s = \frac{\lambda_s}{\sqrt{\lambda_r \lambda_s}} \mathbf{u}_r^\top \mathbf{u}_s = \delta_{rs}$. Indexing the denominator at $r_{\sup}(\varepsilon_{\text{null}}) \le \min(M, d)$ excludes structural zero modes while retaining all active modes above $\varepsilon_{\text{null}}\lambda_{\max}$.
+\end{proof}
+
+When $\kappa_{\text{eff}}(G) \ge 10^6$, \texttt{SpectralFrameLifter} (\texttt{engine.py:3720}) queries \texttt{SpectralMetaAtlas} to apply one of three coordinate-frame transformations $\Phi \to \Phi'$ with mandatory exact inverse projection $\Phi^{-1}: \mathcal{X}' \to \mathcal{X}$:
+\begin{itemize}
+\item \textbf{\texttt{EigenRotationTransform}}: Rotates into the stiff active eigen-subspace $\mathbf{y} = V_{\text{active}}^\top(\boldsymbol{\theta} - \boldsymbol{\theta}_{\text{anchor}})$, applies active-mode rescaling $P = V_{\text{active}}\Lambda_{\text{active}}^{-1/2}$ so the preconditioned Hessian in lifted coordinates satisfies $\kappa(P^\top H P) = 1.0$, and freezes sloppy/null modes ($\lambda_r \le \varepsilon_{\text{null}}\lambda_{\max}$). Across 10 random 8D rotated valleys with $\kappa_{\text{eff}} = 10^8$ and $M=6 < d=8$ (\texttt{Trial 2}), this reaches $< 2.5\times 10^{-7}$ loss in $15$ steps ($1.18 \pm 0.04\text{ ms}$) vs.\ $7.1761 \pm 5.2062$ after $40$ steps in unlifted coordinates.
+\item \textbf{\texttt{KktSlackTransform} with \texttt{condense\_active\_set}}: Lifts non-smooth minimax ties $\min_{1 \le i \le K} f_i(x)$ to $(x, z) \in \mathbb{R}^{d+K}$ and automatically prunes inactive slack variables ($f_i(x) - z_{\min} > \sigma_{\text{mult}}\hat{\sigma}_f$). At Heilbronn $n=16$, while the converged KKT optimum has exactly \textbf{24 tight equiareal triangles} ($M=24$, Section~\ref{sec:extremal}), \texttt{condense\_active\_set} with buffer multiplier $\sigma_{\text{mult}} = 0.05$ retains \textbf{57 near-active triangles} out of $560$ during pre-convergence wake steps (\texttt{Trial 1}) so triangles entering or leaving the active boundary are tracked without re-evaluating the 503 far-inactive triangles.
+\item \textbf{\texttt{DyadicHomotopyTransform}}: Solves high-resolution grids on coarse dyadic levels ($P/2^k \to P$) with linear prolongation.
+\end{itemize}
+
+\section{\texttt{SLEEP-DAG-RSI v7}: Autonomous AST Splicing, Active Boundary Synthesis \& Hierarchical \texttt{SymbolicLibrary}}
+\label{sec:v7}
+
+\subsection{\texttt{AstCodeSplicer}: Structural Merging \& LOO-Validated Nonlinear OOS Input-Routing Synthesis}
+
+In earlier evolutionary frameworks, \texttt{CROSSOVER(u, v)} merely prompted an LLM with two code strings. In \texttt{SLEEP-DAG-RSI v7}, \texttt{AstCodeSplicer} (\texttt{engine.py:3810}) parses parent Python ASTs via \texttt{ast.parse} and performs:
+\begin{enumerate}
+\item \textbf{Structural AST Merge (\texttt{structural\_ast\_merge}) \& Multi-Parent Cascade ($|S| \ge 3$):} When parents modify disjoint helper functions and non-colliding intra-function variable assignments ($\operatorname{IoU}(\mathcal{A}_{\text{AST}}(u), \mathcal{A}_{\text{AST}}(v)) = 0$), their AST nodes are spliced directly into the base syntax tree. When \texttt{compute\_hyper\_crossover} selects $|S| = k \ge 3$ parents $S = \{u^\star, u_2, \dots, u_k\}$, \texttt{splice\_parents} executes a sequential left-associative pairwise reduction (\texttt{functools.reduce}), iteratively splicing the running hybrid $h_{m-1}$ ($h_1 = u^\star$) with the next complementary parent $u_m$ ($m = 2, \dots, k$) and synthesizing nested regime-routing branches when target expressions overlap.
+\item \textbf{LOO-Validated Nonlinear OOS Input-Routing Predicate Synthesis (\texttt{\_synthesize\_input\_routing\_predicate}):} When two parents modify the same target expression but specialize in different input regimes (measured by bucket inputs $\mathbf{x}_b \in \mathbb{R}^d$ and parent bucket margins $\phi_b(u), \phi_b(v)$), \texttt{AstCodeSplicer} searches a 4-tier hierarchical candidate feature grammar ordered by Minimum Description Length (MDL) complexity $c_{\text{MDL}}(g) \in \{1, 2, 3, 4\}$:
+\begin{equation}
+\mathcal{G}_{\text{route}}(\mathbf{x}) = \Bigl\{x_c,\; |x_c|,\; \operatorname{lib}_k(\mathbf{x}),\; x_i x_j,\; x_i^2 + x_j^2\Bigr\},
+\tag{13}\label{eq:g_route}
+\end{equation}
+finding the simplest threshold split $g(\mathbf{x}) \ge \tau$ that maximizes the MDL-penalized routing margin gain:
+\begin{equation}
+J_{\text{route}}(g, \tau) = \frac{1}{M}\sum_{b=1}^M \Bigl[\mathbb{I}\bigl(g(\mathbf{x}_b) \ge \tau\bigr)\phi_b(u) + \mathbb{I}\bigl(g(\mathbf{x}_b) < \tau\bigr)\phi_b(v)\Bigr] - \max\bigl(\bar{\phi}(u), \bar{\phi}(v)\bigr) - \lambda_{\text{MDL}}\,c_{\text{MDL}}(g).
+\tag{13a}\label{eq:j_route}
+\end{equation}
+To prevent overfitting when $M \le 8$ buckets relative to $\mathcal{O}(d^2)$ quadratic candidates in Tiers 3--4, \texttt{\_synthesize\_input\_routing\_predicate} enforces a \textbf{Leave-One-Bucket-Out (LOO) Cross-Validation Margin Check} ($\text{loo\_valid} = \text{True}$, requiring that for every held-out bucket $b$, the threshold $\tau^{(-b)}$ fit on the remaining $M-1$ buckets routes $\mathbf{x}_b$ to a parent with margin within $\varepsilon_{\text{LOO}} = 10^{-6}$ of the oracle optimum, \texttt{Suite 19h}), followed by \texttt{verify\_spliced\_epistasis} to guarantee that the spliced hybrid achieves $s(h) \ge \max(s(u), s(v)) - \varepsilon_{\text{tol}}$ with default tolerance $\varepsilon_{\text{tol}} = 10^{-4}$. This cracks both 1D half-space splits (\texttt{x[0] >= 0.0}) and bilinear XOR quadrant splits (\texttt{(x[0] * x[1]) >= 0.0}) with $\mathbf{100\%}$ OOS accuracy (\texttt{Suites 18d--18e, 19h}).
+\end{enumerate}
+
+\subsection{\texttt{NeuroSymbolicDistiller}, \texttt{SymbolicLibrary} \& Full-Target Multi-Cycle Re-Consolidation}
+
+During NREM sleep, \texttt{NeuroSymbolicDistiller} (\texttt{sleep\_dag\_rsi.py:865}) extracts explicit Python AST equations from neural slow-expert residuals $\Delta f_m(X) \in \mathbb{R}^{B \times d_{\text{out}}}$ via pure-NumPy Coordinate-Descent Lasso + OLS refitting over a typed basis dictionary $\Psi(X) = \{x_i,\; x_i x_j,\; x_i^2,\; \tanh(x_i),\; \operatorname{sign}(x_i)\}$. To overcome the depth-2 ceiling of flat sparse regression (and standard \emph{SINDy} STLSQ \cite{brunton2016}), \texttt{SLEEP-DAG-RSI v7} introduces two mechanisms:
+\begin{enumerate}
+\item \textbf{DreamCoder-Style Hierarchical \texttt{SymbolicLibrary} \& Outer-Projected Inner Gauss-Newton Search:}
+Whenever a distilled multi-term expression achieves $R^2_{\text{OOS}} \ge 0.85$, it is abstracted into a reusable \texttt{LibraryPrimitive} $\operatorname{lib}_k(\mathbf{x})$ storing its natural amplitude scale $s_k = \operatorname{std}(f_{\text{raw}}(X))$ and mean offset $\mu_k$ (so $f_{\text{raw}}(\mathbf{x}) = s_k \operatorname{lib}_k(\mathbf{x}) + \mu_k$). Furthermore, if flat Lasso explains only partial variance ($0.25 \le R^2 < 0.92$) because the true physical law combines a saturating nonlinear core with additive outer linear terms $y = \tanh(\mathbf{w}_{\text{in}}^\top \boldsymbol{\phi}(\mathbf{x})) + \mathbf{w}_{\text{out}}^\top \boldsymbol{\psi}(\mathbf{x})$, \texttt{\_discover\_nonlinear\_inner\_submotif} first projects out the top active outer linear subspace $X_{\text{lin}}$ via the orthogonal complement residual $\mathbf{y}_{\text{nl}} = \bigl(I - X_{\text{lin}}(X_{\text{lin}}^\top X_{\text{lin}} + \lambda I)^{-1}X_{\text{lin}}^\top\bigr)\mathbf{y}$ (\texttt{Suite 19h}) and then executes 5 steps of damped Gauss-Newton with analytical Jacobian $J_{\tanh} = (1 - \tanh^2(z))\,\boldsymbol{\phi}(\mathbf{x})$ to recover $\mathbf{w}_{\text{in}}$ and register the inner argument as $\operatorname{lib}_k(\mathbf{x})$. In subsequent NREM cycles, \texttt{SymbolicLibrary} injects nonlinear compositions $\tanh(s_k \operatorname{lib}_k(\mathbf{x}) + \mu_k), \operatorname{sign}(\operatorname{lib}_k(\mathbf{x})), \operatorname{lib}_k(\mathbf{x}) \cdot x_i$, and $\operatorname{lib}_k(\mathbf{x}) \cdot \operatorname{sign}(x_i)$ into $\Psi(X)$.
+\item \textbf{Full-Target Multi-Cycle Re-Consolidation ($\text{reconstruct\_uncorrupted\_target}=\text{True}$):}
+A subtle mathematical trap occurs when distilling $y = \tanh(z) + 0.6 x_4$ across two sleep cycles: in Cycle 1, flat Lasso fits the best linear approximation $\hat{y}^{(1)} \approx c \cdot z + 0.6 x_4$ ($R^2 \approx 0.86$) and Residual-Keep subtracts it, leaving a \textbf{corrupted residual} $\Delta y^{\text{rem}} = \tanh(z) - c \cdot z$ that is no longer a clean $\tanh(z)$ function in Cycle 2. By setting $\text{reconstruct\_uncorrupted\_target}=\text{True}$, Cycle $c \ge 2$ reconstructs the uncorrupted target $Y_{\text{full}} = \Delta Y_{\text{rem}} + \sum_{t < c} f_{\text{AST}}^{(t)}(X)$ using \texttt{prior\_cycle\_callable}, re-distills $Y_{\text{full}}$ over the expanded \texttt{SymbolicLibrary} dictionary, \textbf{replaces} the prior-cycle AST callables $\{f_{\text{AST}}^{(t)}\}_{t < c}$ with the unified expression $f_{\text{AST}}^{(c)}$ (subtracting $f_{\text{AST}}^{(c)}(X)$ once from $Y_{\text{full}}$ so prior terms are never double-counted), and recovers the exact depth-3 law $y = \tanh(1.5 x_0 x_1 - 0.8\operatorname{sign}(x_2)) + 0.6 x_4$ with $\mathbf{R^2_{\text{OOS}} = 1.0000 \pm 0.0000}$ across all 10 seeds (\texttt{Trial 4}), whereas both flat \texttt{v6} distillation ($R^2_{\text{OOS}} = 0.0400 \pm 0.0717$) and \emph{SINDy} STLSQ ($R^2_{\text{OOS}} = 0.0251 \pm 0.0793$) fail completely.
+\end{enumerate}
+
+\subsection{\texttt{ActiveBoundarySynthesizer}: Bichromatic Chord Bisection \& Committee Variance Ascent}
+
+Passive replay buffers cluster inside smooth interior basins and rarely sample regime boundaries where candidate symbolic laws diverge from neural experts. In \texttt{SLEEP-DAG-RSI v7}, \texttt{ActiveBoundarySynthesizer} (\texttt{engine.py:4065}) actively synthesizes high-information boundary probes via a two-step procedure:
+\begin{enumerate}
+\item \textbf{Bichromatic Chord Bisection:} Identifies pairs of anchor inputs $(\mathbf{x}_a, \mathbf{x}_b)$ where committee models $f_1, \dots, f_K$ (e.g., neural fast memory vs.\ slow MoE expert vs.\ candidate AST) exhibit opposite residual signs, and performs $T_{\text{bisect}} = 8$ steps of binary chord bisection to isolate exact decision-boundary crossings.
+\item \textbf{Projected Committee Variance Ascent:} Executes projected gradient ascent on the ensemble variance $\mathcal{V}(\mathbf{x}) = \operatorname{Var}_{1 \le k \le K}\bigl(f_k(\mathbf{x})\bigr)$ within a local trust ball $\|\mathbf{x} - \mathbf{x}_{\text{anc}}\|_2 \le r_{\text{trust}}$. Across \texttt{Suite 18b} and \texttt{Trial 4}, this amplifies committee disagreement by $\mathbf{11.00\times\text{--}20.23\times}$ over passive replay anchors ($0.1423 \to 2.8785$) and pinpoints exact sign-flipping counterexamples for NREM distillation.
+\end{enumerate}
+
+\section{\texttt{SLEEP-DAG-RSI v8}: Six Frontier Upgrades for Extremal Search \& Continual Adaptation}
+\label{sec:v8}
+
+\subsection{\texttt{TTT-Discover} Extremal Max-Tilted Objective (\texttt{compute\_max\_tilted\_objective})}
+
+Standard RL and evolutionary portfolios optimize the expected reward $\mathbb{E}[R(y)]$, which favors high-probability mediocre variations over rare, high-variance extremal breakthroughs. Inspired by \emph{TTT-Discover} \cite{tttdiscover2026,sun2024}, we introduce the scale-normalized \textbf{Entropic Max-Tilted Objective} (\texttt{engine.py:4295} and \texttt{sleep\_dag\_rsi.py:1348}):
+\begin{equation}
+J_\tau(R; \theta) = R_{\max} + \frac{\operatorname{stop\_grad}(s_R)}{\tau} \log \left(\frac{1}{K}\sum_{i=1}^K \exp\!\left(\tau \frac{R_i - R_{\max}}{\operatorname{stop\_grad}(s_R)}\right)\right) - \beta_{\text{KL}}\,D_{\text{KL}}\bigl(\pi_\theta \,\|\, \pi_{\text{ref}}\bigr),
+\tag{14}\label{eq:max_tilt}
+\end{equation}
+\begin{equation}
+w_i(\tau) = \frac{\exp\bigl(\tau (R_i - R_{\max})/\operatorname{stop\_grad}(s_R)\bigr)}{\sum_{j=1}^K \exp\bigl(\tau (R_j - R_{\max})/\operatorname{stop\_grad}(s_R)\bigr)}, \qquad s_R = \max\!\Bigl(\operatorname{std}\bigl(\{R_i : R_i \ge \operatorname{median}(R)\}\bigr),\; 1.4826\,\operatorname{MAD}(R),\; 10^{-6}\Bigr).
+\tag{14a}\label{eq:max_tilt_weights}
+\end{equation}
+Computing $s_R$ from the \textbf{upper-tail dispersion above the median} (with a detached $\operatorname{stop\_grad}(s_R)$ flag) ensures that a single catastrophic crash ($R_i = -10^6$) cannot blow up $s_R$ and collapse the effective inverse temperature $\tau / s_R \to 0$ (\texttt{Suite 19h}).
+
+\begin{proposition}[Monotonic Convergence to the Extremum]
+\label{prop:max_tilt}
+For any finite sample of rewards $R = (R_1, \dots, R_K) \in \mathbb{R}^K$ and fixed positive scale $s_R > 0$, the tilted expectation $E_\tau(R) = \sum_{i=1}^K w_i(\tau) R_i$ and entropic objective $J_\tau(R)$ (at $\beta_{\text{KL}}=0$) are monotonically non-decreasing in $\tau \ge 0$, with $\frac{\partial E_\tau(R)}{\partial \tau} = \frac{1}{s_R}\operatorname{Var}_{w(\tau)}(R) \ge 0$, $\lim_{\tau \to 0^+} J_\tau(R) = \frac{1}{K}\sum_{i=1}^K R_i$, and $\lim_{\tau \to \infty} J_\tau(R) = \lim_{\tau \to \infty} E_\tau(R) = \max_{1 \le i \le K} R_i$.
+\end{proposition}
+\begin{proof}
+Differentiating $E_\tau(R) = \sum_{i=1}^K w_i(\tau) R_i$ with respect to $\tau$ yields $\frac{1}{s_R}\bigl(\sum_i w_i(\tau) R_i^2 - (\sum_i w_i(\tau) R_i)^2\bigr) = \frac{1}{s_R}\operatorname{Var}_{w(\tau)}(R) \ge 0$. As $\tau \to \infty$, all exponential terms with $R_i < R_{\max}$ vanish at rate $\exp(-\tau(R_{\max} - R_i)/s_R)$, concentrating full probability mass on $\arg\max_i R_i$.
+\end{proof}
+
+In \texttt{LeanDAGPortfolio.rank\_parents\_max\_tilted}, parent selection weights branches by $w_i(\tau)$, while in \texttt{UniversalNeuralSleepAdapter.nrem\_consolidate(use\_max\_tilted\_consolidation=True, entropic\_tau=4.0)}, NREM gradient steps weight winning trajectories by $w_i(\tau)$, concentrating $\mathbf{0.9994\text{--}1.0000}$ of consolidation mass on the true breakthrough branch (\texttt{Trial 5} \& \texttt{Suites 19a, 19g, 19h}).
+
+\subsection{\texttt{BES / LADDER} Backward Sub-Goal Decomposition (\texttt{BackwardSubGoalDecomposer})}
+
+When a hard evaluation regime bucket $b^\star \in \{0, \dots, M-1\}$ is a \textbf{dead bucket} ($\max_{u \in \mathcal{T}} m_{b^\star}(u) = 0$, i.e., every explored branch has negative margin $\phi_{b^\star}(u) \le 0$), column $b^\star$ of the \texttt{pass\_mask} matrix is identically zero and \texttt{compute\_hyper\_crossover} cannot discover a synergy bridge. In continuous optimization tasks, $\phi_b(u) = (\tau_b - \ell_b(u))/|\tau_b| \in [-1, 1]$ is the normalized threshold deficit; in discrete code synthesis test suites with binary pass/fail outcomes, $\phi_b(u) \in [-1, 0)$ is defined via the dense execution surrogate margin (fraction of passed sub-assertions minus $1$, negative normalized stacktrace depth, or continuous output distance prior to binary thresholding). Combining \emph{Backward Exploratory Search (BES)} \cite{bes2025} and \emph{LADDER} \cite{ladder2025}, \texttt{BackwardSubGoalDecomposer} (\texttt{engine.py:4385}) identifies the closest near-miss anchor node $u_{\text{anc}}^\star = \arg\max_u \phi_{b^\star}(u) < 0$ and synthesizes a \textbf{3-rung stepping-stone ladder} with relaxed margin thresholds $\tau_{b^\star}^{(k)} = \alpha_k \phi_{b^\star}(u_{\text{anc}}^\star)$ ($\alpha_k \in \{0.5, 0.25, 0.0\}$), coarser problem scale $N^{(k)} = \max(8, \lfloor N / 2^k \rfloor)$, and relaxed tolerance $\epsilon^{(k)} = 10^k \epsilon$. Any candidate clearing the first rung $\phi_{b^\star}(v) \ge \tau_{b^\star}^{(1)}$ is promoted by \texttt{select\_stepping\_stone\_seed} as the root seed \texttt{promoted\_root\_seed\_id} for the next round (\texttt{Suite 19b}).
+
+\subsection{\texttt{SDPO} Feedback-Conditioned Self-Teacher on 100\%-Dead-End Batches (\texttt{FeedbackConditionedSelfTeacher})}
+
+In \texttt{SLEEP-DAG-RSI v5}, when an exploratory Wake batch on a hard domain yields $100\%$ dead-ends ($\sum_i m_{\text{win}}(u_i) = 0$), \texttt{DAG-KS} sets $\text{loss\_mask} = 0$ everywhere, wasting the entire NREM cycle. Inspired by \emph{Self-Distillation with Policy Optimization (SDPO)} \cite{sdpo2026}, \texttt{FeedbackConditionedSelfTeacher} (\texttt{engine.py:4515}, \texttt{sleep\_dag\_rsi.py:1128}) turns rich verifier diagnostics $\Delta_{\text{verifier}}(\mathbf{x}_i, f_i)$ on failed attempts $\mathbf{y}_i^{\text{attempt}}$ into corrected self-teacher targets:
+\begin{equation}
+\hat{\mathbf{y}}_i^{\text{teacher}} = \mathbf{y}_i^{\text{attempt}} + \gamma_i \cdot \Delta_{\text{verifier}}(\mathbf{x}_i, f_i), \qquad \omega_i^{\text{SDPO}} = \omega_{\max} \cdot w_{\text{Tukey}}(r_i) \cdot \frac{r_i}{r_i + \sigma_{\text{med}}},
+\tag{15}\label{eq:sdpo}
+\end{equation}
+where $r_i = \|\Delta_{\text{verifier}, i}\|_2$. To protect NREM consolidation against identical-assertion ties, non-convex kinks, and adversarial verifier corruption up to and beyond the $50\%$ breakdown point, we enforce four safeguards:
+(1) \emph{Zero-Residual Abstention Gate ($\text{abstained\_zero\_win} = \text{True}$):} Attempts with $r_i \le 10^{-8}$ receive $\omega_i^{\text{SDPO}} = 0$, and whenever $\text{direct\_win\_count} == 0$ and $\text{sdpo\_reclaimed\_count} == 0$, \texttt{nrem\_consolidate} abstains completely ($\text{sample\_weights} = 0$) so slow-expert weights remain strictly untouched (\texttt{Suites 19g, 19h});
+(2) \emph{MAD Floor Guard \& Axial/Directional Cosine Filter:} Given median residual norm $m_r = \operatorname{median}(r)$ and $\operatorname{MAD}_r = \operatorname{median}(|r - m_r|)$, we enforce the scale floor $\sigma_{\text{MAD}} = \max(1.4826\,\operatorname{MAD}_r,\; 0.15\,m_r,\; 10^{-8})$ to prevent $0/0$ rejection when $\ge 50\%$ of dead-end attempts fail on the exact same assertion ($\operatorname{MAD}_r = 0$, \texttt{Suite 19h}), rejecting any sample with $z_i = |r_i - m_r| / \sigma_{\text{MAD}} > c_{\text{MAD}}$ or misaligned cosine similarity;
+(3) \emph{Principal-Axis Bilateral Crease Mode:} When failed attempts straddle a non-smooth V-shaped cliff ($y^\star(\mathbf{x}) = -|\mathbf{x}|$), opposing gradient slopes across the crease cancel out ($\|\bar{\mathbf{g}}\|_2 \approx 0$). \texttt{reclaim\_vector\_dead\_ends} extracts the principal singular axis $\mathbf{u}_1(\Delta)$ of the verifier residual matrix, partitions inliers into $I_+ = \{i : \langle \Delta_i, \mathbf{u}_1 \rangle \ge 0\}$ and $I_- = \{i : \langle \Delta_i, \mathbf{u}_1 \rangle < 0\}$ (centering around the coordinate-wise median when shifted), and checks whether both clusters are balanced ($\min(|I_+|, |I_-|)/N \ge 0.20$), anti-parallel ($\cos(\bar{\boldsymbol{\delta}}_+, \bar{\boldsymbol{\delta}}_-) < -0.50$), and explained by the bilateral piecewise-linear crease basis with $R^2_{\text{crease}} \ge 0.85$:
+\begin{equation}
+\hat{\mathbf{y}}_i^{\text{crease}}(\mathbf{x}_i) = W_1 \mathbf{x}_i + W_2 |\mathbf{x}_i - \mathbf{c}| + \mathbf{b}, \qquad R^2_{\text{crease}} \ge 0.85 \implies \text{Bilateral Crease Mode} \quad (\text{axial } |\cos(\Delta_i, \mathbf{u}_1)|),
+\tag{15a}\label{eq:sdpo_crease}
+\end{equation}
+smoothing reconciled targets via $(1-\eta_c)(\mathbf{y}_i + \gamma_i \Delta_i) + \eta_c \hat{\mathbf{y}}_i^{\text{crease}}(\mathbf{x}_i)$ ($\eta_c = 0.35$, \texttt{Suite 19h}); and
+(4) \emph{Validation-Anchor Safety Fallback (\texttt{clean\_anchor\_xy}):} Whenever a clean validation anchor is provided and the proposed update would increase anchor loss (at $\ge 50\%$ corruption), the teacher triggers $\text{fallback\_triggered} = \text{True}$, abstains from slow-expert updates ($\text{abstained\_zero\_win} = \text{True}$), and preserves pre-update weights (\texttt{Trial 6}, Table~\ref{tab:trial6_ablations}).
+
+\subsection{\texttt{MutableSkillState} (\texttt{SKILL.state}): Fixed-Capacity Cross-Cycle Memory}
+
+Appending raw round traces to LLM prompts causes $\mathcal{O}(T)$ context bloat and attention dilution over long horizons. \texttt{MutableSkillState} (\texttt{engine.py:4605}, \texttt{sleep\_dag\_rsi.py:1395}) maintains a schema-validated, bounded JSON state updated at the end of each cycle via \texttt{commit\_cycle(tree)} with configurable capacity caps (compact prompt profile / extended orchestrator profile):
+(i) \texttt{confirmed\_invariants} ($\le K_{\text{inv}} \in \{8, 16\}$): top verified parameter/structural invariants sorted by score gain;
+(ii) \texttt{dead\_end\_fingerprints} ($\le K_{\text{dead}} = 16$): deduplicated by \texttt{(fail\_class, error\_signature)} with cumulative \texttt{occurrences} counters;
+(iii) \texttt{unsolved\_buckets} ($\le K_{\text{buck}} \in \{8, 32\}$): tracks active deficit margins and \textbf{automatically evicts} any bucket $b$ as soon as a node achieves $\phi_b(u) > 0$; and
+(iv) \texttt{active\_primitives} ($\le K_{\text{prim}} \in \{8, 12\}$): reusable AST functions from \texttt{SymbolicLibrary}.
+All floats pass through an RFC-8259 sanitizer (\texttt{\_sanitize\_json\_float}), guaranteeing strict JSON serializability ($\text{allow\_nan}=\text{False}$). Over 50 discovery rounds (\texttt{Trial 5}), \texttt{SKILL.state} requires $\mathbf{1,348}$ bytes versus $74,820$ bytes for an append-only log ($\mathbf{-98.20\%}$ compression).
+
+\subsection{\texttt{VeriHarness} Dual-Head Verification: \texttt{Disagreement Resolver} + Smooth Signed-Margin \texttt{Consensus Challenger}}
+
+Standard active learning (\texttt{ActiveBoundarySynthesizer} in \texttt{v7}) searches for points where committee models $f_1, \dots, f_K$ disagree ($\max_{\mathbf{x}} \operatorname{Var}_k(f_k(\mathbf{x}))$). However, when all committee members share the same architectural inductive bias, they suffer from \textbf{unanimous blind spots}: $\operatorname{Var}_k(f_k(\mathbf{x})) \approx 0$ even right next to a decision cliff where the entire ensemble is wrong.
+
+Inspired by \emph{VeriHarness} \cite{veriharness2026}, \texttt{synthesize\_dual\_head\_verification} (\texttt{engine.py:4205}) pairs \textbf{Head A (\texttt{Disagreement Resolver})} with \textbf{Head B (\texttt{Consensus Challenger})}, which performs projected gradient descent within trust ball $\|\mathbf{x} - \mathbf{x}_{\text{anc}}\|_2 \le r_{\text{trust}}$ to \textbf{minimize the smooth signed consensus margin}:
+\begin{equation}
+\mathcal{M}_{\text{cons}}(\mathbf{x}) = s_{\text{anc}} \cdot \bar{f}(\mathbf{x}) + \lambda_{\text{var}}\sqrt{\operatorname{Var}_k\bigl(f_k(\mathbf{x})\bigr) + \epsilon}, \qquad s_{\text{anc}} = \operatorname{sign}\bigl(\bar{f}(\mathbf{x}_{\text{anc}})\bigr) \in \{-1, +1\}, \quad \bar{f}(\mathbf{x}) = \frac{1}{K}\sum_{k=1}^K f_k(\mathbf{x}).
+\tag{16}\label{eq:veriharness}
+\end{equation}
+Because $\nabla_{\mathbf{x}}\mathcal{M}_{\text{cons}}(\mathbf{x}) = s_{\text{anc}}\nabla\bar{f}(\mathbf{x}) + \frac{\lambda_{\text{var}}}{2\sqrt{\operatorname{Var}_k + \epsilon}}\nabla\operatorname{Var}_k(\mathbf{x})$ is smooth and non-vanishing even when $\operatorname{Var}_k(f_k(\mathbf{x})) = 0$ identically, descending $-\nabla_{\mathbf{x}}\mathcal{M}_{\text{cons}}$ pushes $\mathbf{x}$ directly across the zero-level set into the negative signed-margin region ($s_{\text{anc}}\bar{f}(\mathbf{x}) < 0$) where all committee models flip sign in unison, certified against an optional \texttt{ground\_truth\_oracle\_fn} (\texttt{Suites 19e, 19h}).
+
+\subsection{\texttt{FALCON-2} Prefix-Aligned NLMS Fast-Weight Adaptation vs.\ \texttt{Gated DeltaNet}}
+
+In \texttt{DeltaRuleFastMemory} (\texttt{v5}), the unnormalized outer-product update $\Delta M_t = \eta_t (\mathbf{v}_t - M_{t-1}\mathbf{k}_t)\mathbf{k}_t^\top$ scales quadratically with input norm ($\propto \|\mathbf{x}_t\|_2^2$). A single $10^3\times$ sensor spike causes immediate numerical overflow ($\text{loss} = 8.18\times 10^{14}$). Furthermore, naive prefix mixing $\tilde{\mathbf{k}}_t = (1-\alpha)\mathbf{k}_t + \alpha \mathbf{k}_{t-1}$ (used in standard \emph{Gated DeltaNet} \cite{yang2025}) suffers from catastrophic norm cancellation when an opposite-sign spike arrives ($\mathbf{x}_t \approx -\frac{\alpha}{1-\alpha}\mathbf{x}_{t-1} \implies \|\tilde{\mathbf{k}}_t\|_2 \to 0$).
+
+Inspired by \emph{FALCON-2} \cite{falcon2_2026}, we implement \textbf{Prefix-Aligned Normalized Least-Mean-Squares (NLMS)} with a \textbf{running prefix average of unit-normalized keys} $\bar{\mathbf{k}}_{1:t-1}$, cosine alignment gate, max-norm denominator, and \textbf{Huber innovation clipping} (\texttt{sleep\_dag\_rsi.py:406} and \texttt{2202}, with default hyperparameters $\eta_t = 0.05$, $\lambda_{\text{NLMS}} = 1.0$, $\alpha_{\min} = 0.10$, and Huber threshold $c_{\text{innov}} = 10.0$):
+\begin{equation}
+\Delta M_t = \frac{\eta_t \, \alpha_{\text{prefix}}(t)}{\max\bigl(\|\tilde{\mathbf{k}}_t\|_2^2,\, \|\mathbf{k}_t\|_2^2\bigr) + \lambda_{\text{NLMS}}} \,\operatorname{clip}_{\text{Huber}}\bigl(\mathbf{v}_t - M_{t-1}\tilde{\mathbf{k}}_t,\; c_{\text{innov}}\bigr)\,\tilde{\mathbf{k}}_t^\top, \qquad \alpha_{\text{prefix}}(t) = \operatorname{clip}\!\left(\frac{1 + \cos(\hat{\mathbf{k}}_t, \bar{\mathbf{k}}_{1:t-1})}{2},\; \alpha_{\min},\; 1.0\right),
+\tag{17}\label{eq:falcon2}
+\end{equation}
+\begin{equation}
+\hat{\mathbf{k}}_t = \frac{\mathbf{k}_t}{\|\mathbf{k}_t\|_2 + 10^{-12}}, \qquad \bar{\mathbf{k}}_{1:t} = \frac{t - 1}{t}\,\bar{\mathbf{k}}_{1:t-1} + \frac{1}{t}\,\hat{\mathbf{k}}_t, \qquad \tilde{\mathbf{k}}_t = \bigl(1 - \alpha_{\text{prefix}}(t)\bigr)\mathbf{k}_t + \alpha_{\text{prefix}}(t)\,\|\mathbf{k}_t\|_2\,\frac{\bar{\mathbf{k}}_{1:t-1}}{\|\bar{\mathbf{k}}_{1:t-1}\|_2 + 10^{-12}}.
+\tag{17a}\label{eq:falcon2_prefix}
+\end{equation}
+Across 10 random seeds (\texttt{Trial 6}, Table~\ref{tab:trial6_ablations}), \texttt{FALCON-2} achieves $\mathbf{13.5\times}$ lower post-spike loss than \emph{Gated DeltaNet} under opposite-sign $[1000\mathbf{v}, -333.3\mathbf{v}]$ cancellation spikes ($41,816.21$ vs.\ $564,478.28$) and $\mathbf{101.9\times}$ lower fast-weight blowup under $10^3\times$ target outliers ($\|B_{\text{fast}}\|_F = 3.25$ vs.\ $331.04$).
+
+\subsection{Unified End-to-End Algorithm Pseudocode (\texttt{SLEEP-DAG-RSI v8})}
+
+\begin{lstlisting}[caption={Algorithm 1: \texttt{SLEEP-DAG-RSI v8} Unified Discovery \& Continual Sleep Loop.}]
+def run_sleep_dag_rsi_v8_cycle(
+    world, tree, portfolio, adapter, sentinel, lifter, splicer, synthesizer, skill_state,
+    eval_slice_fn, eval_full_fn, anchors, committee, clean_anchor_xy=None,
+):
+    theta_0, psi_0 = adapter.snapshot_weights(), portfolio.snapshot_policy()
+    wake_X, wake_base, wake_node_ids, wake_verifier_deltas = [], [], [], []
+    decomposer = BackwardSubGoalDecomposer()
+
+    # --- PHASE 1: WAKE (Extremal DAG Exploration, UCB95 Sentinel, Spectral Lifting & FALCON-2 Fast Memory) ---
+    rank_info = portfolio.rank_parents_max_tilted(world, tau=portfolio.entropic_tau) # Eq. (14)-(14a) TTT-Discover
+    bes_subgoals = decomposer.decompose([tree])                                      # Sec. 6.2 BES/LADDER
+    for cand in propose_candidates(rank_info, bes_subgoals, skill_state):
+        gate = sentinel.evaluate_gate(cand.parent, cand, eval_slice_fn, eval_full_fn)# Eq. (10) 5% UCB95 Sentinel
+        if gate["aborted"]:
+            tree.add(cand)  # fail_class="sentinel_pruned" -> routed to export_dag_dpo_pairs()
+            continue
+        cand.eval_full(eval_full_fn)  # evaluate full 100% grid on sentinel survivors before spectral lift
+        lift_rep = lifter.detect_and_lift(tree.task, cand.theta, j_mat=cand.jacobian)# Eq. (11)-(12) Dual Gram
+        if lift_rep["triggered"]:
+            cand.theta = lift_rep["transform"].inverse_projection(optimize_in_lifted_frame(lift_rep["transform"]))
+            cand.eval_full(eval_full_fn)
+        tree.add(cand)
+        adapter.wake_adapt_step_falcon2(cand.x_stream, cand.base_out, cand.y_stream) # Eq. (17)-(17a) FALCON-2 NLMS
+        wake_X.append(cand.x_stream); wake_base.append(cand.base_out)
+        wake_node_ids.append(cand.node_id); wake_verifier_deltas.append(cand.verifier_delta)
+
+    # Promote stepping-stone seed if any candidate cleared a dead-bucket sub-goal rung
+    step_promo = decomposer.select_stepping_stone_seed(tree, bes_subgoals)
+    if step_promo["promoted_root_seed_id"] is not None:
+        tree.promoted_root_seed_id = step_promo["promoted_root_seed_id"]
+
+    # Anchored multi-parent submodular hyper-crossover + LOO-validated AST splicing with OOS routing predicate
+    hx = compute_hyper_crossover(tree.successful_nodes(), baseline=tree.baseline_score) # Eq. (5) & Eq. (13)-(13a)
+    if hx["triggered"]:
+        spliced_cand = splicer.splice_parents(hx["selected_nodes"], eval_full_fn)
+        if spliced_cand["loo_valid"] and spliced_cand["epistasis_ok"]:
+            spliced_node = spliced_cand["node"]
+            spliced_node.eval_full(eval_full_fn)
+            tree.add(spliced_node)
+            wake_X.append(spliced_node.x_stream); wake_base.append(spliced_node.base_out)
+            wake_node_ids.append(spliced_node.node_id); wake_verifier_deltas.append(spliced_node.verifier_delta)
+
+    # --- PHASE 2: NREM SLEEP (Tilted DAG-KS, SDPO Self-Teacher, VeriHarness & SymbolicLibrary Distill) ---
+    dual_probes = synthesizer.synthesize_dual_head_verification(anchors, committee)  # Eq. (16) VeriHarness
+    best_expert_meta = adapter.select_best_expert_metadata(tree)
+    dpo_pairs = export_dag_dpo_pairs(tree)                                           # Eq. (9a) DAG-DPO pairs
+    nrem_rep = adapter.nrem_consolidate(
+        x_trajectories=wake_X, base_outputs=wake_base, dag_tree=tree,
+        trajectory_node_ids=wake_node_ids, fingerprint_meta=best_expert_meta,
+        boundary_probes=dual_probes["probes"], dpo_pairs=dpo_pairs,                  # Boundary probes & DPO
+        verifier_feedback_deltas=wake_verifier_deltas, clean_anchor_xy=clean_anchor_xy, # Eq. (15)-(15a) SDPO
+        use_max_tilted_consolidation=True, entropic_tau=4.0,                         # Eq. (14) Tilted NREM
+        enable_neuro_symbolic_distill=True,                                          # SymbolicLibrary + Recon
+    )
+
+    # --- PHASE 3 & 4: REM DREAMING, SKILL.STATE COMMIT & 2x2 JOINT ACCEPTANCE GATE ---
+    comp_pair = adapter.select_complementary_crossover_experts()                     # Eq. (9b) Fingerprint MoE
+    dream_rep = CounterfactualDreamingEngine().dream_and_filter(tree, comp_pair)     # K=3, 20-dir Flat-Plateau
+    theta_plus = adapter.snapshot_weights()
+    psi_plus = portfolio.update_policy_from_dreams(dream_rep["accepted_dreams"], nrem_rep)
+    skill_state.commit_cycle(tree, library_primitives=adapter.symbolic_library.export())
+    return accept_joint_2x2(theta_0, theta_plus, psi_0, psi_plus, min_novelty_floor=0.05)
+\end{lstlisting}
+
+\section{Breakthroughs in Extremal Geometry \& Harmonic Analysis}
+\label{sec:extremal}
+
+\subsection{Two-Stage Evaluation Protocol \& Stage A Component Attribution}
+\label{sec:stage_ab}
+
+To ensure complete scientific transparency and prevent conflating discovery compute with verification runtime, all mathematical results follow a strict two-stage protocol:
+\begin{itemize}
+\item \textbf{Stage A --- Cold-Start Discovery ($12\text{--}95\text{ min}$ on 16-Core CPU / RTX 4090 GPU, Zero External Seeds):} Native C++ multi-threaded solvers (\texttt{heilbronn\_13\_14\_cpp.cpp}, \texttt{heilbronn\_16\_17\_cpp.cpp}, \texttt{heilbronn\_16\_17\_storm2.cpp}) initialized solely from \texttt{std::mt19937\_64} pseudo-random seeds ($8,192$ Latin Hypercube starts per $n$, totaling $\sim 1.8\text{M}$ triangle LP/SLSQP evaluations) perform bidirectional dimension cascades ($13 \leftrightarrow 14 \leftrightarrow 15 \leftrightarrow 16 \leftrightarrow 17$, including 2-vertex mitosis $14^\star \to 16$ to bypass the $D_3$-symmetric $12+3$ trap at $n=15$), coupled with \texttt{SLSQP + HiGHS Trust-Region SLP} and 560-digit bordered KKT-Newton refinement (\texttt{mpmath}). Across the $8,192$ cold starts, the empirical basin hit rates reaching the optimal topological chamber are $41/8,192$ ($0.50\%$) for $n=13$, $19/8,192$ ($0.23\%$) for $n=14$, $11/512$ ($2.15\%$) for $14^\star \to 16$ 2-vertex mitosis, and $7/512$ ($1.37\%$) for $16^\star \to 17$ Voronoi apex insertion. For autocorrelation $C_1, C_2, \Phi_3$, Stage A executes GPU multi-start search ($4,096$ Cantor/Dirichlet seeds, totaling $\sim 6.4\text{M}$ convolution evaluations), 4-stage dyadic prolongation ($P = 160 \to 320 \to 640 \to 1280 \to 2560$), and GPU \texttt{Boltzmann Roof-Bundle Subgradient} polishing at $P = 10,128 \to 20,256$.
+\item \textbf{Stage B --- Fast Reproducible Replay \& Multi-Precision Certification ($0.4\text{--}3.9\text{ s}$):} Persisted Stage A branch checkpoints (\texttt{.npy} / \texttt{.json}) are loaded by \texttt{auto\_dream\_rsi.py}, \texttt{verify\_extremal\_cartridges\_7\_8.py}, \texttt{heilbronn\_pr\_package/verify\_pr\_package.py}, and \texttt{lean4\_certificates/Cert\_Heilbronn\_13\_14.lean} to execute the 5-round \texttt{AutoDreamRunner} governance pipeline and certify every bound in \texttt{IEEE-754 float64}, 500-digit \texttt{decimal.Decimal}, exact \texttt{fractions.Fraction} ($10^{16}, 10^{50}, 10^{100}$), and \texttt{Lean 4} (\texttt{by native\_decide}).
+\item \textbf{Division of Labor (Human Domain Framing vs.\ Autonomous \texttt{SLEEP-DAG-RSI} Discovery):} To separate human mathematical setup from autonomous algorithmic discovery: (i) the problem definitions, benchmark verifiers, and standard numerical primitives (\texttt{SLSQP}, \texttt{HiGHS LP}, \texttt{mpmath} arbitrary-precision linear algebra, and \texttt{Lean 4} static specifications in \texttt{Defs.lean}) were provided as task cartridges; whereas (ii) the multi-branch DAG crossovers (e.g., LogSumExp L-BFGS-B $\times$ HiGHS TR-SLP at $n=11$, softplus $\times$ Kronecker polynomial squaring on $C_2$), dimension-cascade transitions ($14^\star \to 16$ 2-vertex mitosis bypassing the $n=15$ $D_3$ trap, $16^\star \to 17$ Voronoi apex lift), automatic active-set KKT slack condensation (\texttt{KktSlackTransform.condense\_active\_set} isolating the corank-1 frame Jacobians $\operatorname{rank}(J_{13})=19<20$ and $\operatorname{rank}(J_{16,\text{frame}})=23<24$ and the $15+1$ / $16+1$ interior floater splits), \texttt{Boltzmann Roof-Bundle Subgradient} temperature schedule, and \texttt{RRSI Epistatic Pruner} selection ($3/5$ active scar-healing knobs on $C_1$) were selected, recombined, and verified autonomously by the \texttt{SLEEP-DAG-RSI} discovery loop.
+\end{itemize}
+
+\begin{table}[ht!]
+\centering
+\caption{Table 2a: Quantitative Stage A Component Attribution Comparing Standalone Multi-Start Numerical Solvers vs.\ DAG Crossover / Mitosis vs.\ Full Stage A Pipeline.}
+\label{tab:stage_a_attribution}
+\label{tab:stage_ab}
+\footnotesize
+\begin{tabular}{p{3.0cm}p{3.4cm}p{3.4cm}p{3.4cm}p{2.4cm}}
+\toprule
+\textbf{Extremal Problem \& Budget} & \textbf{Standalone Multi-Start Solver (No DAG / No Lift)} & \textbf{+ DAG Crossover / Dimension Mitosis} & \textbf{Full Stage A (DAG + KKT Lift + Roof-Bundle)} & \textbf{Algorithmic Gain Attribution} \\
+\midrule
+Heilbronn $n = 13$ ($8,192$ seeds, $18\text{ m}$ CPU) & \texttt{0.02655652891973826} (stalls on $\Gamma_{13}$ at $s_0=1.02\times 10^{-6}$) & \texttt{0.02655652891973826} ($14\to 13$ deletion isolates chamber) & $\mathbf{0.02655652891977558}$ ($\mathbf{+3.7316\times 10^{-14}}$ over Stead 2026) & Bordered KKT-Newton resolves corank-1 $\mathbf{v}_0$ \\
+\addlinespace
+Heilbronn $n = 16$ ($8,192$ seeds, $42\text{ m}$ CPU) & \texttt{0.0181629} (trapped in $D_3$-symmetric basin) & \texttt{0.01835554635540345} ($14^\star \to 16$ 2-vertex mitosis) & $\mathbf{0.01835554635546114}$ ($\mathbf{+5.7690\times 10^{-14}}$ over Fable 5.1) & Mitosis + $15+1$ deflation + KKT-Newton \\
+\addlinespace
+Heilbronn $n = 17$ ($8,192$ seeds, $55\text{ m}$ CPU) & \texttt{0.0153451315} (random + $16\to 17$ L-BFGS-B) & \texttt{0.0157912} ($16^\star \to 17$ Voronoi apex + TR-SLP) & $\mathbf{0.01587384456791490}$ ($\mathbf{+3.4455\%}$ over $0.01534513$) & $16+1$ floater split + $27\times 26$ KKT polish \\
+\addlinespace
+Autocorrelation $C_1$ ($P=2560$, $35\text{ m}$ GPU) & \texttt{1.506412} (direct $P=2560$ L-BFGS-B) & \texttt{1.504518} (4-stage dyadic homotopy + DAG) & $\mathbf{1.503822792008}$ (beats AlphaEvolve v1 $1.5053$) & Dyadic scar healing + \texttt{RRSI Pruner} ($3/5$ knobs) \\
+\addlinespace
+Autocorrelation $C_2$ ($P=20,256$, $90\text{ m}$ GPU) & \texttt{0.926529} (single-index \texttt{argmax} oscillates) & \texttt{0.939840} (softplus $\times$ Kronecker crossover) & $\mathbf{0.942158772814}$ (beats Jaech \& Joseph $0.94136$) & Boltzmann Roof-Bundle stabilizes $20,632$ peaks \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Theorem 1: Resolution of the 1D Equiareal Tie-System Trap at Heilbronn $n = 13$ and $n = 16$}
+
+In Heilbronn's triangle problem \cite{cantrell2007,stead2026}, $n$ points $\mathbf{p}_0, \dots, \mathbf{p}_{n-1}$ are placed in a unit-area triangle $T$ to maximize $\Delta_n = \min_{0 \le i < j < k < n} \operatorname{Area}(\mathbf{p}_i, \mathbf{p}_j, \mathbf{p}_k)$. Because global optimality over all $\binom{n}{3}$ combinatorial triangle topologies remains open for $n \ge 7$, numerical discovery seeks \textbf{certified local KKT stationary optima} $\Delta_n^\star$ on the best discovered active combinatorial topology, paired with exact $10^{100}$-denominator rational vertex roundings $\hat{\mathbf{p}}_i \in \mathbb{Q}^2 \cap T$ certifying rigorous constructive lower bounds $\underline{\Delta}_n = \min_{i<j<k}\operatorname{Area}(\hat{\mathbf{p}}_i, \hat{\mathbf{p}}_j, \hat{\mathbf{p}}_k) \le \Delta_n$ ($|\Delta_n^\star - \underline{\Delta}_n| < 10^{-99}$). Prior records at $n=13$ (\texttt{0.026556528919738264474389245471}, Tej Stead, July 2026, $M=20$ active triangles) and $n=16$ (\texttt{0.0183555463554034501359529610459}, Fable 5.1 \& Shengtong Zhang, Sept 2026, $M=24$ active triangles) were refined to 30--80 digits by solving the area-equality tie system $A_1(\boldsymbol{\theta}) = A_2(\boldsymbol{\theta}) = \dots = A_M(\boldsymbol{\theta})$ via damped Gauss-Newton, assuming the tie system defines an isolated 0-dimensional point.
+
+\begin{theorem}[Corank-1 Equiareal Manifold $\Gamma(s)$ and Bordered KKT-Newton Resolution at $n=13$ and $n=16$]
+\label{thm:heilbronn_corank1}
+Let $\boldsymbol{\theta} \in \mathbb{R}^{d_{\text{free}}}$ denote the free vertex coordinates of the active frame after fixing the 6 boundary constraints (2 vertices on each triangle side, all of whose outward normal KKT multipliers are strictly dual-feasible $\mu_{\text{boundary}, r}^\star > 0$):
+\begin{enumerate}
+\item \textbf{At $n = 16$ ($15 + 1$ Floater Split):} Exactly 15 vertices form the active frame ($d_{\text{free}} = 2\times 15 - 6 = 24$) carrying all $M = 24$ minimal triangles, while the 16th vertex (\texttt{p\_13 = (0.440423714855, 0.491088435790)}, corresponding to \texttt{vertex 1} in \texttt{math.tejstead.com/heilbronn/triangle/16/}) is a strict interior floater participating in \textbf{zero} active triangles with Voronoi cell clearance $\mathbf{0.0185320014278944} > \Delta_{16}^\star + 1.7645 \times 10^{-4}$.
+\item \textbf{Corank-1 Equiareal Curve $\Gamma(s)$:} In both $n=13$ ($d_{\text{free}} = 20, M = 20$) and $n=16$ ($d_{\text{free}} = 24, M = 24$), the $M \times d_{\text{free}}$ active area Jacobian $J = \frac{\partial(A_1, \dots, A_M)}{\partial \boldsymbol{\theta}}$ (with $m$-th row $J_m = \nabla_{\boldsymbol{\theta}} A_m(\boldsymbol{\theta}^\star)^\top \in \mathbb{R}^{1 \times d_{\text{free}}}$) at the KKT stationary point $\boldsymbol{\theta}^\star$ has rank $d_{\text{free}} - 1$ ($\operatorname{rank}(J_{13}) = 19 < 20$, $\|J_{13}\mathbf{v}_0\|_2 = 1.03\times 10^{-551}$; and $\operatorname{rank}(J_{16,\text{frame}}) = 23 < 24$, $\|J_{16,\text{frame}}\mathbf{v}_0\|_2 = 9.08\times 10^{-552}$). Consequently, the $M-1$ tie-system equations $A_m(\boldsymbol{\theta}) - A_1(\boldsymbol{\theta}) = 0$ define a \textbf{smooth 1-dimensional equiareal curve} $\Gamma(s) = \boldsymbol{\theta}^\star + s\mathbf{v}_0 + s^2\mathbf{w} + \mathcal{O}(s^3)$ along the unit right nullvector $\mathbf{v}_0 \in \ker J$ on which all $M$ triangles have strictly equal area $\Delta(s)$ to arbitrary precision.
+\item \textbf{Parameterization-Independent KKT Curvature $c > 0$ and Bordered KKT-Newton System:} Because $\ker(J^\top)$ is 1-dimensional and spanned by strictly positive KKT multipliers $\boldsymbol{\lambda}^\star > 0$ ($\sum_{m=1}^M \lambda_m^\star = 1$, $J^\top \boldsymbol{\lambda}^\star = \mathbf{0}$), multiplying the second-order Taylor expansion $A_m(\boldsymbol{\theta}(s)) = \Delta^\star + s J_m \mathbf{v}_0 + s^2 \left(J_m \mathbf{w} + \frac{1}{2}\mathbf{v}_0^\top \nabla^2 A_m \mathbf{v}_0\right) + \mathcal{O}(s^3)$ by $\boldsymbol{\lambda}^{\star\top}$ annihilates the normal correction $\mathbf{w}$ identically ($\boldsymbol{\lambda}^{\star\top} J \mathbf{w} = 0$), yielding:
+\begin{equation}
+\Delta(s) = \Delta^\star - c \cdot s^2 + \mathcal{O}(s^3), \qquad c = -\frac{1}{2}\sum_{m=1}^M \lambda_m^\star \,\mathbf{v}_0^\top \nabla^2 A_m(\boldsymbol{\theta}^\star)\mathbf{v}_0 > 0,
+\tag{18}\label{eq:kkt_curvature}
+\end{equation}
+with certified values $c_{13} = \mathbf{0.036078780237794575\dots} > 0$ and $c_{16} = \mathbf{0.011234563953840429\dots} > 0$. Running damped Gauss-Newton on the tie system from a \texttt{float64} iterate at arc-length offset $s_0 \sim 10^{-6}$ projects orthogonally onto $\Gamma(s)$ at $s \approx s_0 \ne 0$ and terminates immediately with zero tie residual at a value $c s_0^2$ below the apex. To converge quadratically to the exact apex $s = 0$, we solve the $(d_{\text{free}} + M + 1) \times (d_{\text{free}} + M + 1)$ \textbf{bordered KKT-Newton system} for $(\delta\boldsymbol{\theta}, \delta\boldsymbol{\lambda}, \delta\Delta) \in \mathbb{R}^{d_{\text{free}}} \times \mathbb{R}^M \times \mathbb{R}$:
+\begin{equation}
+\begin{bmatrix} H_{\mathcal{L}}(\boldsymbol{\theta}, \boldsymbol{\lambda}) & J(\boldsymbol{\theta})^\top & \mathbf{0} \\ J(\boldsymbol{\theta}) & \mathbf{0} & -\mathbf{1}_M \\ \mathbf{0}^\top & \mathbf{1}_M^\top & 0 \end{bmatrix} \begin{bmatrix} \delta\boldsymbol{\theta} \\ \delta\boldsymbol{\lambda} \\ \delta\Delta \end{bmatrix} = -\begin{bmatrix} J(\boldsymbol{\theta})^\top \boldsymbol{\lambda} \\ \mathbf{A}(\boldsymbol{\theta}) - \Delta \mathbf{1}_M \\ \mathbf{1}_M^\top \boldsymbol{\lambda} - 1 \end{bmatrix}, \qquad H_{\mathcal{L}}(\boldsymbol{\theta}, \boldsymbol{\lambda}) = \sum_{m=1}^M \lambda_m \nabla^2_{\boldsymbol{\theta}\boldsymbol{\theta}} A_m(\boldsymbol{\theta}).
+\tag{18a}\label{eq:bordered_kkt}
+\end{equation}
+Because $\mathbf{v}_0^\top H_{\mathcal{L}}(\boldsymbol{\theta}^\star, \boldsymbol{\lambda}^\star) \mathbf{v}_0 = -2c < 0$ is strictly negative definite on $\ker J(\boldsymbol{\theta}^\star) = \operatorname{span}(\mathbf{v}_0)$ and $\mathbf{1}_M^\top \boldsymbol{\lambda}^\star = 1 \ne 0$ spans $\ker(J(\boldsymbol{\theta}^\star)^\top)$, the bordered KKT matrix in Eq.~\eqref{eq:bordered_kkt} is \textbf{strictly nonsingular} at $(\boldsymbol{\theta}^\star, \boldsymbol{\lambda}^\star, \Delta^\star)$, yielding quadratic convergence to 560 decimal digits:
+\begin{equation}
+\Delta_{13}^\star = \mathbf{0.02655652891977558013836441122594677335105195594906545441276197643\dots} \quad (\mathbf{+3.731566 \times 10^{-14}} \text{ at } s_0 = 1.0170 \times 10^{-6}),
+\tag{18b}\label{eq:heilbronn_n13}
+\end{equation}
+\begin{equation}
+\Delta_{16}^\star = \mathbf{0.01835554635546114041232536365340313429459832905287243778082350191\dots} \quad (\mathbf{+5.769028 \times 10^{-14}} \text{ at } s_0 = 2.2661 \times 10^{-6}).
+\tag{18c}\label{eq:heilbronn_n16}
+\end{equation}
+\end{enumerate}
+\end{theorem}
+\begin{proof}
+Let $L = [-\mathbf{1}_{M-1},\; I_{M-1}] \in \mathbb{R}^{(M-1)\times M}$ denote the tie-difference operator. Since $\ker(J^\top) = \operatorname{span}(\boldsymbol{\lambda}^\star)$ with $\mathbf{1}_M^\top\boldsymbol{\lambda}^\star = 1 \ne 0$ and $\ker(L^\top) = \operatorname{span}(\mathbf{1}_M)$, any $\mathbf{u} \in \ker((LJ)^\top)$ satisfies $L^\top\mathbf{u} = \alpha\boldsymbol{\lambda}^\star \implies 0 = (\mathbf{1}_M^\top L^\top)\mathbf{u} = \alpha(\mathbf{1}_M^\top\boldsymbol{\lambda}^\star) = \alpha \implies \mathbf{u} = \mathbf{0}$, proving $\operatorname{rank}(LJ) = M-1$. By the Implicit Function Theorem, $L\mathbf{A}(\boldsymbol{\theta}) = \mathbf{0}$ defines a smooth 1D manifold $\Gamma(s)$ tangent to $\mathbf{v}_0$ at $s=0$. Taking the inner product of $\Delta(s)\mathbf{1}_M = \Delta^\star\mathbf{1}_M + s^2(J\mathbf{w} + \frac{1}{2}\mathbf{h}(\mathbf{v}_0)) + \mathcal{O}(s^3)$ with $\boldsymbol{\lambda}^\star$ eliminates $J\mathbf{w}$, establishing Eq.~\eqref{eq:kkt_curvature}. Finally, if $(\delta\boldsymbol{\theta}, \delta\boldsymbol{\lambda}, \delta\Delta)$ lies in the nullspace of the bordered matrix in Eq.~\eqref{eq:bordered_kkt}, left-multiplying $J\delta\boldsymbol{\theta} - \delta\Delta\mathbf{1}_M = \mathbf{0}$ by $\boldsymbol{\lambda}^{\star\top}$ gives $-\delta\Delta = 0$ and $\delta\boldsymbol{\theta} = \alpha\mathbf{v}_0$; left-multiplying $H_{\mathcal{L}}\delta\boldsymbol{\theta} + J^\top\delta\boldsymbol{\lambda} = \mathbf{0}$ by $\mathbf{v}_0^\top$ gives $-2c\alpha = 0 \implies \delta\boldsymbol{\theta} = \mathbf{0}$, so $\delta\boldsymbol{\lambda} = \beta\boldsymbol{\lambda}^\star$ and $\mathbf{1}_M^\top\delta\boldsymbol{\lambda} = \beta = 0 \implies \delta\boldsymbol{\lambda} = \mathbf{0}$.
+\end{proof}
+
+\subsection{Theorem 2: Isostatic $16 + 1$ Floater Split at Heilbronn $n = 17$}
+
+Applying our upward cascade $16^\star \to 17$ (\texttt{heilbronn\_16\_17\_storm2.cpp}) followed by \texttt{HiGHS Trust-Region SLP}, nullspace analysis, and 560-digit KKT-Newton refinement (\texttt{heilbronn\_pr\_package/n17\_exact\_500dps.json}), we establish a new 500-digit stationary certificate at $n = 17$:
+
+\begin{theorem}[$16+1$ Isostatic Floater Decomposition at $n = 17$]
+\label{thm:heilbronn_n17}
+The 17-point configuration certified in \texttt{n17\_exact\_500dps.json} achieves minimum triangle area:
+\begin{equation}
+\Delta_{17}^\star = \mathbf{0.0158738445679148985586945648652412980581378440060904196107577980\dots}
+\tag{19}\label{eq:heilbronn_n17}
+\end{equation}
+(improving the prior local lift \texttt{0.0153451315213836} by $\mathbf{+0.0005287130}$ ($\mathbf{+3.4455\%}$)). Out of the 17 vertices, exactly \textbf{16 vertices form an isostatic frame} ($6$ boundary $+ 10$ interior $= 26$ free coordinates) supporting $M = 27$ active minimal triangles equal to within $< 1.20 \times 10^{-550}$. The frame Jacobian $J_{17,\text{frame}} \in \mathbb{R}^{27 \times 26}$ has \textbf{full column rank 26} ($\sigma_{\min} = 0.01625434 > 0, \sigma_{\max} = 1.82063138$, corank $0$), with $\ker(J_{17,\text{frame}}^\top)$ spanned by strictly positive KKT multipliers $\boldsymbol{\lambda}^\star \in [0.00027477, 0.09910695]^{27}$ ($\sum_{m=1}^{27}\lambda_m^\star = 1$). The 17th vertex (\texttt{p\_7 = (0.303424857847, 0.033348129948)}) is a strict interior floater ($0$ active triangles) with Chebyshev Voronoi clearance $\mathbf{0.0163144961439749}$ ($+0.00044065$ above $\Delta_{17}^\star$).
+\end{theorem}
+\begin{proof}
+Verified by exact 500-digit evaluation and SVD/nullspace certification in \texttt{heilbronn\_pr\_package/verify\_pr\_package.py} and $10^{100}$-denominator rational arithmetic over all $\binom{17}{3} = 680$ triangles.
+\end{proof}
+
+\subsection{Extremal Autocorrelation Inequalities ($C_1, C_2, \Phi_3$)}
+
+For step functions $f(x) = \sum_{i=0}^{P-1} a_i \mathbb{I}_{I_i}(x)$ on $[-1/4, 1/4]$ with discrete autoconvolution $g_k = (a * a)_k = \sum_{i+j=k} a_i a_j$ ($k \in \{0, \dots, 2P-2\}$):
+\begin{enumerate}
+\item \textbf{First Autocorrelation Inequality ($C_1$, Cartridge 3):} Minimizing $C_1(a) = \frac{2P \max_k g_k}{(\sum_i a_i)^2}$ ($a_i \ge 0$) \cite{matolcsi2010}. Using exact Lagrangian sphere curvature $2\max(g_k - \mu, 0)$ (\texttt{2*clamp(g\_a - mu, 0)}) + \texttt{Micro-Wakeup} + 4-stage dyadic prolongation ($P=160 \to 2560$) and \texttt{RRSI Pruner} (keeping $3/5$ active scar-healing knobs), we certify \texttt{autocorr\_c1\_champion.npy} at $P=2560$:
+\begin{equation}
+C_1 \le \mathbf{1.503822792008} \quad \left(\text{exact } 10^{16}\text{-rational } \frac{341010539074195724916434565120000}{226762409866468403805013573068561}\right),
+\tag{20}\label{eq:c1_bound}
+\end{equation}
+certified across all $2P-1 = 5,119$ shifts via Kronecker polynomial squaring in \texttt{fractions.Fraction} at $10^{16}$ and $10^{50}$. Within the $P \le 2,560$ single-step-function regime, this improves upon Matolcsi \& Vinuesa 2010 ($1.5098$) by $-0.005977$ and AlphaEvolve v1 2025 ($1.5053$) by $-0.001477$ (whereas recent variable-interval / $P \ge 30,000$ continuous and step constructions reach $1.50314$ in AlphaEvolve v2 \cite{alphaevolve2_2025}, $1.502870$ in \cite{khrulkov2026}, and $1.50286$ in TTT-Discover \cite{tttdiscover2026}).
+\item \textbf{Second Autocorrelation Inequality ($C_2$, Cartridge 7):} Maximizing over nonnegative step weights $a_i \ge 0$ (\texttt{verify\_extremal\_cartridges\_7\_8.py:130}) \cite{jaech2025}:
+\begin{equation}
+C_2(a) = \frac{\|f*f\|_2^2}{\|f*f\|_1 \|f*f\|_\infty} = \frac{2\sum_{k=0}^{2P-2} g_k^2 + 2\sum_{k=0}^{2P-3} g_k g_{k+1}}{3\bigl(\sum_{k=0}^{2P-2} g_k\bigr)\max_{0 \le k \le 2P-2} g_k} \ge \mathbf{0.942158772814} \quad (P = 20,256,\; a_i \ge 0),
+\tag{21}\label{eq:c2_bound}
+\end{equation}
+and $C_2 \ge \mathbf{0.942111374293}$ at $P = 10,128$. Near the optimum at $P = 20,256$, $\mathbf{50.93\%}$ ($\mathbf{20,632 / 40,511}$) of convolution nodes lie on a flat roof $g_k \ge 0.95 g_{\max}$, where single-index \texttt{argmax} subgradients oscillate across competing peaks. Our \textbf{Boltzmann Roof-Bundle Subgradient} replaces $\max_k g_k$ with $\widehat{g}_{\max}(\tau) = \sum_k \operatorname{stop\_grad}(w_k(\tau)) g_k$, $w_k(\tau) = \operatorname{softmax}((g_k - g_{\max})/\tau)$ annealed over $\tau \in [8\times 10^{-6}, 2\times 10^{-5}] g_{\max}$, surpassing Matolcsi \& Vinuesa ($0.88922$), AlphaEvolve v1 ($0.90530$), and Jaech \& Joseph (2025, $0.94136$ at $P=2399$) by $\mathbf{+0.00079877}$ within $P \le 20,256$ (complementary to $P \ge 50,000$ searches in TTT-Discover \cite{tttdiscover2026} $0.9595$ and AlphaEvolve v2 \cite{alphaevolve2_2025} $0.9610$).
+\item \textbf{Third Autocorrelation Inequality for Signed Functions ($\Phi_3$, Problem 4 of \emph{Dream-RSI}):} Minimizing $\Phi_3(a) = \max_k |g_k|$ where $g_k = \frac{2}{P}(a*a)_k$ subject to $\frac{1}{P}\sum_i a_i = 1$ ($a_i \in \mathbb{R}$) \cite{cilleruelo2010}. Under the smooth bidirectional LogSumExp potential $L_\beta(a) = \frac{1}{\beta}\log \sum_k (\exp(\beta g_k) + \exp(-\beta g_k))$ with partition function $Z(\beta) = \sum_k (\exp(\beta g_k) + \exp(-\beta g_k))$, let $u_k(\beta) = \frac{\exp(\beta g_k) + \exp(-\beta g_k)}{Z(\beta)} \ge 0$ ($\sum_k u_k = 1$) and $w_k(\beta) = \frac{\exp(\beta g_k) - \exp(-\beta g_k)}{Z(\beta)} \in [-u_k, u_k]$. Dropping the indefinite Hankel second-derivative term yields an analytical \textbf{PSD Gauss-Newton preconditioner}:
+\begin{equation}
+H_{\text{GN}}(a) = \beta J(a)^\top \bigl(\operatorname{diag}(\mathbf{u}(\beta)) - \mathbf{w}(\beta)\mathbf{w}(\beta)^\top\bigr) J(a) \succeq 0, \qquad J_{k,i}(a) = \frac{\partial g_k}{\partial a_i} = \frac{4}{P} a_{k-i}, \qquad \Phi_3 \le \mathbf{1.457058511867} \quad (P = 3,200),
+\tag{22}\label{eq:phi3_bound}
+\end{equation}
+outperforming OpenEvolve ($1.4600$), EvoX ($1.4589$), Cilleruelo--Ruzsa--Vinuesa ($1.4581$), and ShinkaEvolve ($1.4578$).
+\end{enumerate}
+
+\section{Comprehensive Empirical Results \& Ablation Studies}
+\label{sec:results}
+
+\paragraph{Benchmarking Hardware \& Threading Environment.}
+All wall-clock timings and throughput comparisons across Tables~\ref{tab:baseline_lasso}--\ref{tab:trial6_ablations} were executed on an AMD Ryzen 9 16-core / 32-thread workstation (64 GB DDR5 RAM, Windows 11, Python 3.12, NumPy 2.x OpenBLAS, \texttt{g++ -O3 -march=native}, and NVIDIA RTX 4090 24 GB GPU for Stage A convolution polishing and \texttt{simvq-zero-crutch}). All head-to-head CPU solver comparisons (e.g., C++ Lasso vs.\ \emph{Dream-RSI} \texttt{Listing 3}, \texttt{Celer}, \texttt{SINDy} STLSQ, and \texttt{Tree-GP SR}) were benchmarked strictly single-threaded (\texttt{OMP\_NUM\_THREADS=1}, \texttt{OPENBLAS\_NUM\_THREADS=1}) on identical memory layouts for fair wall-clock attribution.
+
+\begin{table}[ht!]
+\centering
+\caption{Table 1: Baseline Audit, 50-Task Synthetic Benchmark \& 6-Regime C++ Lasso Solver.}
+\label{tab:baseline_lasso}
+\footnotesize
+\begin{tabular}{p{3.8cm}p{3.6cm}p{3.6cm}p{4.4cm}}
+\toprule
+\textbf{Benchmark / Regime} & \textbf{Baseline (\emph{Dream-RSI} / \emph{Celer})} & \textbf{\texttt{Lean-DAG-RSI} Result} & \textbf{Speedup / Gain \& Mechanism} \\
+\midrule
+50-Task Counterfactual Replay (\texttt{lean\_dag\_rsi\_benchmark.py}) & $V = 1.3912$ (\texttt{OptimalPolicy}) & $\mathbf{V = 1.5384}$ (\textbf{37 : 2} wins, 11 ties) & $\mathbf{-30.6\%}$ verifier probes via monotone $V_{\text{Lean}}$ + Tukey $s_{\text{cf}}$ + DAG crossover \\
+\addlinespace
+Lasso C++ Solver (\texttt{benchmark\_lasso\_cpp.cpp}, 6 regimes of Fig.~3a) & \emph{Dream-RSI} \texttt{Listing 3}: $24.53\text{ ms}$ geomean (2 violations $>10^{-6}$) & $\mathbf{9.80\text{ ms}}$ geomean ($0$ violations, max gap $< 10^{-8}$) & $\mathbf{2.50\times}$ geomean speedup via Look-Ahead Gap Safe Screening + Anderson ($m=5$) \\
+\addlinespace
+Lasso Python/NumPy (\texttt{verify\_dream\_rsi.py}) & \texttt{Celer}: $23.51\text{ ms}$ & $\mathbf{11.63\text{ ms}}$ & $\mathbf{2.02\times}$ speedup on active-set coordinate descent \\
+\addlinespace
+Circle Packing in Unit Square ($n=26, 32$) & AlphaEvolve v1: $2.635862$ / $2.937944$ & $\mathbf{2.635983084915}$ ($n=26$); $\mathbf{2.939572771203}$ ($n=32$) & Certified in exact \texttt{Fraction(10\^{}16)} via L-BFGS-B + SLSQP + HiGHS LP \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[ht!]
+\centering
+\caption{Table 2: Autonomous Discovery Cartridges (\texttt{auto\_dream\_rsi.py}, Stage A Discovery + Stage B Replay).}
+\label{tab:cartridges}
+\footnotesize
+\begin{tabular}{cp{3.5cm}p{2.3cm}ccp{4.6cm}c}
+\toprule
+\# & \textbf{Cartridge (\texttt{--task})} & \textbf{Domain} & \textbf{Base} & \textbf{Champion} & \textbf{Key Verified Result \& Mechanism} & \textbf{Replay} \\
+\midrule
+1 & \texttt{algotune-rbf-kernel-solver} & Numerical LA & $1.00\times$ & $\mathbf{33.36\times}$ & Line profiler isolates \texttt{np.linalg.solve} $\to$ BLAS Gram GEMM + Cholesky ($1.56\text{ ms}$) & $0.4\text{ s}$ \\
+2 & \texttt{funsearch-weibull-binpacking} & Combinatorial Opt. & $4.18\%$ & $\mathbf{0.3690\%}$ & Beats \emph{FunSearch} ($0.68\%$ excess over $L_2$) via Dead-Zone Guard $\times$ Modal Resonance & $0.5\text{ s}$ \\
+3 & \texttt{open-autocorrelation-c1} & Harmonic ($C_1$) & $1000.0$ & $\mathbf{1496.18}$ & $C_1 \le \mathbf{1.50382279}$ ($P=2560$, beats AlphaEvolve v1 $1.5053$); \texttt{RRSI Pruner} keeps $3/5$ knobs & $3.9\text{ s}$ \\
+4 & \texttt{open-heilbronn-triangle-11} & Geometry ($n=11$) & $219.45$ & $\mathbf{365.18}$ & $\Delta_{11} = \mathbf{0.03651835} > 0.0365$ via DAG crossover of LogSumExp L-BFGS-B and HiGHS TR-SLP & $1.8\text{ s}$ \\
+5 & \texttt{simvq-zero-crutch} & 1.58-Bit Ternary NN & $71.40\%$ & $\mathbf{100.00\%}$ & Error-Fingerprint Union $7/7$ ($188,416/188,416$ steps across $T=64\dots 1024$ \& $2,000$ OOD rules) & $50\text{ s}$ \\
+6 & \texttt{open-heilbronn-triangle-13-14} & Geometry ($n=13,14$) & $20.36$ & $\mathbf{503.32}$ & $\Delta_{13}^\star = \mathbf{0.026556528920}$ ($+3.73\times 10^{-14}$) \& $\Delta_{14}^\star = \mathbf{0.023775773108}$ + \texttt{Lean 4} proofs & $0.5\text{ s}$ \\
+7 & \texttt{open-autocorrelation-c2} & Harmonic ($C_2$) & $6666.7$ & $\mathbf{9421.11}$ & $C_2 \ge \mathbf{0.94211137}$ ($P=10,128$) and $\mathbf{0.94215877}$ ($P=20,256$), beating Jaech \& Joseph ($0.94136$) & $3.4\text{ s}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[ht!]
+\centering
+\caption{Table 3: Heilbronn Triangle $n = 13, 14, 15, 16, 17$ 500-Digit \& $10^{100}$-Rational Certificates (\texttt{heilbronn\_pr\_package/}). Note: $\Delta_n^\star$ denotes the 500-digit stationary KKT optimum, whereas $\underline{\Delta}_n = \Delta_n(Q_{10^{100}}(x^\star))$ denotes the certified $10^{100}$-rational floor lower bound ($\Delta_n^\star - \underline{\Delta}_n \le 2.5\times 10^{-100}$).}
+\label{tab:heilbronn}
+\footnotesize
+\begin{tabular}{cp{4.8cm}ccp{5.4cm}}
+\toprule
+$n$ & \textbf{500-Digit Stationary Optimum $\Delta_n^\star$} & \textbf{Active} & \textbf{Floaters} & \textbf{KKT Structure \& Gain vs.\ Prior Record} \\
+\midrule
+$13$ & \texttt{0.026556528919775580138364411226...} & $20/286$ & $0$ & Corank-1 $\Gamma_{13}(s)$, $\operatorname{rank}(J)=19<20$, $c_{13}=0.03607878>0$, $\mathbf{+3.7316\times 10^{-14}}$ over Stead 2026; \texttt{Lean 4} \\
+$14$ & \texttt{0.023775773107573057671296916141...} & $23/364$ & $0$ & Isostatic $\operatorname{rank}(J)=22$ (Cantrell 2007 to 500 dps); chord $u_6 \equiv u_9$; \texttt{Lean 4} \\
+$15$ & \texttt{0.021090769460266687959320407664...} & $15/455$ & $3$ & $12+3$ split; root of $P_{15}(\Delta_{15}) = 5250987\Delta_{15}^5 + 1609650\Delta_{15}^4 + 161469\Delta_{15}^3 + 5438\Delta_{15}^2 - 13\Delta_{15} - 4 = 0$ ($|P_{15}(\Delta_{15}^\star)| = 2.78\times 10^{-503}$) \\
+$16$ & \texttt{0.018355546355461140412325363653...} & $24/560$ & $1$ & $15+1$ split + Corank-1 $\Gamma_{16}(s)$, $\operatorname{rank}(J_{\text{frame}})=23<24$, $c_{16}=0.01123456>0$, $\mathbf{+5.7690\times 10^{-14}}$ over Fable 5.1 \\
+$17$ & \texttt{0.015873844567914898558694564865...} & $27/680$ & $1$ & $16+1$ isostatic split, $\operatorname{rank}(J_{\text{frame}})=26$ ($27\times 26$), $\mathbf{+3.4455\%}$ over prior lift \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[ht!]
+\centering
+\caption{Table 4: \texttt{SLEEP-DAG-RSI v5} Continual Retention (5 Domains, 5 Seeds Mean $\pm$ SD) \& REM Dreaming Ablation (30 Worlds, \texttt{run\_sleep\_dag\_experiments.py}). Rows 2--3 share identical REM Score ($13.472 \pm 1.827$) because both omit error-fingerprint REM crossover.}
+\label{tab:sleep_v5}
+\footnotesize
+\begin{tabular}{p{4.8cm}cccccc}
+\toprule
+\textbf{Architecture (\texttt{run\_sleep\_dag\_experiments.py})} & \textbf{D1 Ret} & \textbf{5-Dom Avg} & \textbf{Trap \%} & \textbf{Comp Hit} & \textbf{Spike Leak} & \textbf{REM Score (30W)} \\
+\midrule
+1. \texttt{Wake-Only SFT} (No Sleep Phase) & $0.00\%$ & $7.13 \pm 4.96\%$ & $13.31\%$ & --- & --- & --- \\
+2. \texttt{Vanilla SLEEP} (Unmasked KS + Random MoE) & $54.00\%$ & $51.09 \pm 7.86\%$ & $39.49\%$ & $10.0\%$ & $100.0\%$ & $13.472 \pm 1.827$ \\
+3. \texttt{SLEEP + DAG-Masking} (No Replay / No REM) & $61.45\%$ & $81.34 \pm 3.95\%$ & $18.66\%$ & $0.0\%$ & $0.0\%$ & $13.472 \pm 1.827$ \\
+4. \textbf{\texttt{SLEEP-DAG-RSI v5} (DAG-KS + DPO + REM)} & $\mathbf{97.63\%}$ & $\mathbf{97.82 \pm 0.86\%}$ & $\mathbf{2.18\%}$ & $\mathbf{100.0\%}$ & $\mathbf{0.0\%}$ & $\mathbf{28.532 \pm 4.236}$ ($\mathbf{+111.8\%}$) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[ht!]
+\centering
+\caption{Table 5: End-to-End Battle-Test Ablation across \texttt{SLEEP-DAG-RSI v6--v8} (\texttt{battle\_test\_sleep\_dag\_v6.py}, 10 Seeds Mean $\pm$ SD \& Overhead).}
+\label{tab:battle_test}
+\footnotesize
+\begin{tabular}{p{2.8cm}p{3.3cm}p{3.6cm}p{4.2cm}p{1.6cm}}
+\toprule
+\textbf{Trial / Suite} & \textbf{Stress-Test Condition} & \textbf{Baseline (\texttt{v5/v6/SINDy/Tree-GP})} & \textbf{\texttt{SLEEP-DAG-RSI v6--v8} (10 Seeds)} & \textbf{Overhead} \\
+\midrule
+Trial 1: Sentinel + KKT (\texttt{v6}) & Heilbronn $n=16$ ($560$ triangles, $60$ mutations) & $33,600$ triangle evals, $560$ KKT slacks & $\mathbf{-76.44 \pm 9.23\%}$ evals ($-83.51\%$ canon.), $560 \to \mathbf{57}$ slacks, $\mathbf{100.0\%}$ winner match (\texttt{10/10}) & $8.31 \pm 0.90\text{ ms}$ ($\mathbf{1.16\times}$ speedup) \\
+\addlinespace
+Trial 2: Spectral Lifter (\texttt{v6}) & 8D rotated valley ($\kappa_{\text{eff}} = 10^8, M=6<d=8$) & Loss $7.1761 \pm 5.2062$ ($13.0534$ canon.) after $40$ steps & Freezes $2$ null modes, reaches $\mathbf{< 2.5\times 10^{-7}}$ in $15$ steps ($\mathbf{6.11\times 10^6\times}$ gain; $\kappa=1.0$) & $1.18 \pm 0.04\text{ ms}$ lift + solve \\
+\addlinespace
+Trial 3: Dynamical Control (\texttt{v6--v7}) & Heavy-tailed spikes ($2,400$ steps, $480$ Blind Vault) & Naive Vault $R^2 = 0.2837 \pm 0.0127$; \emph{SINDy} STLSQ \cite{brunton2016} $R^2 = 0.9876 \pm 0.0014$ ($\text{MSE} = 0.01232$) & Hybrid Vault $\mathbf{R^2 = 0.9946 \pm 0.0009}$ ($\text{MSE} = \mathbf{0.00535 \pm 0.00096}$, $\mathbf{2.30\times}$ lower MSE than SINDy) & $15.45 \pm 1.31\text{ ms}$ NREM sleep \\
+\addlinespace
+Trial 4: \texttt{SymbolicLibrary} (\texttt{v7}) & Depth-3 law $\tanh(1.5 x_0 x_1 - 0.8\operatorname{sign}(x_2)) + 0.6 x_4$ (\texttt{battle\_test\_sleep\_dag\_v6.py:397}) & Flat \texttt{v6}: $R^2_{\text{OOS}} = 0.0400 \pm 0.0717$; \emph{SINDy}: $0.0251 \pm 0.0793$; \texttt{Tree-GP SR} ($16.4\text{ ms}$): $0.3464 \pm 0.2404$; \texttt{Tree-GP SR} ($605.2\text{ ms}$): $0.8486 \pm 0.2397$ & Invents \texttt{lib\_0(x)} ($R^2 = 0.9963 \pm 0.0006$), Cycle 2 $\mathbf{R^2_{\text{OOS}} = 1.0000 \pm 0.0000}$ across $10/10$ seeds ($100\%$ energy cut) & $15.8\text{ ms}$ distill ($\mathbf{38\times}$ faster than Ext.\ Tree-GP) \\
+\addlinespace
+Trial 5: \texttt{v8} Frontier Suite & Tilted search, dead bucket, $100\%$-dead batch ($31\%$ noise), 50-round log, $10^3\times$ spike & $J_0=61.0$, NREM $\text{MSE}=15.87$, $74.8\text{ kB}$ log, $0$ blind spots, GD $8.18\times 10^{14}$ & $J_6=\mathbf{96.23}$, promotes \texttt{b1\_step\_seed}, SDPO $\mathbf{\text{MSE}=0.0985}$ ($\mathbf{161.15\times}$), $\mathbf{1,348\text{ B}}$ (\textbf{-98.2\%}), $2$ blind spots, FALCON-2 $\mathbf{61,376.9}$ & $18.4\text{ ms}$ total suite \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[ht!]
+\centering
+\caption{Table 6: Trial 6 --- Head-to-Head Modern Baselines \& 6-Module \texttt{v8} Ablation Matrix (10 Seeds Mean $\pm$ SD).}
+\label{tab:trial6_ablations}
+\footnotesize
+\begin{tabular}{p{3.6cm}p{5.8cm}p{6.0cm}}
+\toprule
+\textbf{Experiment / Sub-Suite} & \textbf{Evaluated Regimes \& Baselines (10 Seeds)} & \textbf{Verified Quantitative Result (\texttt{battle\_test\_sleep\_dag\_v6.py})} \\
+\midrule
+\textbf{Trial 6A: Fast-Memory Rules} (\texttt{FALCON-2} \cite{falcon2_2026} vs.\ \emph{Gated DeltaNet} \cite{yang2025} vs.\ \texttt{DeltaRule} \cite{schlag2021}) & (i) Single $10^3\times$ covariate spike; (ii) Opposite-sign cancellation spike $[\mathbf{x}_1, \mathbf{x}_2] = [1000\mathbf{v}, -333.3\mathbf{v}]$; (iii) $10^3\times$ target outlier spike ($y_t = 10^3$). & (i) Covariate spike loss: GD $37,443.7 \pm 62,835.5$ vs.\ Gated DeltaNet $14,965.9 \pm 22,477.2$ vs.\ \texttt{FALCON-2} $23,203.0 \pm 32,730.2$. \newline (ii) Cancellation spike loss: Gated DeltaNet $564,478.3 \pm 1,072,629.3$ vs.\ \textbf{\texttt{FALCON-2} $\mathbf{41,816.2 \pm 54,392.2}$} ($\mathbf{13.50\times}$ lower). \newline (iii) Target spike $\|B_{\text{fast}}\|_F$: Gated DeltaNet $331.04 \pm 106.95$ vs.\ \textbf{\texttt{FALCON-2} $\mathbf{3.25 \pm 1.09}$} ($\mathbf{101.86\times}$ lower via Huber innovation clipping). \\
+\addlinespace
+\textbf{Trial 6B: \texttt{SDPO} Adversarial Breakdown Sweep} ($0\% \to 60\%$ corrupted residuals, $N=40$) & Corruption fractions $\rho \in \{0\%, 10\%, 25\%, 40\%, 50\%, 60\%\}$ with $+25.0$ adversarial verifier bias + validation-anchor fallback gate. & $\rho \in \{0\%, 10\%, 25\%\}$: $\mathbf{\text{MSE} = 0.00000 \pm 0.00000}$ ($0\%$ fallback). \newline $\rho = 40\%$: $\text{MSE} = 6.62257 \pm 10.60460$ ($30\%$ fallback). \newline $\rho = 50\%$: $\text{MSE} = 17.73849 \pm 9.68051$ ($80\%$ fallback). \newline $\rho = 60\%$: $\mathbf{\text{MSE} = 21.94710 \pm 4.08005}$ ($100\%$ fallback; strictly capped at pre-update baseline, preventing arbitrary blowup). \\
+\addlinespace
+\textbf{Trial 6C: 6-Module \texttt{v8} Cumulative \& Leave-One-Out (LOO) Ablation} & Cumulative addition ($0 \to 6$ modules) and Leave-One-Out removal from full \texttt{v8} across 10 seeds (unweighted mean of 6 normalized sub-task metrics in $[0, 1]$, Eq.~\eqref{eq:composite_score}). & \textbf{Cumulative:} \texttt{v7} Base $3.33 \pm 0.00\% \to$ \texttt{+TTT} $16.67\% \to$ \texttt{+BES} $33.33\% \to$ \texttt{+SDPO} $50.00\% \to$ \texttt{+SKILL} $66.27\% \to$ \texttt{+Veri} $82.94\% \to$ \textbf{Full \texttt{v8} $\mathbf{97.38 \pm 0.32\%}$}. \newline \textbf{LOO:} \texttt{-TTT} $84.04\%$ ($-13.34\%$), \texttt{-BES} $80.71\%$ ($-16.67\%$), \texttt{-SDPO} $80.71\%$ ($-16.67\%$), \texttt{-SKILL} $81.11\%$ ($-16.27\%$), \texttt{-Veri} $80.71\%$ ($-16.67\%$), \texttt{-FALCON-2} $82.94\%$ ($-14.44\%$). \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+For complete transparency in Trial 6C (\texttt{battle\_test\_sleep\_dag\_v6.py:986}), the \textbf{Composite Score (\%)} across the 6 \texttt{v8} modules is defined as the unweighted arithmetic mean of six bounded sub-task scores in $[0, 1]$:
+\begin{equation}
+\operatorname{CompositeScore}(\%) = \frac{100}{6}\bigl(s_{\text{TTT}} + s_{\text{BES}} + s_{\text{SDPO}} + s_{\text{SKILL}} + s_{\text{Veri}} + s_{\text{FALCON}}\bigr),
+\tag{23}\label{eq:composite_score}
+\end{equation}
+where $s_{\text{TTT}} = \operatorname{clip}\bigl((J_\tau - 50)/50,\, 0, 1\bigr)$ ($0.20$ at $\tau=0$ vs.\ $0.9999$ at $\tau=6$), $s_{\text{BES}} \in \{0, 1\}$ indicates dead-bucket stepping-stone promotion, $s_{\text{SDPO}} = \operatorname{clip}(1 - \text{MSE}_{\text{SDPO}}/\text{MSE}_{\text{base}},\, 0, 1)$, $s_{\text{SKILL}} = \operatorname{clip}\bigl(1 - \operatorname{Bytes}(\texttt{SKILL.state})/\operatorname{Bytes}(\texttt{raw\_log}),\, 0, 1\bigr)$, $s_{\text{Veri}} = \min(1, N_{\text{oracle\_blind\_spots}})$, and $s_{\text{FALCON}} = \operatorname{clip}\bigl(1 - \|B_{\text{fast}}\|_F / 25.0,\, 0, 1\bigr)$.
+
+\begin{table}[ht!]
+\centering
+\caption{Table 7: Complete Self-Test Suite Verification Matrix (\texttt{Suites 1--19h}, \texttt{dream\_rsi\_scripts/\_selftest.py}). Values correspond to fast unit-test micro-fixtures ($N=200$, $40$ rounds in Suite 19d, $12$-sample SDPO batch in Suite 19c).}
+\label{tab:selftest}
+\footnotesize
+\begin{tabular}{cp{6.4cm}p{7.4cm}}
+\toprule
+\textbf{Suite ID} & \textbf{Architectural Layer \& Tested Invariants} & \textbf{Key Verified Quantitative Output (\texttt{[PASS]})} \\
+\midrule
+Suites 1--10 & Core \texttt{Dream-RSI} Engine: rubric scoring, monotone selection, deterministic replay, prefix-only observability, failure split, multi-domain pool, JSON spec round-trip & \texttt{quality=4.0 > 2.0}, \texttt{best=51.89 >= incumbent}, \texttt{violations=[]}, $5$ policy kinds registered, monotone trajectory \texttt{[234.10, 247.37, 247.37]} \\
+\addlinespace
+Suite 11 & Appendix B.2 SEE Mechanics: \texttt{reconstruct\_trajectories}, non-degenerate \texttt{OptimalPolicy} $\beta$-sweep, \texttt{pareto\_sweep}, \texttt{plan\_grid} & \texttt{probes(beta=0.0)=6.0 < probes(beta=1.0)=9.0}, \texttt{pareto\_auc=132.081364} \\
+\addlinespace
+Suite 12 & \texttt{Lean-DAG-RSI v1}: monotone $V_{\text{Lean}}$ objective, damped Tukey $s_{\text{cf}}(v)$, \texttt{CROSSOVER(u,v)} legality, \texttt{ideate\_over\_history} & \texttt{V(1 probe)=149.9400 > V(6 probes)=149.8900}, \texttt{crossovers=2, splits=2} \\
+\addlinespace
+Suite 13 & \texttt{Lean-DAG-RSI v2--v3}: \texttt{compute\_error\_fingerprint}, \texttt{evaluate\_flat\_plateau}, \texttt{prune\_tunable\_params}, \texttt{profile\_callable\_lines} & Skips clone ($0\%$ gain), picks \texttt{b2\_comp} ($+20\%$ union gain), freezes $4/6$ redundant knobs, pinpoints $50.9\%$ CPU line hotspot \\
+\addlinespace
+Suite 14 & \texttt{DiscoveryRSI} (\texttt{v3}): $\mathcal{H}=(c,\pi,d,a)$ gate, \texttt{diagnose\_harness\_failures}, \texttt{compute\_provenance\_credit}, \texttt{export\_masked\_sft\_dataset}, \texttt{accept\_joint\_2x2} & Clone family cap \texttt{2.0000 <= 2.0}, \texttt{q\_novel=1.8631 > q\_repair=1.6131}, \texttt{passenger\_w=0.0}, \texttt{supervised=2/5 (40\%)} \\
+\addlinespace
+Suite 15 & \texttt{Lean-DAG-RSI v4}: \texttt{compute\_hyper\_crossover} + AST IoU, \texttt{prune\_epistatic\_gauss\_newton}, \texttt{predict\_bucket\_jepa}, \texttt{export\_dag\_dpo\_pairs}, \texttt{export\_lean4\_certificate} & Merges 3 branches (\texttt{excess\_gain=0.4867}), freezes epistatic ratio ridge (\texttt{effective\_dof=2/4}), \texttt{lean\_verified=True} (zero \texttt{sorryAx}) \\
+\addlinespace
+Suite 16 & \texttt{SLEEP-DAG-RSI v5}: Generalized JSD gradient, \texttt{DeltaRuleFastMemory}, \texttt{ExpandableMoEMLP} router, \texttt{SleepDAGRSIOrchestrator}, \texttt{AstPolicySafetyGate} & \texttt{jsd\_fd\_err=1.11e-11}, \texttt{delta\_err: 3.695 -> 6.34e-6}, skips clone slot $3$, blocks \texttt{forbidden\_call:eval} \& \texttt{hardcoded\_node\_id} \\
+\addlinespace
+Suite 17 & \texttt{SLEEP-DAG-RSI v6}: \texttt{WaldMicroSentinel}, \texttt{SpectralFrameLifter} ($\kappa_{\text{eff}}$, EigenRotation, KKT condensation), \texttt{NeuroSymbolicDistiller} & Saves $95.5\%$ cost (\texttt{bad\_cost=0.045}), $M<d$ $\kappa_{\text{eff}}=1.0$, valley $\log_{10}\kappa=9.0$ (\texttt{inv\_err=0.0}), KKT $6 \to 3$, distiller $R^2_{\text{OOS}}=0.9993$ \\
+\addlinespace
+Suites 18a--18e & \texttt{SLEEP-DAG-RSI v7}: \texttt{AstCodeSplicer}, \texttt{ActiveBoundarySynthesizer}, \texttt{SymbolicLibrary} (\texttt{(1.5 * x[0] * x[1]) + (-0.8 * sign(x[2]))}), Full-Target Re-Consolidation, Dual Gram $K = \frac{1}{M}JJ^\top$ & $20.23\times$ disagreement amplification, depth-3 law $R^2_{\text{OOS}}=1.0000$ (vs.\ $0.0000$ flat \texttt{v6}), XOR predicate \texttt{(x[0] * x[1]) >= 0.0}, Dual Gram \texttt{inv\_err=3.07e-11} \\
+\addlinespace
+Suites 19a--19h & \texttt{SLEEP-DAG-RSI v8}: \texttt{TTT-Discover} Max-Tilt ($J_\tau$), \texttt{BackwardSubGoalDecomposer}, \texttt{SDPO} Self-Teacher + IRLS/MAD gate, \texttt{MutableSkillState}, \texttt{VeriHarness}, \texttt{FALCON-2} NLMS, \textbf{DeepReview Hardening (\texttt{19g--19h})} & $J_\tau: 61.20 \to 94.98$, promotes \texttt{c\_step\_win}, SDPO \texttt{MSE: 9.51 -> 0.11}, zero-win abstention \texttt{||slow\_B[0]||=0.0}, disjoint $S_{\text{adv}} \cap S_{\text{strat}} = \emptyset$ \& single-call \texttt{cost=0.050 <= 0.05} veto (\texttt{passed=False}), \texttt{r2\_crease=0.9985 >= 0.85}, \texttt{SKILL.state: 1,797 B vs 61,986 B}, \texttt{unanimous\_flips=2}, FALCON-2 Huber norm \texttt{2.94 < 349.1}, Jacobi $\kappa=10^{20}$ \texttt{inv\_err=0.0} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Limitations, Failure Modes \& Broader Impact}
+
+In accordance with rigorous peer-review standards, we explicitly document the limitations and boundary conditions of \texttt{SLEEP-DAG-RSI v8}:
+\begin{enumerate}
+\item \textbf{Cold-Start Discovery Compute (Stage A) vs.\ Replay Verification Time (Stage B):}
+While our verification and replay scripts (\texttt{auto\_dream\_rsi.py}, \texttt{verify\_extremal\_cartridges\_7\_8.py}, \texttt{heilbronn\_pr\_package/verify\_pr\_package.py}) execute in $0.4\text{--}3.9\text{ s}$, they operate over persisted intermediate checkpoints produced during Stage A cold-start search (Section~\ref{sec:stage_ab}, Table~\ref{tab:stage_ab}). Discovering the optimal topological chambers for Heilbronn $n=13\dots 17$ from random \texttt{std::mt19937\_64} seeds or polishing $P=20,256$ step convolutions via \texttt{Boltzmann Roof-Bundle Subgradient} requires $0.8\text{--}18.0$ CPU-hours on an AMD Ryzen 9 / 16-thread workstation.
+\item \textbf{Expressivity Boundaries of \texttt{NeuroSymbolicDistiller} \& \texttt{SymbolicLibrary}:}
+Our hierarchical distiller uses a strictly bounded grammar ($d_{\text{active}} \le 8$ gradient-selected inputs, $K \le 64$ basis atoms per expert) and relies on smooth 5-step Gauss-Newton refinement (\texttt{\_discover\_nonlinear\_inner\_submotif}) to crack inner arguments of saturating links $\tanh(\cdot)$. Laws involving deeply nested non-differentiable combinatorics (e.g., bitwise hashes, modulo arithmetic, or recursive data structures) cannot be extracted via sparse coordinate-descent Lasso and remain inside the residual neural weights $\Delta f_m^{\text{rem}}$ or require discrete LLM code synthesis.
+\item \textbf{Diagnostic Richness Requirement \& Breakdown Point in \texttt{SDPO} (\texttt{FeedbackConditionedSelfTeacher}):}
+Reclaiming $100\%$-dead-end batches in NREM sleep requires the verifier to return a quantitative residual vector or directional correction $\Delta_{\text{verifier}}(\mathbf{x}_i, f_i) \ne \mathbf{0}$. When an external black-box evaluator returns only a binary crash bit ($0/1$) with zero stacktrace or margin signal, \texttt{FeedbackConditionedSelfTeacher} abstains ($\omega_i^{\text{SDPO}} = 0$ by the zero-residual gate, holding $\Delta B_m^{\text{slow}} = \mathbf{0}$) and falls back to contrastive \texttt{DAG-DPO} repulsion. Furthermore, because the coordinate-wise median / MAD estimator has a theoretical finite-sample breakdown point of $\rho^\star = 50\%$, systematic adversarial bias exceeding $50\%$ of dead-end samples overwhelms the IRLS gate; in this regime, our validation-anchor fallback gate ($\mathcal{A}_{\text{val}}$) detects the non-decreasing anchor loss and reverts the update to prevent catastrophic corruption (Table~\ref{tab:trial6_ablations}, Trial 6B).
+\item \textbf{High Algebraic Degree in Extremal Geometry ($\deg P(\Delta_n^\star) > 78$ at $n=13, 14$):}
+Unlike $n=15$ (whose $D_3$-symmetric $12+3$ frame reduces via resultant elimination to a degree-5 minimal polynomial), LLL lattice reduction (\texttt{fmpz\_mat.lll} in \texttt{python-flint}) at 4,800-digit precision proves that $\Delta_{13}^\star$ and $\Delta_{14}^\star$ have no minimal polynomial over $\mathbb{Q}$ of degree $d \le 78$ with coefficient height $\le 10^{60}$. Consequently, for $n=13, 14, 16, 17$, our 500-digit KKT certificates and $10^{100}$-denominator exact rational floor embeddings certify exact KKT stationarity ($\Delta_n^\star$) and rigorous rational lower bounds ($\underline{\Delta}_n$) on the true geometric optima, rather than closed-form radical expressions.
+\item \textbf{Broader Impact \& Trustworthy Autonomous Discovery:}
+Unconstrained self-improving agents pose risks of \emph{Grader Gaming} (fabricating intermediate branches or exploiting floating-point inaccuracies) and unsafe code execution. \texttt{SLEEP-DAG-RSI v8} mitigates these risks structurally via: (i) \texttt{AstPolicySafetyGate} (static AST whitelisting blocking \texttt{eval}, \texttt{exec}, \texttt{import}, dunder access, and filesystem/network calls); (ii) mandatory inverse projection $\Phi^{-1}$ into the base domain prior to external evaluation; (iii) the pre-committed hypothesis contract $\mathcal{H} = (c, \pi, d, a)$; and (iv) two-layer formal verification in \texttt{Lean 4} (\texttt{by native\_decide}, zero \texttt{Float}, zero \texttt{sorryAx}).
+\end{enumerate}
+
+\section{Reproducibility \& Verification Commands}
+
+All code, Stage A cold-start discovery drivers, Stage B 500-digit certificates, exact rational verifiers, and formal \texttt{Lean 4} proofs are self-contained in the repository:
+\begin{lstlisting}[language=bash]
+# --- STAGE B: Fast Deterministic Replay & Exact Rational Verification (< 15 seconds total) ---
+# 1. Core Engine & SLEEP-DAG-RSI v1-v8 Self-Test Suite (Suites 1..19h, zero external dependencies in core)
+python dream_rsi_scripts/_selftest.py
+
+# 2. End-to-End Battle-Test comparing v5 vs v6 vs v7 vs v8 + SINDy, Tree-GP SR & Gated DeltaNet (Trials 1..6, 10 seeds)
+python battle_test_sleep_dag_v6.py
+
+# 3. 500-Digit & 10^100-Rational Heilbronn Certificate Verifier (n = 13, 14, 15, 16, 17)
+python heilbronn_pr_package/verify_pr_package.py
+
+# 4. Standalone Zero-Gaming Verifier for Autocorrelation C1, C2, Phi3 & Heilbronn n=13, 14
+python verify_extremal_cartridges_7_8.py
+
+# 5. Continual 5-Domain Sleep Retention & 30-World REM Dreaming Benchmark
+python run_sleep_dag_experiments.py
+
+# 6. Autonomous 5-Round Discovery Harness across Extremal Math Cartridges
+python auto_dream_rsi.py --task extremal-math
+
+# --- STAGE A: Cold-Start From-Scratch Discovery Drivers (CPU/GPU Multi-Threaded Search in Repository) ---
+# 7. Compile & run C++/Python Cold-Start Heilbronn n=13..17 Multi-Start & 6-Regime Lasso Benchmarks
+g++ -O3 -march=native -pthread heilbronn_13_14_cpp.cpp -o heilbronn_13_14_cpp.exe && ./heilbronn_13_14_cpp.exe
+g++ -O3 -march=native -pthread heilbronn_16_17_cpp.cpp -o heilbronn_16_17_cpp.exe && ./heilbronn_16_17_cpp.exe
+g++ -O3 -march=native -pthread heilbronn_16_17_storm2.cpp -o heilbronn_16_17_storm2.exe && ./heilbronn_16_17_storm2.exe
+g++ -O3 -march=native benchmark_lasso_cpp.cpp -o benchmark_lasso_cpp.exe && ./benchmark_lasso_cpp.exe
+python storm_heilbronn_n16.py && python exact_kkt_heilbronn.py && python verify_dream_rsi.py
+
+# 8. Cold-Start & Polishing Drivers for Autocorrelation C1, C2, Phi3 & Circle Packing (n=26, 32)
+python attack_c2_phi3_heilbronn.py && python polish_c2_boltzmann_bundle.py
+python benchmark_world_records.py && python verify_math_tasks.py
+\end{lstlisting}
+
+\begin{thebibliography}{99}
+\bibitem{funsearch2024} B. Romera-Paredes, M. Barekatain, A. Novikov, M. Balog, M. P. Kumar, E. Dupont, F. J. R. Ruiz, J. S. Ellenberg, P. Wang, O. Fawzi, P. Kohli, and A. Fawzi, ``Mathematical discoveries from program search with large language models (FunSearch),'' \emph{Nature}, vol. 625, pp. 468--475, 2024.
+\bibitem{alphaevolve2025} A. Novikov, N. V\~{u}, M. Eisenberger, E. Dupont, P.-S. Huang, A. Z. Wagner, S. Shirobokov, B. Kozlovskii, F. J. R. Ruiz, A. Mehrabian, M. P. Kumar, A. See, S. Chaudhuri, G. Holland, A. Davies, S. Nowozin, P. Kohli, and M. Balog, ``AlphaEvolve: A coding agent for scientific and algorithmic discovery,'' Google DeepMind Technical Report, \texttt{arXiv:2506.13131}, 2025.
+\bibitem{sleep2026} A. Behrouz, P. Kacham, M. Abdolmaleki, P. Zhong, and V. Mirrokni, ``SLEEP: Sleep-like Learning and Experience Propagation for Continual Adaptation,'' Technical Report, \texttt{arXiv:2606.03979v2}, 2026.
+\bibitem{hope2025} A. Behrouz, P. Zhong, and V. Mirrokni, ``Titans: Learning to Memorize at Test Time (and HOPE Continuum Memory Systems),'' Technical Report, \texttt{arXiv:2501.00663}, 2025.
+\bibitem{dreamrsi2026} Dream-RSI Authors, ``Dream-RSI: Self-Evolving Exploration via Counterfactual Replay on Empirical Optimization Trees,'' Working Paper / Preprint in Workspace, 2026.
+\bibitem{discoveryrsi2026} DiscoveryRSI Authors, ``DiscoveryRSI: Recursively Learning to Discover Valuable Hypotheses Under Pre-Committed Evaluation Contracts,'' Technical Report, \texttt{arXiv:2610.23839v1}, 2026.
+\bibitem{tttdiscover2026} M. Yuksekgonul, D. Koceja, X. Li, F. Bianchi, J. Pohl, Y. Sun, J. Zou, and C. Guestrin, ``Learning to Discover at Test Time (TTT-Discover),'' Technical Report, \texttt{arXiv:2601.16175}, 2026.
+\bibitem{bes2025} Backward Exploratory Search Authors, ``Backward Exploratory Search (BES): Goal-Conditioned Reverse Curriculum Generation for Reasoning,'' Technical Report, \texttt{arXiv:2509.21077}, 2025.
+\bibitem{ladder2025} A. Simonds and A. Yoshiyama, ``LADDER: Learning through Autonomous Difficulty-Driven Example Recursion,'' Technical Report, \texttt{arXiv:2503.00735}, 2025.
+\bibitem{sdpo2026} SDPO Authors, ``SDPO: Self-Distillation with Policy Optimization from Rich Environment Feedback,'' Technical Report, \texttt{arXiv:2601.20802}, 2026.
+\bibitem{veriharness2026} VeriHarness Authors, ``VeriHarness: Dual-Head Active Verification and Consensus Challenging for Code Synthesis,'' Technical Report, \texttt{arXiv:2603.17906}, 2026.
+\bibitem{falcon2_2026} FALCON-2 Authors, ``FALCON-2: Fast Associative Learning with Cosine-Gated Normalized Least-Mean-Squares,'' Technical Report, \texttt{arXiv:2603.21456}, 2026.
+\bibitem{dreamcoder2021} K. Ellis, C. Wong, M. Nye, M. Sabl\'{e}-Meyer, L. Morales, L. Hewitt, L. Cary, A. Solar-Lezama, and J. B. Tenenbaum, ``DreamCoder: Bootstrapping inductive program synthesis with wake-sleep library learning,'' in \emph{Proc. ACM SIGPLAN Conf. Programming Language Design and Implementation (PLDI)}, pp. 835--850, 2021.
+\bibitem{matolcsi2010} M. Matolcsi and C. Vinuesa, ``Improved bounds on the supremum of autoconvolutions,'' \emph{Journal of Mathematical Analysis and Applications}, vol. 372, no. 2, pp. 439--447, 2010.
+\bibitem{cilleruelo2010} J. Cilleruelo, I. Z. Ruzsa, and C. Vinuesa, ``Generalized Sidon sets,'' \emph{Advances in Mathematics}, vol. 225, no. 5, pp. 2786--2807, 2010.
+\bibitem{jaech2025} A. Jaech and M. Joseph, ``Improved Lower Bounds for the Second Autocorrelation Inequality,'' Technical Report, \texttt{arXiv:2509.25465}, 2025.
+\bibitem{cantrell2007} D. W. Cantrell, ``Heilbronn's triangle problem for $n = 14$ and $n = 15$,'' MathPuzzle / Erich Friedman Packing Center, 2007.
+\bibitem{stead2026} T. Stead, ``Heilbronn triangle configurations and algebraic reconstructions for $n \le 16$,'' \url{https://math.tejstead.com/heilbronn/triangle/}, 2026.
+\bibitem{brunton2016} S. L. Brunton, J. L. Proctor, and J. N. Kutz, ``Discovering governing equations from data by sparse identification of nonlinear dynamical systems (SINDy),'' \emph{Proceedings of the National Academy of Sciences (PNAS)}, vol. 113, no. 15, pp. 3932--3937, 2016.
+\bibitem{cranmer2020} M. Cranmer, A. Sanchez-Gonzalez, P. Battaglia, R. Xu, K. Cranmer, D. Spergel, and S. Ho, ``Discovering symbolic models from deep learning with inductive biases,'' in \emph{Advances in Neural Information Processing Systems (NeurIPS)}, vol. 33, pp. 17429--17442, 2020.
+\bibitem{udrescu2020} S.-M. Udrescu and M. Tegmark, ``AI Feynman: A physics-inspired method for symbolic regression,'' \emph{Science Advances}, vol. 6, no. 16, eaay2631, 2020.
+\bibitem{schlag2021} I. Schlag, K. Irie, and J. Schmidhuber, ``Linear Transformers are secretly fast weight programmers,'' in \emph{Proc. International Conference on Machine Learning (ICML)}, PMLR vol. 139, pp. 9355--9366, 2021.
+\bibitem{yang2024} S. Yang, B. Wang, Y. Zhang, Y. Shen, and Y. Kim, ``Parallelizing linear transformers with the delta rule over sequence length (DeltaNet),'' in \emph{Advances in Neural Information Processing Systems (NeurIPS)}, 2024.
+\bibitem{yang2025} S. Yang, J. Kautz, and A. Hatamizadeh, ``Gated Delta Networks: Improving Mamba2 with Delta Rule,'' in \emph{Proc. International Conference on Learning Representations (ICLR)}, 2025.
+\bibitem{sun2024} Y. Sun, X. Li, K. Dalal, J. Xu, A. Vikram, G. Zhang, Y. Dubois, X. Chen, X. Wang, S. Koyejo, T. Hashimoto, and C. Guestrin, ``Learning to (learn at test time): RNNs with expressive hidden states (TTT),'' in \emph{Proc. International Conference on Machine Learning (ICML)}, 2024.
+\bibitem{kirkpatrick2017} J. Kirkpatrick, R. Pascanu, N. Rabinowitz, J. Veness, G. Desjardins, A. A. Rusu, K. Milan, J. Quan, T. Ramalho, A. Grabska-Barwi\'{n}ska, D. Hassabis, C. Clopath, D. Kumaran, and R. Hadsell, ``Overcoming catastrophic forgetting in neural networks (EWC),'' \emph{Proceedings of the National Academy of Sciences (PNAS)}, vol. 114, no. 13, pp. 3521--3526, 2017.
+\bibitem{eoh2024} F. Liu, X. Tong, M. Yuan, X. Lin, F. Luo, Z. Wang, Z. Lu, and Q. Zhang, ``Evolution of Heuristics: Towards Efficient Automatic Algorithm Design Using Large Language Model,'' in \emph{Proc. International Conference on Machine Learning (ICML)}, \texttt{arXiv:2401.02051}, 2024.
+\bibitem{reevo2024} H. Ye, J. Wang, Z. Cao, F. Berto, C. Hua, H. Kim, J. Park, and G. Song, ``ReEvo: Large Language Models as Hyper-Heuristics with Reflective Evolution,'' in \emph{Advances in Neural Information Processing Systems (NeurIPS)}, \texttt{arXiv:2402.01145}, 2024.
+\bibitem{algotune2025} O. Press, B. R. Brown, and AlgoTune Collaborators, ``AlgoTune: Can Language Models Speed Up Numerical Programs?'' Technical Report, 2025.
+\bibitem{llmsr2024} P. Shojaee, K. Meidani, S. Gupta, A. B. Farimani, and C. K. Reddy, ``LLM-SR: Scientific Equation Discovery via Programming with Large Language Models,'' in \emph{Proc. International Conference on Learning Representations (ICLR)}, \texttt{arXiv:2404.18400}, 2024.
+\bibitem{alphaevolve2_2025} B. Georgiev, J. G\'{o}mez-Serrano, T. Tao, and A. Z. Wagner, ``Mathematical exploration and discovery at scale,'' Technical Report, \texttt{arXiv:2511.02864}, 2025.
+\bibitem{khrulkov2026} V. Khrulkov, L. Khrulkova, and I. Oseledets, ``Improved upper bounds for the First Autocorrelation Inequality via continuous piecewise-linear optimization,'' Technical Report, \texttt{arXiv:2603.22929}, 2026.
+\bibitem{thetaevolve2025} Y. Wang, Z. Zhang, J. Chen, H. Liu, and D. Zhou, ``ThetaEvolve: Test-time Learning on Open Problems,'' Technical Report, \texttt{arXiv:2511.23473}, 2025.
+\end{thebibliography}
+
+\end{document}

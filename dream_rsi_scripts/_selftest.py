@@ -2109,9 +2109,252 @@ def main() -> int:
         and rep_noisy_sdpo["sdpo_reclaimed_count"] >= 17
         and mse_noisy_sdpo < 0.25
         and rep_zero_sdpo["sdpo_reclaimed_count"] == 0
+        and rep_zero_sdpo["supervised_win_count"] == 0
+        and float(np.linalg.norm(ad_zero_sdpo.slow_B[0])) == 0.0
         and rep_sib_t6["j_tau_expectation"] > rep_sib_t0["j_tau_expectation"] + 20.0
         and rep_sib_t6["champion_tilt_share"] > 0.95,
         f"opp_f2={rep_opp_f2['loss']:.1f}->{rep_opp_f2['post_update_loss']:.1f} noisy_rej={rep_noisy_sdpo['sdpo_rejected_noisy_count']}/7 mse={mse_noisy_sdpo:.4f} sib_tau0={rep_sib_t0['j_tau_expectation']:.1f}->tau6={rep_sib_t6['j_tau_expectation']:.1f}",
+    )
+
+    # 19h. DeepReview Mathematical Hardening Suite (r_sup vs r_eff, anchored submodular hyper-crossover,
+    #      shift-invariant counterfactual step, conjunctive clone-family C_f, WaldMicroSentinel UCB95 + ceiling veto,
+    #      SDPO MAD=0 floor + bilateral crease + 60% corruption fallback, FALCON-2 Huber target spike vs Gated DeltaNet,
+    #      upper-tail s_R in TTT-Discover, and VeriHarness smooth consensus margin)
+    from engine import (
+        EigenRotationTransform,
+        WaldMicroSentinel,
+        compute_counterfactual_step,
+        compute_hyper_crossover,
+        compute_provenance_credit,
+        compute_spectral_diagnostics,
+    )
+    from sleep_dag_rsi import FeedbackConditionedSelfTeacher
+
+    # (1) Multi-scale spectrum (1.0, 0.8, 1e-8): r_eff < 2 is blind, r_sup = 3 detects kappa_eff = 1e8
+    H_multiscale = [[1.0, 0.0, 0.0], [0.0, 0.8, 0.0], [0.0, 0.0, 1e-8]]
+    spec_ms = compute_spectral_diagnostics(g_mat=H_multiscale)
+    eig_ms = EigenRotationTransform(theta_anchor=[0.0, 0.0, 0.0], g_mat=H_multiscale)
+
+    # (2) Anchored submodular hyper-crossover at u* with pairwise C(|S|, 2) normalization
+    hc_nodes = [
+        Node(id="u_star", parent_id="root", branch=0, attempt=1, score=20.0, pass_mask=[1, 0, 0], meta={"code": "def f(x):\n    a = x + 1\n    return a"}),
+        Node(id="u_b1", parent_id="root", branch=1, attempt=1, score=18.0, pass_mask=[0, 1, 0], meta={"code": "def f(x):\n    b = x * 2\n    return b"}),
+        Node(id="u_b2", parent_id="root", branch=2, attempt=1, score=17.0, pass_mask=[0, 0, 1], meta={"code": "def f(x):\n    c = x - 3\n    return c"}),
+    ]
+    hc_res = compute_hyper_crossover(hc_nodes)
+
+    # (3) Shift-invariant counterfactual step under +1000.0 global score translation for |Delta+| < 4
+    cf_a = compute_counterfactual_step(ds=7.0, node_score=22.0, root_score=10.0, pos_gains=[5.0, 7.0])
+    cf_b = compute_counterfactual_step(ds=7.0, node_score=1022.0, root_score=1010.0, pos_gains=[5.0, 7.0])
+
+    # (4) Conjunctive clone-family C_f: distinct AST/code with identical pass_mask & margin are NOT merged
+    pc_hyps = [
+        {
+            "id": "alg1",
+            "mu": 20.0,
+            "sigma": 1.0,
+            "n": 5,
+            "pass_mask": [1, 1],
+            "code": "def f(x):\n    a = x + 1\n    return a",
+            "lead_trajectories": ["t1"],
+        },
+        {
+            "id": "alg2",
+            "mu": 20.0,
+            "sigma": 1.0,
+            "n": 5,
+            "pass_mask": [1, 1],
+            "code": "def f(x):\n    b = x * 2\n    c = b - x\n    d = c + 1\n    return d",
+            "lead_trajectories": ["t2"],
+        },
+        {
+            "id": "alg2_clone",
+            "mu": 20.0,
+            "sigma": 1.0,
+            "n": 5,
+            "pass_mask": [1, 1],
+            "code": "def f(x):\n    b = x * 2\n    c = b - x\n    d = c + 1\n    return d",
+            "lead_trajectories": ["t3"],
+        },
+    ]
+    pc_res = compute_provenance_credit(pc_hyps, c_loc=0.72)
+
+    # (5) WaldMicroSentinel UCB95, stratified SE, and hard divergence ceiling veto on 1e7 blow-up (including trimmed_outlier_indices)
+    sentinel_19h = WaldMicroSentinel(adv_frac=0.25, strat_frac=0.25)
+    p_node_19h = Node(id="p", parent_id="root", branch=0, attempt=1, score=-1.0)
+    c_good_node = Node(id="cg", parent_id="p", branch=0, attempt=2, score=0.0)
+    c_blow_node = Node(id="cb", parent_id="p", branch=0, attempt=2, score=0.0)
+    p_scores = [-1.0, -1.2, -0.8, -1.1, -0.9, -1.0, -1.1, -0.9]
+    c_good = [-0.5, -0.6, -0.4, -0.5, -0.4, -0.5, -0.6, -0.4]
+    c_blowup = [-1.0e7, -1.0e7, -1.0e7, -1.0e7, -1.0e7, -1.0e7, -1.0e7, -1.0e7]
+    w_good = sentinel_19h.evaluate_gate(
+        p_node_19h, c_good_node, p_scores, lambda idxs: [c_good[i] for i in idxs], lambda: c_good
+    )
+    w_blow = sentinel_19h.evaluate_gate(
+        p_node_19h, c_blow_node, p_scores, lambda idxs: [c_blowup[i] for i in idxs], lambda: c_blowup
+    )
+    sentinel_stoch = WaldMicroSentinel(adv_frac=0.25, strat_frac=0.25, noise_regime="stochastic", outlier_trim_quantile=0.25)
+    p_stoch_scores = [-50.0, -40.0, -1.0, -1.1, -0.9, -1.0, -1.1, -0.9]
+    c_trim_blow_scores = [-1.0e7, -40.0, -0.5, -0.5, -0.5, -0.5, -0.5, -0.5]
+    c_trim_node = Node(id="ctb", parent_id="p", branch=0, attempt=2, score=0.0)
+    w_trim_blow = sentinel_stoch.evaluate_gate(
+        p_node_19h,
+        c_trim_node,
+        p_stoch_scores,
+        lambda idxs: [c_trim_blow_scores[i] for i in idxs],
+        lambda: c_trim_blow_scores,
+    )
+    stoch_200_calls = 0
+    stoch_200_pts = [-120.0 if i == 0 else (-100.0 if i < 10 else (-5.0 if i < 15 else 1.0)) for i in range(200)]
+    c_200_bad_pts = [-1.0e7 if i == 0 else (stoch_200_pts[i] - 0.8) for i in range(200)]
+
+    def _eval_stoch_200(idxs):
+        nonlocal stoch_200_calls
+        stoch_200_calls += 1
+        return [c_200_bad_pts[i] for i in idxs]
+
+    w_stoch_200 = stoch_sentinel.evaluate_gate(
+        p_node_19h,
+        Node(id="ct200", parent_id="p", branch=0, attempt=3, score=0.0),
+        stoch_200_pts,
+        _eval_stoch_200,
+        None,
+    )
+    det_slice_200 = sentinel.build_slice(parent_pts, higher_is_better=True)
+    stoch_80_pts = [-100.0 if i < 4 else (-5.0 if i < 6 else 1.0) for i in range(80)]
+    w_stoch_80 = stoch_sentinel.evaluate_gate(
+        p_node_19h,
+        Node(id="ct80", parent_id="p", branch=0, attempt=4, score=0.0),
+        stoch_80_pts,
+        lambda idxs: [stoch_80_pts[i] - 0.8 for i in idxs],
+        None,
+    )
+    stoch_10_pts = [-50.0, -5.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+    w_stoch_10 = stoch_sentinel.evaluate_gate(
+        p_node_19h,
+        Node(id="ct10", parent_id="p", branch=0, attempt=5, score=0.0),
+        stoch_10_pts,
+        lambda idxs: [stoch_10_pts[i] - 0.8 for i in idxs],
+        None,
+    )
+
+    # (6) SDPO MAD=0 floor, bilateral crease [x, |x|, 1], and 60% corruption validation-loss fallback
+    sdpo_teacher = FeedbackConditionedSelfTeacher()
+    X_crease = rng_v8.uniform(-2.0, 2.0, size=(32, 3))
+    Y_crease_true = (2.0 * np.abs(X_crease[:, 0]) - 1.5 * X_crease[:, 1] + 0.5)[:, None]
+    wrong_crease = np.zeros_like(Y_crease_true)
+    # Identical residual norm on every dead-end -> MAD_r == 0.0
+    const_res_delta = np.ones((32, 1), dtype=np.float64) * 3.0
+    rep_mad0 = sdpo_teacher.reclaim_vector_dead_ends(
+        x_dead=X_crease,
+        failed_delta=wrong_crease,
+        verifier_feedback_residual=const_res_delta,
+        damping=1.0,
+    )
+    rep_crease = sdpo_teacher.reclaim_vector_dead_ends(
+        x_dead=X_crease,
+        failed_delta=wrong_crease,
+        verifier_feedback_residual=Y_crease_true - wrong_crease,
+        damping=1.0,
+    )
+    err_crease = float(np.mean((rep_crease["sdpo_target_delta"] - Y_crease_true) ** 2))
+    X_lin_sdpo = rng_v8.uniform(-2.0, 2.0, size=(40, 3))
+    Y_lin_sdpo = (1.5 * X_lin_sdpo[:, 0] - 0.8 * X_lin_sdpo[:, 1] + 0.3)[:, None]
+    wrong_lin_sdpo = np.zeros_like(Y_lin_sdpo)
+    X_anc_sdpo = rng_v8.uniform(-1.5, 1.5, size=(12, 3))
+    Y_anc_sdpo = (1.5 * X_anc_sdpo[:, 0] - 0.8 * X_anc_sdpo[:, 1] + 0.3)[:, None]
+    sweep_sdpo = sdpo_teacher.evaluate_corruption_sweep(
+        x_dead=X_lin_sdpo,
+        failed_delta=wrong_lin_sdpo,
+        true_target_delta=Y_lin_sdpo,
+        clean_anchor_xy=(X_anc_sdpo, Y_anc_sdpo),
+    )
+    corrupt_60_delta = (Y_true_sdpo - wrong_fast_delta).copy()
+    corrupt_60_delta[:15] = -3.0 * corrupt_60_delta[:15]
+    ad_60_nrem = UniversalNeuralSleepAdapter(d_in=4, d_out=1, d_low=4, seed=77)
+    rep_60_nrem = ad_60_nrem.nrem_consolidate(
+        x_trajectories=X_sdpo,
+        base_outputs=base_zeros,
+        dag_tree=t_all_dead,
+        trajectory_node_ids=node_ids_dead,
+        fingerprint_meta=ExpertFingerprintMeta(expert_slot=0, source_node_id="d0", pass_mask=[0, 0]),
+        steps=25,
+        lr=0.12,
+        target_delta_override=wrong_fast_delta,
+        enable_neuro_symbolic_distill=False,
+        verifier_feedback_deltas=corrupt_60_delta,
+        clean_anchor_xy=(X_sdpo[-6:], Y_true_sdpo[-6:]),
+    )
+
+    # (7) FALCON-2 target spike y_t = 1e3 Huber clipping vs Gated DeltaNet
+    ad_f2_yspike = UniversalNeuralSleepAdapter(d_in=4, d_out=2, d_low=4, seed=55)
+    ad_gdn_yspike = UniversalNeuralSleepAdapter(d_in=4, d_out=2, d_low=4, seed=55)
+    x_norm_in = np.array([[1.0, -0.5, 0.5, -1.0], [0.5, 1.0, -1.0, 0.5]], dtype=np.float64)
+    y_huge_spike = np.array([[1000.0, -1000.0], [1000.0, -1000.0]], dtype=np.float64)
+    rep_f2_ysp = ad_f2_yspike.wake_adapt_step_falcon2(x_norm_in, np.zeros((2, 2)), y_huge_spike, lr=0.45)
+    rep_gdn_ysp = ad_gdn_yspike.wake_adapt_step_gated_deltanet(x_norm_in, np.zeros((2, 2)), y_huge_spike, lr=0.08)
+
+    # (8) compute_max_tilted_objective upper-tail s_R immunity to -1e6 crash
+    mt_clean = compute_max_tilted_objective([10.0, 12.0, 15.0, 20.0, 25.0], tau=2.0)
+    mt_crash = compute_max_tilted_objective([-1.0e6, 12.0, 15.0, 20.0, 25.0], tau=2.0)
+
+    # (9) VeriHarness smooth signed consensus margin + ground_truth_oracle_fn
+    vh_19h = ActiveBoundarySynthesizer()
+    f_ens = [
+        lambda x: float(x[0]) - 0.15,
+        lambda x: float(x[0]) - 0.14,
+        lambda x: float(x[0]) - 0.16,
+    ]
+    vh_anchors = [[0.0, 0.0, 0.0], [0.1, 0.1, 0.0], [-0.1, 0.0, 0.1], [0.05, -0.1, 0.0]]
+    vh_rep = vh_19h.synthesize_dual_head_verification(
+        anchor_points=vh_anchors,
+        committee_fns=f_ens,
+        ground_truth_oracle_fn=lambda x: float(x[0]) - 0.8,
+    )
+
+    check(
+        "19h. DeepReview Mathematical Hardening: r_sup=3 multiscale rank, anchored hyper-crossover, shift-invariant CF, conjunctive C_f, UCB95+ceiling veto (<=5% stochastic budget), SDPO MAD=0+crease+60% fallback, FALCON-2 target spike, upper-tail s_R, VeriHarness oracle",
+        int(spec_ms["r_eff"]) == 1
+        and spec_ms["r_sup"] == 3
+        and spec_ms["kappa_eff"] > 1e7
+        and abs(eig_ms.preconditioned_condition_number - 1.0) < 1e-6
+        and hc_res["anchor_id"] == "u_star"
+        and hc_res["selected_ids"] == ["u_star", "u_b1", "u_b2"]
+        and abs(cf_a - cf_b) < 1e-9
+        and pc_res["hypothesis_weights"]["alg1"]["q_tilde"] > pc_res["hypothesis_weights"]["alg2"]["q_tilde"] * 1.5
+        and abs(pc_res["hypothesis_weights"]["alg2"]["q_tilde"] - pc_res["hypothesis_weights"]["alg2_clone"]["q_tilde"]) < 1e-9
+        and w_good["passed"] is True
+        and "ucb95_gain" in w_good
+        and w_blow["passed"] is False
+        and w_blow["catastrophic_blowup"] is True
+        and w_trim_blow["passed"] is False
+        and w_trim_blow["catastrophic_blowup"] is True
+        and stoch_200_calls == 1
+        and w_stoch_200["cost_spent"] <= 0.05
+        and w_stoch_200["canary_trim_probed"] >= 1
+        and w_stoch_200["catastrophic_blowup"] is True
+        and set(stoch_slice.adversarial_indices).isdisjoint(stoch_slice.stratified_indices)
+        and set(det_slice_200.adversarial_indices).isdisjoint(det_slice_200.stratified_indices)
+        and set(det_slice_200.stratified_indices).issubset(set(det_slice_200.combined_indices))
+        and w_stoch_80["aborted"] is True
+        and w_stoch_10["aborted"] is True
+        and rep_mad0["reclaimed_count"] == 32
+        and err_crease < 1e-6
+        and rep_crease["bilateral_crease_used"] is True
+        and rep_crease["r2_crease"] >= 0.85
+        and rep_crease["opposing_cluster_cosine"] < -0.50
+        and sweep_sdpo[0]["post_mse"] < 1e-5
+        and sweep_sdpo[2]["post_mse"] < 1e-4
+        and sweep_sdpo[-1]["fallback_reverted"] is True
+        and rep_60_nrem["sdpo_fallback_reverted"] is True
+        and rep_60_nrem["sdpo_reclaimed_count"] == 0
+        and float(np.linalg.norm(ad_60_nrem.slow_B[0])) == 0.0
+        and rep_f2_ysp["fast_B_norm"] < 15.0
+        and rep_gdn_ysp["fast_B_norm"] > 20.0
+        and abs(mt_clean["s_R"] - mt_crash["s_R"]) < 1e-9
+        and "kl_divergence" in mt_clean
+        and vh_rep["oracle_verified_blind_spots"] > 0,
+        f"r_eff={spec_ms['r_eff']:.2f} r_sup={spec_ms['r_sup']} stoch_cost={w_stoch_200['cost_spent']:.3f}(calls={stoch_200_calls}) crease_r2={rep_crease['r2_crease']:.4f} f2_norm={rep_f2_ysp['fast_B_norm']:.2f} vs gdn={rep_gdn_ysp['fast_B_norm']:.1f}",
     )
 
     print()
