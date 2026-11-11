@@ -1,0 +1,11 @@
+{
+  "name": "autonomous-research",
+  "displayName": "Autonomous R&D, SLEEP-DAG-RSI v8 & Epistemic Discovery",
+  "description": "Universal SLEEP-DAG-RSI v8 discovery suite: TaskCartridge & AutoDreamRunner SDK, 5% WaldMicroSentinel, AstCodeSplicer crossover, SpectralFrameLifter, FALCON-2 + SDPO + SymbolicLibrary neural sleep adapter, OEB epistemic discipline, and branch/auditor subagents.",
+  "version": "2.0.0",
+  "suggestedPrompts": [
+    "Разверни стенд dreamrsi.py scaffold под этот проект, замерь шумовой порог 2σ и найди решение сильнее бейзлайна",
+    "Запусти параллельные ветки через субагентов rsi-branch-worker, сшей лучшие через AstCodeSplicer и проверь через rsi-blind-auditor",
+    "Оберни обученную нейросеть в UniversalNeuralSleepAdapter (FALCON-2 + SDPO) и извлеки символьные законы в SymbolicLibrary"
+  ]
+}

@@ -2357,6 +2357,96 @@ def main() -> int:
         f"r_eff={spec_ms['r_eff']:.2f} r_sup={spec_ms['r_sup']} stoch_cost={w_stoch_200['cost_spent']:.3f}(calls={stoch_200_calls}) crease_r2={rep_crease['r2_crease']:.4f} f2_norm={rep_f2_ysp['fast_B_norm']:.2f} vs gdn={rep_gdn_ysp['fast_B_norm']:.1f}",
     )
 
+    # -----------------------------------------------------------------------
+    # 20. Universal Plugin SDK v2.0: cartridge.py, BlindVaultGuard, and dreamrsi.py scaffold/state
+    # -----------------------------------------------------------------------
+    print(
+        "\n20. Universal Plugin SDK v2.0: cartridge.py (Auto AstCodeSplicer + Sentinel), BlindVaultGuard, and CLI scaffold/state"
+    )
+    import contextlib
+    import io
+    import subprocess
+    import sys
+    from cartridge import (
+        BlindVaultGuard,
+        BlindVaultViolationError,
+    )
+    import dreamrsi
+
+    # 20a. BlindVaultGuard physical single-shot lock
+    bv_guard = BlindVaultGuard(lambda fn: {"vault_val": float(fn(3.0))}, max_calls=1)
+    bv_first = bv_guard.evaluate_once(lambda z: z * 2.0)
+    bv_second_blocked = False
+    try:
+        bv_guard.evaluate_once(lambda z: z * 2.0)
+    except BlindVaultViolationError:
+        bv_second_blocked = True
+    check(
+        "20a. BlindVaultGuard enforces single-shot open (call #1 succeeds, call #2 raises BlindVaultViolationError)",
+        bv_first["vault_val"] == 6.0
+        and bv_first["blind_vault_call_count"] == 1
+        and bv_second_blocked,
+        f"calls={bv_guard.calls} second_blocked={bv_second_blocked}",
+    )
+
+    # 20b. Standalone cartridge.py with autonomous AstCodeSplicer + 5% WaldMicroSentinel + _skill_state.json
+    tmp_s20 = tempfile.mkdtemp(prefix="dreamrsi_s20_")
+    try:
+        pool_s20 = os.path.join(tmp_s20, "pool")
+        scaf_dir = os.path.join(tmp_s20, "proj")
+        env_s20 = dict(os.environ)
+        env_s20["DREAM_RSI_POOL"] = pool_s20
+
+        mode_champions: Dict[str, float] = {}
+        mode_tree_counts: Dict[str, int] = {}
+        for mode_name in ("code", "ml", "trading", "math"):
+            t_id = f"s20_{mode_name}"
+            with contextlib.redirect_stdout(io.StringIO()):
+                rc_scaf = dreamrsi.main(
+                    ["--pool", pool_s20, "scaffold", "--dir", scaf_dir, "--task", t_id, "--mode", mode_name, "--force"]
+                )
+            assert rc_scaf == 0, f"scaffold failed for {mode_name}"
+            h_path = os.path.join(scaf_dir, f"rsi_{t_id}_harness.py")
+            proc = subprocess.run(
+                [sys.executable, h_path],
+                env=env_s20,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            assert proc.returncode == 0, f"harness {mode_name} failed: {proc.stderr}\n{proc.stdout}"
+            loaded_t = load_pool(task=t_id, pool_dir=pool_s20)
+            mode_tree_counts[mode_name] = len(loaded_t)
+            mode_champions[mode_name] = max(n.score for n in loaded_t[0].nodes.values()) if loaded_t else -1e9
+
+        state_buf = io.StringIO()
+        with contextlib.redirect_stdout(state_buf):
+            rc_state = dreamrsi.main(["--pool", pool_s20, "state", "--task", "s20_code"])
+        state_payload = json.loads(state_buf.getvalue())
+        state_file_exists = os.path.isfile(os.path.join(pool_s20, "s20_code", "_skill_state.json"))
+        code_tree = load_pool(task="s20_code", pool_dir=pool_s20)[0]
+        sentinel_pruned_ok = (
+            "b2_doomed_mutation" in code_tree.nodes
+            and code_tree.nodes["b2_doomed_mutation"].fail_class == "sentinel_pruned"
+        )
+        champs_fmt = {k: round(v, 2) for k, v in mode_champions.items()}
+        check(
+            "20b. dreamrsi.py scaffold executes all 4 modes (code/ml/trading/math) with 1 tree/run, Sentinel veto, and AST splice",
+            all(c == 1 for c in mode_tree_counts.values())
+            and mode_champions["code"] >= 99.9
+            and mode_champions["ml"] >= 95.0
+            and mode_champions["trading"] > 0.0
+            and mode_champions["math"] > 330.0
+            and sentinel_pruned_ok
+            and rc_state == 0
+            and state_payload.get("task") == "s20_code"
+            and state_file_exists,
+            f"trees={mode_tree_counts} champs={champs_fmt} sentinel_pruned={sentinel_pruned_ok}",
+        )
+    finally:
+        shutil.rmtree(tmp_s20, ignore_errors=True)
+
     print()
     if FAILURES:
         print(f"RESULT: {len(FAILURES)} FAILED -> {FAILURES}")

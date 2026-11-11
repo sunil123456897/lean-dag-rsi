@@ -155,14 +155,20 @@ flowchart TD
 ## 6. Структура репозитория
 
 ```text
-├── dream_rsi_scripts/                 # Ядро универсального движка и глобального навыка dream-rsi
+├── dream_rsi_scripts/                 # Ядро универсального движка, SDK картриджей и CLI
 │   ├── engine.py                      # Lean-DAG-RSI v1..v4 + SLEEP-DAG-RSI v6..v8 (WaldSentinel, SpectralFrameLifter, AstCodeSplicer, ActiveBoundarySynthesizer, TTT-Discover, BES/LADDER, MutableSkillState)
 │   ├── sleep_dag_rsi.py               # SLEEP-DAG-RSI v5..v8 (HOPE/FALCON-2 DeltaRule, DAG-KS, SDPO Self-Teacher, ExpandableMoE, NeuroSymbolicDistiller, SymbolicLibrary, UniversalNeuralSleepAdapter)
-│   ├── _selftest.py                   # 20 самодостаточных тестовых наборов (Suites 1..19h, 0 внешних зависимостей)
-│   ├── dreamrsi.py                    # CLI-интерфейс (init, round, prompt, apply, status, trees, ideate, sleep, demo)
+│   ├── cartridge.py                   # Универсальный SDK v2.0 (TaskCartridge, BranchCandidate, AutoDreamRunner, одноразовый замок BlindVaultGuard, авто-сплайсинг AstCodeSplicer)
+│   ├── _selftest.py                   # 21 самодостаточный тестовый набор (Suites 1..20, включая v8 и SDK v2.0)
+│   ├── dreamrsi.py                    # CLI-интерфейс (scaffold, state, init, round, prompt, apply, status, trees, ideate, sleep, demo)
 │   ├── loop.py                        # Замкнутый цикл выбора и сохранения политик исследования
 │   ├── simulator.py                   # Обёртка реплея исторических деревьев
-│   └── SKILL.md                       # Полная спецификация навыка dream-rsi (v1.8.0)
+│   └── SKILL.md                       # Компактный ранбук навыка dream-rsi (v2.0.0, Progressive Disclosure)
+├── plugin_bundle/                     # Модульный пакет плагина Antigravity `autonomous-research v2.0`
+│   ├── plugin.json                    # Манифест плагина v2.0.0 и стартовые промпты
+│   ├── skills/                        # 3 навыка (< 7 КБ каждый): dream-rsi (+ references/), neural-sleep, epistemic-research
+│   └── agents/                        # 2 изолированных субагента: rsi-branch-worker и rsi-blind-auditor
+├── sync_plugin.py                     # Атомарный синхронизатор и Zero-Manual QA валидатор плагина (SHA-256, YAML, Suites 1..20)
 ├── heilbronn_pr_package/              # Пакет 500-значных и 10^100-рациональных сертификатов Хейльбронна (n=13..17)
 │   ├── n13_exact_500dps.json          # 500-значный KKT-сертификат для n=13 (+3.73e-14 над Stead 2026)
 │   ├── n14_exact_500dps.json          # 500-значный KKT-сертификат для n=14 (Cantrell 2007)
@@ -198,7 +204,7 @@ flowchart TD
 Требования: `Python 3.10+`, `numpy`, `scipy` (опционально `torch` с CUDA для GPU-картриджей; базовое ядро [`dream_rsi_scripts/_selftest.py`](dream_rsi_scripts/_selftest.py) работает на чистом стандартном Python без внешних библиотек).
 
 ```bash
-# 1. Проверить все тестовые наборы ядра (Suites 1..19h: v1..v4 + SLEEP-DAG-RSI v5..v8, ~0.8 сек)
+# 1. Проверить все тестовые наборы ядра и SDK v2.0 (Suites 1..20: v1..v4 + SLEEP-DAG-RSI v5..v8 + cartridge/scaffold)
 python dream_rsi_scripts/_selftest.py
 
 # 2. Запустить стресс-тест SLEEP-DAG-RSI v5 vs v6 vs v7 vs v8 + SINDy & Gated DeltaNet (Trials 1..6, 10 сидов, ~2 сек)
@@ -220,6 +226,10 @@ python auto_dream_rsi.py --task benchmarks
 
 # 7. Запустить CLI-демонстрацию цикла сна SLEEP-DAG-RSI
 python dream_rsi_scripts/dreamrsi.py sleep --demo
+
+# 8. Синхронизировать плагин autonomous-research v2.0 и сгенерировать стенд для нового проекта (code | ml | trading | math)
+python sync_plugin.py --verify
+python dream_rsi_scripts/dreamrsi.py scaffold --dir ./my_project --task kernel-opt --mode code
 ```
 
 ---
@@ -307,6 +317,37 @@ sp_routed = splicer.splice_parents(
 )
 print("Синтезированный OOS-предикат:", sp_routed["routing_predicate"])
 print(sp_routed["spliced_code"])
+```
+
+### 8.3. Подключение любой внешней задачи через `TaskCartridge` + `AutoDreamRunner` (`cartridge.py`)
+
+```python
+from dream_rsi_scripts.cartridge import AutoDreamRunner, BranchCandidate, TaskCartridge
+
+cartridge = TaskCartridge(
+    task_id="custom-kernel",
+    description="Оптимизация целевой функции с защитой отложенного теста BlindVaultGuard",
+    baseline_fn=lambda x: x * 0.5,
+    baseline_source="def solve(x):\n    return x * 0.5\n",
+    verify_and_score=lambda fn: (
+        True,
+        100.0 - abs(fn(2.0) - 4.0),
+        "ok",
+        {"pass_mask": [int(abs(fn(2.0) - 4.0) < 1e-6)], "bucket_scores": [-abs(fn(2.0) - 4.0)]},
+    ),
+    initial_branches=[
+        BranchCandidate(
+            branch_idx=0,
+            node_id="b0_exact",
+            hypothesis="Удвоение масштаба",
+            fn=lambda x: x * 2.0,
+            source_code="def solve(x):\n    return x * 2.0\n",
+        ),
+    ],
+    blind_vault_evaluator=lambda fn: {"vault_err": abs(fn(5.0) - 10.0)},  # физически открывается ровно 1 раз
+)
+
+summary = AutoDreamRunner(cartridge).run(verbose=True)
 ```
 
 ---
