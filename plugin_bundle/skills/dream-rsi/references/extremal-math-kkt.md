@@ -4,7 +4,7 @@ Disclosed domain reference for `dream-rsi`. Load only when solving packing, mini
 
 ## 1. Degenerate Minimax & Corank-1 KKT Polishing (Heilbronn / Packing)
 1. **Floater Separation:** Partition points into the **Active Frame** ($\ge 1$ active minimal constraint) and interior **Floaters** ($0$ active constraints, e.g. $12+3$ at $n=15$, $15+1$ at $n=16$, $16+1$ at $n=17$). Optimize floaters independently via LP inside their Voronoi pockets.
-2. **Corank-1 Equiareal Manifold Trap ($\operatorname{rank}(J_{\text{frame}}) = d_{\text{frame}} - 1$):**
+2. **Corank-1 Equiareal Manifold Trap ($`\mathrm{rank}(J_{\text{frame}}) = d_{\text{frame}} - 1`$):**
    - When parallel chords/trapezoids cause corank 1 (as in Heilbronn $n=13$ and $n=16$), the tie-system $A_1(\boldsymbol{\theta}) = \dots = A_M(\boldsymbol{\theta})$ defines a **1D curve $\Gamma(s)$**, not an isolated point.
    - Damped Gauss-Newton on $A_1 = \dots = A_M$ projects orthogonally onto $\Gamma(s)$ at $s_0 \ne 0$, halting $c \cdot s_0^2 \sim 10^{-14}$ below the optimum.
    - Solve the **full bordered KKT-Newton system** ($A_m(\boldsymbol{\theta}) - \Delta = 0$, $J_{\text{frame}}^\top \boldsymbol{\lambda} = \mathbf{0}$, $\sum \lambda_m = 1$, $\boldsymbol{\lambda} > 0$) in high precision (`decimal.Decimal` 500+ digits) to slide to the unique apex $s = 0$, and compute curvature $c = -\frac{1}{2}\sum \lambda_m^\star \frac{d^2 A_m}{ds^2}\big|_{\mathbf{v}_0} > 0$.

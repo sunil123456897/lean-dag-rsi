@@ -62,12 +62,16 @@ Full evaluations on fine discretization grids ($P=20256$), long financial time s
 
 #### Mathematical Formulation
 Given a parent node $u$ with residual error vector $e_u \in \mathbb{R}^N$ over $N$ evaluation points:
-1. **Adversarial Core Selection ($S_{\text{adv}}$):** Compute $S_{\text{adv}} = \operatorname{argtop}_{k} (|e_u|)$ where $k = \lfloor 0.025 \cdot N \rfloor$. These $2.5\%$ indices represent the specific failure manifold where the parent is most fragile, directly linking to `compute_error_fingerprint()`'s failure mask.
-2. **Stratified Anchor Selection ($S_{\text{strat}}$):** Select a deterministic, uniform $2.5\%$ sub-sample across the domain $S_{\text{strat}} = \{i \cdot 40 \mid 0 \le i < 0.025 \cdot N\}$ to anchor global scale and prevent local overfitting.
-3. **Combined Sentinel Slice:** $S_{\text{sentinel}} = S_{\text{adv}} \cup S_{\text{strat}}$ ($|S_{\text{sentinel}}| \approx 0.05 \cdot N$).
-4. **Sequential Lower Confidence Bound (LCB) Veto:** Evaluate candidate child $v$ on $S_{\text{sentinel}}$. Compute the sample mean difference $\Delta \mu = \bar{s}_v(S_{\text{sentinel}}) - \bar{s}_u(S_{\text{sentinel}})$ and standard error $\operatorname{SE}(\Delta \mu) = \frac{\hat{\sigma}}{\sqrt{|S_{\text{sentinel}}|}}$:
-   $$\operatorname{LCB}(v) = \Delta \mu + \gamma \cdot \operatorname{SE}(\Delta \mu)$$
-   If $\operatorname{LCB}(v) < -\epsilon_{\text{tol}}$ (with $\gamma = 1.96$ for 95% confidence and $\epsilon_{\text{tol}} = 0.01$), the candidate is immediately aborted.
+1. **Adversarial Core Selection ($S_{\text{adv}}$):** Compute $`S_{\text{adv}} = \mathrm{argtop}_{k} (\lvert e_u\rvert)`$ where $k = \lfloor 0.025 \cdot N \rfloor$. These `2.5%` indices represent the specific failure manifold where the parent is most fragile, directly linking to `compute_error_fingerprint()`'s failure mask.
+2. **Stratified Anchor Selection ($S_{\text{strat}}$):** Select a deterministic, uniform `2.5%` sub-sample across the domain $`S_{\text{strat}} = \lbrace i \cdot 40 \mid 0 \le i < 0.025 \cdot N\rbrace`$ to anchor global scale and prevent local overfitting.
+3. **Combined Sentinel Slice:** $`S_{\text{sentinel}} = S_{\text{adv}} \cup S_{\text{strat}}`$ ($`\lvert S_{\text{sentinel}}\rvert \approx 0.05 \cdot N`$).
+4. **Sequential Lower Confidence Bound (LCB) Veto:** Evaluate candidate child $v$ on $S_{\text{sentinel}}$. Compute the sample mean difference $`\Delta \mu = \bar{s}_v(S_{\text{sentinel}}) - \bar{s}_u(S_{\text{sentinel}})`$ and standard error $`\mathrm{SE}(\Delta \mu) = \frac{\hat{\sigma}}{\sqrt{\lvert S_{\text{sentinel}}\rvert}}`$:
+
+   ```math
+   \mathrm{LCB}(v) = \Delta \mu + \gamma \cdot \mathrm{SE}(\Delta \mu)
+   ```
+
+   If $`\mathrm{LCB}(v) < -\epsilon_{\text{tol}}`$ (with $\gamma = 1.96$ for 95% confidence and $\epsilon_{\text{tol}} = 0.01$), the candidate is immediately aborted.
 
 #### Asymmetric Exemption for Macro-Innovations
 * Standard mutations are pruned aggressively by $S_{\text{sentinel}}$.
@@ -83,19 +87,35 @@ Given a parent node $u$ with residual error vector $e_u \in \mathbb{R}^N$ over $
 ### 2. Stage 2: Spectral Stall Detector, Frame-Lifting & Meta-Atlas (`SpectralFrameLifter` & `SpectralMetaAtlas`)
 
 #### Problem Solved
-Local search inside a fixed parameter coordinate frame $\Phi$ stalls when the parameter manifold is rank-deficient ($\operatorname{rank}(J) < d$) or ill-conditioned, such that small gradient steps produce zero progress or oscillate violently along narrow valleys.
+Local search inside a fixed parameter coordinate frame $\Phi$ stalls when the parameter manifold is rank-deficient ($\mathrm{rank}(J) < d$) or ill-conditioned, such that small gradient steps produce zero progress or oscillate violently along narrow valleys.
 
 #### Mathematical Diagnostics
 From the empirical bucket/residual Jacobian $J \in \mathbb{R}^{M \times d}$, form the normalized Gauss-Newton matrix:
-$$G = \frac{1}{M} J^\top J \in \mathbb{R}^{d \times d}$$
+
+```math
+G = \frac{1}{M} J^\top J \in \mathbb{R}^{d \times d}
+```
+
 1. **Effective Spectral Rank:**
-   $$r_{\text{eff}}(G) = \frac{(\operatorname{Tr} G)^2}{\operatorname{Tr}(G^2)} = \frac{\left(\sum_{i=1}^d \lambda_i\right)^2}{\sum_{i=1}^d \lambda_i^2}$$
+
+   ```math
+   r_{\text{eff}}(G) = \frac{(\mathrm{Tr}\, G)^2}{\mathrm{Tr}(G^2)} = \frac{\left(\sum_{i=1}^d \lambda_i\right)^2}{\sum_{i=1}^d \lambda_i^2}
+   ```
+
 2. **Regularized Condition Number:**
-   $$\kappa_{\text{eff}}(G) = \frac{\lambda_{\max}(G)}{\max\left(\lambda_{r_{\text{eff}}}(G), 10^{-12}\right)}$$
-   *(Note: Truncating at $\lambda_{r_{\text{eff}}}$ eliminates numerical floating-point noise from trailing zero eigenvalues when $M < d$.)*
+
+   ```math
+   \kappa_{\text{eff}}(G) = \frac{\lambda_{\max}(G)}{\max\left(\lambda_{r_{\text{eff}}}(G), 10^{-12}\right)}
+   ```
+
+   Note: Truncating at $`\lambda_{r_{\text{eff}}}`$ eliminates numerical floating-point noise from trailing zero eigenvalues when $M < d$.
 3. **Dimensionless Stall Signature ($\sigma$):**
-   $$\sigma = \left(\log_{10} \kappa_{\text{eff}}(G),\; \frac{r_{\text{eff}}(G)}{d},\; \Delta_{\text{Train}\to\text{OOS}},\; H_{\text{fingerprint}}\right)$$
-   where $\Delta_{\text{Train}\to\text{OOS}} = \text{Score}_{\text{Train}} - \text{Score}_{\text{OOS}}$ captures representation over-capacity, and $H_{\text{fingerprint}}$ is the Shannon entropy of the error fingerprint bitmask.
+
+   ```math
+   \sigma = \left(\log_{10} \kappa_{\text{eff}}(G),\; \frac{r_{\text{eff}}(G)}{d},\; \Delta_{\text{Train}\to\text{OOS}},\; H_{\text{fingerprint}}\right)
+   ```
+
+   where $`\Delta_{\text{Train}\to\text{OOS}} = \mathrm{Score}_{\text{Train}} - \mathrm{Score}_{\text{OOS}}`$ captures representation over-capacity, and $H_{\text{fingerprint}}$ is the Shannon entropy of the error fingerprint bitmask.
 
 #### Autonomous Frame Transformations ($\Phi \to \Phi'$)
 When $\kappa_{\text{eff}}(G) > 10^8$ or $K=4$ consecutive probes improve Train score while failing the `accept_joint_2x2` OOS transfer gate, query `SpectralMetaAtlas` to instantiate one of three frame transformations:
@@ -127,20 +147,32 @@ During **Deep NREM Sleep consolidation**:
 1. For each newly unlocked or modified MoE expert $m$ with residual activation $\Delta f_m(x) = (x A_m) B_m$ evaluated on the replay buffer $X_{\text{replay}} \in \mathbb{R}^{B \times d_{\text{in}}}$:
 2. Construct a bounded, typed candidate basis dictionary $\Psi(X_{\text{replay}}) \in \mathbb{R}^{B \times K}$:
    * Linear projections: $x_i$
-   * Bounded nonlinearities: $\tanh(x_i)$, $\operatorname{sign}(x_i)$, $\operatorname{ReLU}(x_i)$, $\log(1 + |x_i|)$
+   * Bounded nonlinearities: $\tanh(x_i)$, $\mathrm{sign}(x_i)$, $\mathrm{ReLU}(x_i)$, $\log(1 + |x_i|)$
    * Pairwise epistatic interactions: $x_i \cdot x_j$, $x_i / \max(|x_j|, 10^{-6})$, $x_i - x_j$
    * Threshold step functions: $\mathbb{I}(x_i > \theta_k)$
 3. Fit a sparse Look-Ahead Coordinate-Descent Lasso model:
-   $$\hat{w} = \arg\min_w \frac{1}{2B} \|\Delta f_m(X_{\text{replay}}) - \Psi(X_{\text{replay}}) w\|_2^2 + \lambda \|w\|_1$$
-4. Compile the non-zero support $\operatorname{supp}(\hat{w})$ into an explicit Python AST expression $f_{\text{AST}}(x)$.
+
+   ```math
+   \hat{w} = \arg\min_w \frac{1}{2B} \lVert\Delta f_m(X_{\text{replay}}) - \Psi(X_{\text{replay}}) w\rVert_2^2 + \lambda \lVert w\rVert_1
+   ```
+
+4. Compile the non-zero support $\mathrm{supp}(\hat{w})$ into an explicit Python AST expression $f_{\text{AST}}(x)$.
 5. Validate $f_{\text{AST}}$ against `AstPolicySafetyGate` (blocking dangerous calls, globals, or unrevealed state inspection).
 6. Evaluate out-of-sample explained variance $R^2_{\text{OOS}}$:
-   $$R^2_{\text{OOS}} = 1 - \frac{\sum_{x \in X_{\text{OOS}}} \|\Delta f_m(x) - f_{\text{AST}}(x)\|_2^2}{\sum_{x \in X_{\text{OOS}}} \|\Delta f_m(x) - \overline{\Delta f_m}\|_2^2}$$
+
+   ```math
+   R^2_{\text{OOS}} = 1 - \frac{\sum_{x \in X_{\text{OOS}}} \lVert\Delta f_m(x) - f_{\text{AST}}(x)\rVert_2^2}{\sum_{x \in X_{\text{OOS}}} \lVert\Delta f_m(x) - \overline{\Delta f_m}\rVert_2^2}
+   ```
+
 7. **The Residual-Keep Invariant:**
    * If $R^2_{\text{OOS}} \ge \tau_{\text{distill}}$ (default $\tau = 0.25$) and passes `accept_joint_2x2`:
      * Register $f_{\text{AST}}(x)$ as an explicit symbolic rule node in the DAG.
      * Subtract the explained component from the neural expert target:
-       $$\Delta f_m^{\text{rem}}(x) \leftarrow \Delta f_m(x) - f_{\text{AST}}(x)$$
+
+       ```math
+       \Delta f_m^{\text{rem}}(x) \leftarrow \Delta f_m(x) - f_{\text{AST}}(x)
+       ```
+
      * Fine-tune the neural low-rank matrices $(A_m, B_m)$ on the unexplained residual $\Delta f_m^{\text{rem}}(x)$.
    * **Guarantee:** Zero regression in empirical accuracy, while extracting human-interpretable, verifiable symbolic invariants.
 
@@ -153,7 +185,7 @@ During **Deep NREM Sleep consolidation**:
   * *Resolution:* Introduce an explicit boolean `node.meta["sentinel_aborted"] = True` and set `node.fail_class = "sentinel_pruned"`. In `engine.py`, `is_success()` returns `False` for sentinel-aborted nodes. Their score is kept solely for DPO contrastive pairs and logging, completely shielding policy replay from score scale distortion.
 * **Critique 1.2 (Combinatorial Explosion in Basis Dictionary):** An unrestricted symbolic AST search over $d_{\text{in}} = 32$ features yields $>10^5$ pairwise and ternary combinations, causing memory exhaustion and slow Lasso convergence.
   * *Resolution:* Enforce a **Strictly Bounded Basis Grammar**:
-    1. Filter features first by input gradient norm $\|\nabla_x \Delta f_m\|_2$, keeping only the top 8 most influential input dimensions ($d_{\text{active}} \le 8$).
+    1. Filter features first by input gradient norm $`\lVert\nabla_x \Delta f_m\rVert_2`$, keeping only the top 8 most influential input dimensions ($`d_{\text{active}} \le 8`$).
     2. Limit dictionary size to $K \le 64$ basis atoms per expert.
     3. Maximum AST depth $= 2$ (at most one composite operation).
 
@@ -161,8 +193,12 @@ During **Deep NREM Sleep consolidation**:
 * **Critique 2.1 (Finite-Difference $O(d^2 \cdot M)$ Bottleneck):** In `engine.py` (lines 2990–3060), finite differences require $2d + 4d(d-1)$ function calls to form $G$. For neural adapter parameters ($d = 256$), this requires $>130,000$ evaluations, freezing the engine.
   * *Resolution:* Dual-Path Gauss-Newton Construction:
     * For parametric domain optimizers with $d \le 30$: continue using macro-step numerical stencils.
-    * For neural adapters and high-dimensional representations ($d > 30$): use **Closed-Form Forward-Mode Gradient Products** for low-rank layers $\nabla_{(A,B)} = x^\top \delta$, or use **Hutchinson Stochastic Trace Estimation** with $m=16$ Rademacher random vector projections ($v_k \in \{-1, +1\}^d$):
-      $$r_{\text{eff}}(G) \approx \frac{\left(\frac{1}{m}\sum_{k=1}^m v_k^\top G v_k\right)^2}{\frac{1}{m}\sum_{k=1}^m \|G v_k\|_2^2}$$
+    * For neural adapters and high-dimensional representations ($d > 30$): use **Closed-Form Forward-Mode Gradient Products** for low-rank layers $\nabla_{(A,B)} = x^\top \delta$, or use **Hutchinson Stochastic Trace Estimation** with $m=16$ Rademacher random vector projections ($`v_k \in \lbrace -1, +1\rbrace^d`$):
+
+      ```math
+      r_{\text{eff}}(G) \approx \frac{\left(\frac{1}{m}\sum_{k=1}^m v_k^\top G v_k\right)^2}{\frac{1}{m}\sum_{k=1}^m \lVert G v_k\rVert_2^2}
+      ```
+
       reducing complexity from $O(d^2)$ to $O(m \cdot d)$.
 * **Critique 2.2 (Numerical Condition Number Singularity):** When $M < d$, empirical covariance matrices have rank at most $M$, so $\lambda_{\min}(G) \equiv 0$, causing $\kappa(G) = \lambda_{\max}/\lambda_{\min} \to \infty$ spuriously on every probe.
   * *Resolution:* Replace raw $\kappa(G)$ with the **Regularized Condition Number** $\kappa_{\text{eff}}(G) = \lambda_{\max} / \max(\lambda_{r_{\text{eff}}}, 10^{-12})$, checking condition only across the effective non-zero spectral support.
@@ -183,7 +219,7 @@ During **Deep NREM Sleep consolidation**:
 
 #### Lens 5: Pragmatic Ship-It Brainstormer (`egm-implementation-readiness`)
 * **Critique 5.1 (External Dependency on `skglm`):** Requiring `skglm` breaks the zero-external-dependency guarantee of `engine.py` and causes install failures on resource-constrained test environments.
-  * *Resolution:* Implement a standalone, vectorized Coordinate-Descent Lasso in pure NumPy (~45 lines of code) with cyclical soft-thresholding $\mathcal{S}_{\lambda}(z) = \operatorname{sgn}(z)\max(|z|-\lambda, 0)$. It runs deterministically, requires zero compilation, and executes in $<5$ ms on $B=128, K=64$. If `skglm` is installed, use it as an optional speed accelerator.
+  * *Resolution:* Implement a standalone, vectorized Coordinate-Descent Lasso in pure NumPy (~45 lines of code) with cyclical soft-thresholding $`\mathcal{S}_{\lambda}(z) = \mathrm{sgn}(z)\max(\lvert z\rvert - \lambda, 0)`$. It runs deterministically, requires zero compilation, and executes in $<5$ ms on $B=128, K=64$. If `skglm` is installed, use it as an optional speed accelerator.
 * **Critique 5.2 (Test Suite Regression Risk):** Adding spectral lifting and distillation must not break any of the 16 existing tests in `_selftest.py`.
   * *Resolution:* Design 4 independent, deterministic unit tests for `_selftest.py` with fixed random seeds (`seed=42`), verifying each stage in isolation before integrating the end-to-end cycle.
 
@@ -198,7 +234,7 @@ During **Deep NREM Sleep consolidation**:
 ## Goals vs. Non-Goals
 
 ### In-Scope Goals
-1. **WaldMicroSentinel Implementation:** 5% multi-fidelity early abort filter in `engine.py`, cutting wall-clock compute on rejected branches by $\ge 70\%$.
+1. **WaldMicroSentinel Implementation:** 5% multi-fidelity early abort filter in `engine.py`, cutting wall-clock compute on rejected branches by `>= 70%`.
 2. **SpectralFrameLifter & MetaAtlas:** Spectral stall detection ($\kappa_{\text{eff}} > 10^8$), active-set KKT lifting, dyadic prolongation, and eigen-basis rotation with mandatory inverse projection $\Phi^{-1}$.
 3. **NeuroSymbolicDistiller:** Pure NumPy NREM Coordinate-Descent Lasso extracting verified AST expressions with non-destructive Residual-Keep decomposition in `sleep_dag_rsi.py`.
 4. **Deterministic Zero-Regression Verification:** Passing all 16 existing `_selftest.py` suites plus 4 new deterministic suites (Sentinel Prune, Ill-Conditioned Ridge Lifter, Symbolic Distiller Recovery, and Active-Set Condensation).
@@ -230,14 +266,14 @@ flowchart TD
 
 #### Milestone 1: WaldMicroSentinel (Lowest Risk, Immediate Speedup)
 * Add `SentinelSlice` dataclass and `evaluate_sentinel_gate()` in `engine.py`.
-* Implement asymmetric exemption for crossover nodes and high-$\beta$ nodes.
+* Implement asymmetric exemption for crossover nodes and high $`\beta`$ nodes.
 * Add deterministic unit test in `_selftest.py`: verify that a deliberately corrupted child node is aborted at 5% compute while an improving child evaluates fully.
 
 #### Milestone 2: Pure-NumPy Coordinate-Descent Lasso & NeuroSymbolicDistiller
 * Implement `numpy_lasso_coordinate_descent(X, y, alpha, max_iter, tol)` in `sleep_dag_rsi.py`.
 * Build typed AST basis dictionary builder $\Psi(X)$ with input gradient filtering ($d_{\text{active}} \le 8$).
 * Implement `Residual-Keep Decomposition` in `UniversalNeuralSleepAdapter.nrem_consolidate()`.
-* Add deterministic unit test in `_selftest.py`: verify that synthetic residual $\Delta f(x) = 2.0 x_0 x_1 - 1.5 \operatorname{sign}(x_2) + \epsilon$ is recovered with $R^2 \ge 0.95$ and subtracted cleanly from neural weights.
+* Add deterministic unit test in `_selftest.py`: verify that synthetic residual $\Delta f(x) = 2.0 x_0 x_1 - 1.5 \mathrm{sign}(x_2) + \epsilon$ is recovered with $R^2 \ge 0.95$ and subtracted cleanly from neural weights.
 
 #### Milestone 3: SpectralFrameLifter, Active-Set Condensation & Meta-Atlas
 * Implement regularized condition number $\kappa_{\text{eff}}(G)$ and Hutchinson trace estimator in `engine.py`.

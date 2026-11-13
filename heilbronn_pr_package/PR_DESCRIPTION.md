@@ -12,18 +12,33 @@ This PR proves a fundamental geometric property of both chambers that explains w
 1. **Under-constrained / Corank-1 Equiareal Manifold $\Gamma(s)$:**
    - **At $n = 16$ (`15 + 1` Floater Split):** Out of the 16 points, **1 point is a strict interior floater** (`vertex 1` in the site's 0-indexed table / `p_13` in `n16_exact_500dps.json`), participating in **zero** of the 24 active minimal triangles (with Voronoi pocket clearance `0.0185320014278944`, `+0.00017646` above $\Delta_{16}^\star$). The remaining **15 frame vertices** have $2 \times 15 - 6 = 24$ free coordinates and carry all $M = 24$ active minimal triangles, imposing only $M - 1 = 23$ area-equality constraints $A_m(\boldsymbol{\theta}) - A_1(\boldsymbol{\theta}) = 0$.
    - **At $n = 13$:** The 13 vertices have $2 \times 13 - 6 = 20$ free coordinates and $M = 20$ active minimal triangles, imposing $M - 1 = 19$ area-equality constraints.
-   - In both $n = 13$ ($d_{\text{free}} = 20$) and $n = 16$ ($d_{\text{free}} = 24$), the $M \times d_{\text{free}}$ Jacobian $J = \frac{\partial(A_1, \dots, A_M)}{\partial \boldsymbol{\theta}}$ at the optimum has **rank $d_{\text{free}} - 1$** ($\operatorname{rank}(J_{13}) = 19 < 20$ and $\operatorname{rank}(J_{16,\text{frame}}) = 23 < 24$, certified to $< 10^{-550}$). Consequently, the tie-system equations $A_1(\boldsymbol{\theta}) = \dots = A_M(\boldsymbol{\theta})$ define a **smooth 1-dimensional curve $\Gamma(s) \subset \mathbb{R}^{d_{\text{free}}}$ of exact equiareal configurations**, parameterized by arc length $s$ along the unit nullvector $\mathbf{v}_0 \in \ker J$:
-     $$\boldsymbol{\theta}(s) = \boldsymbol{\theta}^\star + s \mathbf{v}_0 + s^2 \mathbf{w} + \mathcal{O}(s^3), \qquad A_1(\boldsymbol{\theta}(s)) = A_2(\boldsymbol{\theta}(s)) = \dots = A_M(\boldsymbol{\theta}(s)) \equiv \Delta(s).$$
+   - In both $n = 13$ ($d_{\text{free}} = 20$) and $n = 16$ ($d_{\text{free}} = 24$), the $M \times d_{\text{free}}$ Jacobian $J = \frac{\partial(A_1, \dots, A_M)}{\partial \boldsymbol{\theta}}$ at the optimum has **rank $d_{\text{free}} - 1$** ($`\mathrm{rank}(J_{13}) = 19 < 20`$ and $`\mathrm{rank}(J_{16,\text{frame}}) = 23 < 24`$, certified to $< 10^{-550}$). Consequently, the tie-system equations $A_1(\boldsymbol{\theta}) = \dots = A_M(\boldsymbol{\theta})$ define a **smooth 1-dimensional curve $\Gamma(s) \subset \mathbb{R}^{d_{\text{free}}}$ of exact equiareal configurations**, parameterized by arc length $s$ along the unit nullvector $\mathbf{v}_0 \in \ker J$:
+
+     ```math
+     \boldsymbol{\theta}(s) = \boldsymbol{\theta}^\star + s \mathbf{v}_0 + s^2 \mathbf{w} + \mathcal{O}(s^3), \qquad A_1(\boldsymbol{\theta}(s)) = A_2(\boldsymbol{\theta}(s)) = \dots = A_M(\boldsymbol{\theta}(s)) \equiv \Delta(s).
+     ```
+
 2. **Why Damped Gauss-Newton on the Tie-System Halts at $s \ne 0$:**
    - Every point $\boldsymbol{\theta}(s)$ on the 1D curve $\Gamma(s)$ satisfies the tie-system $A_1 = \dots = A_M$ **with zero residual to arbitrary precision** (80, 500, or 10,000 digits).
    - However, because the 1D left nullspace $\ker(J^\top)$ is spanned by strictly positive KKT Lagrange multipliers $\boldsymbol{\lambda}^\star > 0$ ($\sum_{m=1}^M \lambda_m^\star = 1$, $J^\top \boldsymbol{\lambda}^\star = \mathbf{0}$), the transverse normal shift $\mathbf{w}$ cancels identically ($\boldsymbol{\lambda}^{\star\top} J \mathbf{w} = 0$), and the common area $\Delta(s)$ along $\Gamma(s)$ varies quadratically with a **strictly positive parameterization-independent KKT curvature invariant $c > 0$**:
-     $$\Delta(s) = \Delta^\star - c \cdot s^2 + \mathcal{O}(s^3), \qquad c = -\frac{1}{2}\sum_{m=1}^M \lambda_m^\star \frac{d^2 A_m}{ds^2}\Big|_{\mathbf{v}_0} > 0.$$
+
+     ```math
+     \Delta(s) = \Delta^\star - c \cdot s^2 + \mathcal{O}(s^3), \qquad c = -\frac{1}{2}\sum_{m=1}^M \lambda_m^\star \frac{d^2 A_m}{ds^2}\Big|_{\mathbf{v}_0} > 0.
+     ```
+
    - When damped Gauss-Newton is run on the tie-system $A_1 = \dots = A_{24}$ starting from a `float64` optimization point at offset $s_0 \sim 10^{-6}$, it projects orthogonally onto $\Gamma(s)$ at $s \approx s_0 \ne 0$ and immediately terminates because all 24 triangles are already equal to 80 digits!
    - By instead solving the **full augmented KKT-Newton system** ($A_m(\boldsymbol{\theta}) - \Delta = 0$, $J(\boldsymbol{\theta})^\top \boldsymbol{\lambda} = \mathbf{0}$, $\sum \lambda_m = 1$) in 560-digit precision, we slide along $\Gamma(s)$ to the unique stationary apex $s = 0$:
      * **$n = 16$:** moves from $s = 2.2661 \times 10^{-6}$ (`0.0183555463554034501359529610459`) to $s = 0$:
-       $$\Delta_{16}^\star = \mathbf{0.01835554635546114041232536365340313429459832905287244\dots} \quad (\mathbf{+5.76902763724026 \times 10^{-14}}).$$
+
+       ```math
+       \Delta_{16}^\star = \mathbf{0.01835554635546114041232536365340313429459832905287244\dots} \quad (\mathbf{+5.76902763724026 \times 10^{-14}}).
+       ```
+
      * **$n = 13$:** moves from $s = 1.0170 \times 10^{-6}$ (`0.026556528919738264474389245471`) to $s = 0$:
-       $$\Delta_{13}^\star = \mathbf{0.02655652891977558013836441122594677335105195594906545\dots} \quad (\mathbf{+3.73156639751658 \times 10^{-14}}).$$
+
+       ```math
+       \Delta_{13}^\star = \mathbf{0.02655652891977558013836441122594677335105195594906545\dots} \quad (\mathbf{+3.73156639751658 \times 10^{-14}}).
+       ```
 
 ---
 
@@ -41,16 +56,26 @@ This PR proves a fundamental geometric property of both chambers that explains w
 ## 1. Detailed Breakdown for $n = 16$ (`n16_exact_500dps.json`)
 
 * **500-Digit Stationary Minimum Area ($\Delta_{16}^\star$ at $s = 0$):**
-  $$\Delta_{16}^\star = 0.01835554635546114041232536365340313429459832905287243778082350191\dots$$
+
+  ```math
+  \Delta_{16}^\star = 0.01835554635546114041232536365340313429459832905287243778082350191\dots
+  ```
+
 * **Gain over Current Site `exact tie-system` Point (`0.0183555463554034501359529610459`):**
-  $$\Delta_{16}^\star - \Delta_{16}^{\text{site}}(s_0) = \mathbf{+5.769027637240260750 \times 10^{-14}}.$$
+
+  ```math
+  \Delta_{16}^\star - \Delta_{16}^{\text{site}}(s_0) = \mathbf{+5.769027637240260750 \times 10^{-14}}.
+  ```
 * **The Unnoticed $15 + 1$ Floater Decomposition:**
   - Checking the vertex indices of the 24 minimal triangles listed on `math.tejstead.com/heilbronn/triangle/16/` (`(3,4,7), (0,9,14), ..., (2,3,6)`), **`vertex 1` never appears in any of the 24 active minimal triangles** (`p_13 = (0.440423714855, 0.491088435790)` in our right-simplex indexing).
   - Optimizing this floater vertex inside its local Voronoi cell while holding the 15-point frame fixed shows it has a strict Chebyshev area clearance of **`0.0185320014278944`** (`+0.0001764551` above $\Delta_{16}^\star$).
 * **Corank-1 KKT Theorem on the 15-Point Frame:**
   - The 15 frame vertices (6 boundary + 9 interior) have $d_{\text{free}} = 24$ free coordinates and carry all $M = 24$ active minimal triangles.
-  - At $s = 0$, $\operatorname{rank}(J_{\text{frame}}) = 23 < 24$ ($\|J_{\text{frame}} \mathbf{v}_0\|_2 = 9.08 \times 10^{-552}$), with 24 strictly positive KKT multipliers $\boldsymbol{\lambda}^\star \in [0.00011937,\; 0.16252430]^{24}$ ($\sum_{m=1}^{24} \lambda_m^\star = 1$) and second-order curvature invariant:
-    $$c_{16} = -\frac{1}{2}\sum_{m=1}^{24} \lambda_m^\star \frac{d^2 A_m}{ds^2}\Big|_{\mathbf{v}_0} = \mathbf{0.011234563953840429469\dots} > 0.$$
+  - At $s = 0$, $`\mathrm{rank}(J_{\text{frame}}) = 23 < 24`$ ($`\lVert J_{\text{frame}} \mathbf{v}_0\rVert_2 = 9.08 \times 10^{-552}`$), with 24 strictly positive KKT multipliers $`\boldsymbol{\lambda}^\star \in [0.00011937,\; 0.16252430]^{24}`$ ($`\sum_{m=1}^{24} \lambda_m^\star = 1`$) and second-order curvature invariant:
+
+    ```math
+    c_{16} = -\frac{1}{2}\sum_{m=1}^{24} \lambda_m^\star \frac{d^2 A_m}{ds^2}\Big|_{\mathbf{v}_0} = \mathbf{0.011234563953840429469\dots} > 0.
+    ```
   - The 30-digit coordinate set currently on `math.tejstead.com/heilbronn/triangle/16/` is the point on the 1D equiareal curve $\Gamma_{16}(s)$ at arc-length offset $s_0 = \sqrt{5.769028 \times 10^{-14} / c_{16}} = \mathbf{2.266115 \times 10^{-6}}$ ($4.6256 \times 10^{-7}$ RMS per coordinate).
 * **Exact Hypotenuse-Parallel Chord & Trapezoid Identity:**
   In the right simplex ($u \ge 0, v \ge 0, u+v \le 1$), interior vertices $p_1$ and $p_{10}$ form a chord strictly parallel to the hypotenuse $p_4 p_9$ ($u+v=1$):
@@ -65,10 +90,14 @@ This PR proves a fundamental geometric property of both chambers that explains w
 * **Gain over Current Site Coordinates (`0.026556528919738264474389245471`):**
   $$\Delta_{13}^\star - \Delta_{13}^{\text{site}}(s_0) = \mathbf{+3.731566397516575495 \times 10^{-14}}.$$
 * **Corank-1 KKT Curvature Invariant:**
-  - $d_{\text{free}} = 20$ free coordinates, $M = 20$ active minimal triangles, $\operatorname{rank}(J_{13}) = 19 < 20$ ($\|J_{13}\mathbf{v}_0\|_2 = 1.03 \times 10^{-551}$).
-  - Strictly positive KKT multipliers $\boldsymbol{\lambda}^\star \in [0.00366307,\; 0.10246835]^{20}$ ($\sum_{m=1}^{20} \lambda_m^\star = 1$) and second-order curvature invariant:
-    $$c_{13} = -\frac{1}{2}\sum_{m=1}^{20} \lambda_m^\star \frac{d^2 A_m}{ds^2}\Big|_{\mathbf{v}_0} = \mathbf{0.036078780237794575246\dots} > 0,$$
-    explaining the `float64` deficit at arc-length offset $s_0 = \sqrt{3.731566 \times 10^{-14} / c_{13}} = \mathbf{1.016997 \times 10^{-6}}$ ($2.2741 \times 10^{-7}$ RMS per coordinate).
+  - $d_{\text{free}} = 20$ free coordinates, $M = 20$ active minimal triangles, $`\mathrm{rank}(J_{13}) = 19 < 20`$ ($`\lVert J_{13}\mathbf{v}_0\rVert_2 = 1.03 \times 10^{-551}`$).
+  - Strictly positive KKT multipliers $`\boldsymbol{\lambda}^\star \in [0.00366307,\; 0.10246835]^{20}`$ ($`\sum_{m=1}^{20} \lambda_m^\star = 1`$) and second-order curvature invariant:
+
+    ```math
+    c_{13} = -\frac{1}{2}\sum_{m=1}^{20} \lambda_m^\star \frac{d^2 A_m}{ds^2}\Big|_{\mathbf{v}_0} = \mathbf{0.036078780237794575246\dots} > 0,
+    ```
+
+    explaining the `float64` deficit at arc-length offset $`s_0 = \sqrt{3.731566 \times 10^{-14} / c_{13}} = \mathbf{1.016997 \times 10^{-6}}`$ ($2.2741 \times 10^{-7}$ RMS per coordinate).
 * **Exact Parallel Chords & Degree Bound:**
   $$u_0 \equiv u_9, \qquad u_2 \equiv u_5, \qquad v_{11} \equiv v_{12} \qquad (< 10^{-500}), \qquad \deg P(\Delta_{13}^\star) > 78.$$
 

@@ -28,7 +28,7 @@ adapters = attach_sleep_dag_adapters(pytorch_model, target_layer_names=["fc1", "
 # Option B: Standalone streaming adapter y_hat(x) = f_0(x) + Delta_Fast(x) + Delta_Slow_MoE(x)
 adapter = UniversalNeuralSleepAdapter(d_in=X.shape[1], d_out=Y.shape[1], d_low=8, seed=42)
 ```
-During streaming `Wake`, adapt online with **Prefix-Aligned `FALCON-2` NLMS** (`use_falcon2=True`), which applies denominator floor $\max(\|\tilde{k}_t\|_2^2, \|k_t\|_2^2)$, cosine prefix gating $\alpha_{\text{prefix}}(t)$, and Huber residual clipping so $10^3\times$ input/target spikes cannot blow up fast weights:
+During streaming `Wake`, adapt online with **Prefix-Aligned `FALCON-2` NLMS** (`use_falcon2=True`), which applies denominator floor $`\max(\lVert\tilde{k}_t\rVert_2^2, \lVert k_t\rVert_2^2)`$, cosine prefix gating $`\alpha_{\text{prefix}}(t)`$, and Huber residual clipping so $10^3\times$ input/target spikes cannot blow up fast weights:
 ```python
 wake_step = adapter.wake_adapt_step(X_batch, Y_target_residual, lr=0.08, use_falcon2=True)
 ```
@@ -52,14 +52,14 @@ rep = distiller.distill_residual(
     reconstruct_uncorrupted_target=True,
 )
 ```
-- **Depth-3+ Law Discovery:** In Cycle 1, `_discover_nonlinear_inner_submotif()` runs 5 Gauss-Newton steps to isolate inner arguments (e.g. $z = 1.5 x_0 x_1 - 0.8\operatorname{sign}(x_2)$) into `lib_0(x)`. In Cycle $\ge 2$, `reconstruct_uncorrupted_target=True` rebuilds the full target $Y_{\text{full}}$ so outer saturating links (`tanh(scale * lib_0(x) + offset)`) recover $R^2_{\text{OOS}} \to 1.0$.
+- **Depth-3+ Law Discovery:** In Cycle 1, `_discover_nonlinear_inner_submotif()` runs 5 Gauss-Newton steps to isolate inner arguments (e.g. $`z = 1.5 x_0 x_1 - 0.8\mathrm{sign}(x_2)`$) into `lib_0(x)`. In Cycle $`\ge 2`$, `reconstruct_uncorrupted_target=True` rebuilds the full target $Y_{\text{full}}$ so outer saturating links (`tanh(scale * lib_0(x) + offset)`) recover $R^2_{\text{OOS}} \to 1.0$.
 - **Mandatory Safety Gate:** Every extracted `rep["ast_code"]` is checked by `AstPolicySafetyGate` (`rep["ast_safety_valid"] == True`) and `accept_joint_2x2` before subtracting from slow weights.
 *Completion criterion:* Accepted symbolic rule achieves $R^2_{\text{OOS}} \ge \tau_{\text{distill}}$ and reduces unexplained neural residual energy without degrading validation score.
 
 ### Step 4: Challenge Blind Spots & Cross-Pollinate Experts (`REM` + `VeriHarness`)
 1. Run `ActiveBoundarySynthesizer().synthesize_dual_head_verification(committee_fns, X_anchor, oracle_fn=...)`:
-   - **Head A (`Disagreement Resolver`):** Ascends committee variance $\operatorname{Var}_k(f_k(x))$ to resolve inter-expert disputes.
-   - **Head B (`Consensus Challenger`):** Minimizes unanimous confidence margin $|\bar{f}(x)| / \sqrt{\operatorname{Var}_k + \epsilon}$ to expose collective blind spots where all experts agree yet flip against the oracle.
+   - **Head A (`Disagreement Resolver`):** Ascends committee variance $`\mathrm{Var}_k(f_k(x))`$ to resolve inter-expert disputes.
+   - **Head B (`Consensus Challenger`):** Minimizes unanimous confidence margin $`\lvert\bar{f}(x)\rvert / \sqrt{\mathrm{Var}_k + \epsilon}`$ to expose collective blind spots where all experts agree yet flip against the oracle.
 2. Pair complementary slow experts via `select_complementary_crossover_experts()` (maximizing non-overlapping `pass_mask` union gain, skipping clones) and accept updates only through `accept_joint_2x2`.
 
 ---
