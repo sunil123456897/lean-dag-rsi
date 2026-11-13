@@ -1,8 +1,8 @@
 """
 Real-World SOTA Benchmark Suite for Upgraded Lean-DAG-RSI (`dream-rsi` skill).
 
-Executes a live multi-round discovery & ideation tournament using our upgraded global
-`dream-rsi` engine (`C:/Users/vanya/.gemini/config/skills/dream-rsi/scripts/`) across
+Executes a live multi-round discovery & ideation tournament using our upgraded
+`dream-rsi` engine (`./dream_rsi_scripts/` or `$DREAM_RSI_PLUGIN_DIR`) across
 FOUR real-world benchmarks from Google DeepMind (AlphaEvolve, FunSearch) and NeurIPS (AlgoTune):
 
 1. AlphaEvolve Benchmark 1 (arXiv:2506.13131): Circle Packing in a Unit Square (n = 26)
@@ -31,7 +31,6 @@ Every solution is verified by an untouchable mathematical/geometric/combinatoria
 
 from __future__ import annotations
 
-import json
 import math
 import os
 import shutil
@@ -44,9 +43,23 @@ import numpy as np
 from scipy.optimize import linprog, minimize
 from scipy.spatial.distance import pdist, squareform
 
-LOCAL_SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dream_rsi_scripts")
-PLUGIN_SCRIPTS_DIR = r"C:\Users\vanya\.gemini\config\plugins\autonomous-research\skills\dream-rsi\scripts"
-for _cand_dir in (LOCAL_SCRIPTS_DIR, PLUGIN_SCRIPTS_DIR):
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LOCAL_SCRIPTS_DIR = os.path.join(ROOT_DIR, "dream_rsi_scripts")
+_plugin_root = os.path.expanduser(
+    os.environ.get(
+        "DREAM_RSI_PLUGIN_DIR",
+        os.environ.get(
+            "AUTONOMOUS_RESEARCH_PLUGIN_DIR",
+            os.path.join("~", ".gemini", "config", "plugins", "autonomous-research"),
+        ),
+    )
+)
+PLUGIN_SCRIPTS_DIR = (
+    _plugin_root
+    if os.path.isfile(os.path.join(_plugin_root, "engine.py"))
+    else os.path.join(_plugin_root, "skills", "dream-rsi", "scripts")
+)
+for _cand_dir in (ROOT_DIR, LOCAL_SCRIPTS_DIR, PLUGIN_SCRIPTS_DIR):
     if os.path.isdir(_cand_dir) and _cand_dir not in sys.path:
         sys.path.insert(0, _cand_dir)
 
@@ -66,7 +79,9 @@ def verify_circle_packing(
     Strictly verifies that `n_expected` circles with `centers` (n, 2) and `radii` (n,)
     lie completely inside [0, 1]^2 and have zero pairwise overlap.
     """
-    assert centers.shape == (n_expected, 2), f"Expected ({n_expected}, 2), got {centers.shape}"
+    assert centers.shape == (n_expected, 2), (
+        f"Expected ({n_expected}, 2), got {centers.shape}"
+    )
     assert radii.shape == (n_expected,), f"Expected ({n_expected},), got {radii.shape}"
     assert np.all(np.isfinite(centers)) and np.all(np.isfinite(radii))
     assert np.all(radii >= 0.0)
@@ -110,8 +125,14 @@ def verify_circle_packing_rational_fraction(
     from fractions import Fraction
 
     assert centers.shape == (n_expected, 2) and radii.shape == (n_expected,)
-    rx = [Fraction(max(0, min(denom, int(round(float(centers[i, 0]) * denom)))), denom) for i in range(n_expected)]
-    ry = [Fraction(max(0, min(denom, int(round(float(centers[i, 1]) * denom)))), denom) for i in range(n_expected)]
+    rx = [
+        Fraction(max(0, min(denom, int(round(float(centers[i, 0]) * denom)))), denom)
+        for i in range(n_expected)
+    ]
+    ry = [
+        Fraction(max(0, min(denom, int(round(float(centers[i, 1]) * denom)))), denom)
+        for i in range(n_expected)
+    ]
     rr = [
         Fraction(max(0, int(math.floor((float(radii[i]) - 2e-13) * denom))), denom)
         for i in range(n_expected)
@@ -129,7 +150,9 @@ def verify_circle_packing_rational_fraction(
             dy = ry[i] - ry[j]
             r_ij = rr[i] + rr[j]
             sq_slack = dx * dx + dy * dy - r_ij * r_ij
-            assert sq_slack >= 0, f"Rational overlap on pair ({i}, {j}): {float(sq_slack)}"
+            assert sq_slack >= 0, (
+                f"Rational overlap on pair ({i}, {j}): {float(sq_slack)}"
+            )
             if min_sq_slack is None or sq_slack < min_sq_slack:
                 min_sq_slack = sq_slack
 
@@ -142,7 +165,9 @@ def verify_circle_packing_rational_fraction(
     }
 
 
-def exact_lp_radii(centers: np.ndarray, weights: np.ndarray | None = None) -> np.ndarray:
+def exact_lp_radii(
+    centers: np.ndarray, weights: np.ndarray | None = None
+) -> np.ndarray:
     """
     Given fixed circle centers `c_i` in [0, 1]^2, solves the exact Linear Program (LP):
         maximize    sum_i w_i * r_i
@@ -220,6 +245,7 @@ def smooth_penalty_with_radii(
     bounds = [(0.0, 1.0)] * (2 * n) + [(0.0, 0.5)] * n
 
     for weight in weights:
+
         def smooth_loss(x: np.ndarray, w: float = weight) -> Tuple[float, np.ndarray]:
             c = x[: 2 * n].reshape(n, 2)
             r = x[2 * n :]
@@ -231,8 +257,15 @@ def smooth_penalty_with_radii(
             v_bot = np.maximum(0.0, r - c[:, 1])
             v_top = np.maximum(0.0, r + c[:, 1] - 1.0)
 
-            pen_b = 0.5 * w * (
-                np.sum(v_left**2) + np.sum(v_right**2) + np.sum(v_bot**2) + np.sum(v_top**2)
+            pen_b = (
+                0.5
+                * w
+                * (
+                    np.sum(v_left**2)
+                    + np.sum(v_right**2)
+                    + np.sum(v_bot**2)
+                    + np.sum(v_top**2)
+                )
             )
             grad_c[:, 0] += w * (-v_left + v_right)
             grad_c[:, 1] += w * (-v_bot + v_top)
@@ -367,7 +400,9 @@ def run_circle_packing_benchmarks() -> Dict[str, Any]:
     v26_b1 = verify_circle_packing(c26_b1, r26_b1, 26)
 
     # CROSSOVER(Branch 0, Branch 1) + Neuro-Symbolic LP-Vertex Basin Hopping:
-    c26_x, r26_x = smooth_penalty_with_radii(row_layout_seed([5, 6, 5, 5, 5], jitter=0.0))
+    c26_x, r26_x = smooth_penalty_with_radii(
+        row_layout_seed([5, 6, 5, 5, 5], jitter=0.0)
+    )
     best_c26, best_r26 = slsqp_exact_polish(c26_x, r26_x, slsqp_iters=400)
     best_v26 = verify_circle_packing(best_c26, best_r26, 26)
 
@@ -400,7 +435,12 @@ def run_circle_packing_benchmarks() -> Dict[str, Any]:
     # CROSSOVER(Branch 0, Branch 1) + Multi-Scale Heterogeneous Radius Mutation (`rng.uniform(0.55, 1.45)`):
     rng32 = np.random.default_rng(108)
     best_c32, best_r32, best_v32 = c32_b1, r32_b1, v32_b1
-    pats_32 = [[5, 5, 6, 5, 6, 5], [5, 6, 5, 6, 5, 5], [5, 6, 5, 5, 6, 5], [6, 5, 5, 5, 6, 5]]
+    pats_32 = [
+        [5, 5, 6, 5, 6, 5],
+        [5, 6, 5, 6, 5, 5],
+        [5, 6, 5, 5, 6, 5],
+        [6, 5, 5, 5, 6, 5],
+    ]
     for pat in pats_32:
         for _ in range(8):
             c0 = row_layout_seed(pat, jitter=0.03, rng=rng32)
@@ -538,7 +578,15 @@ def funsearch_nature_priority(item: int, valid_bins: np.ndarray) -> np.ndarray:
 def make_lean_dag_bin_packing_priority(
     params: np.ndarray,
 ) -> Callable[[int, np.ndarray], np.ndarray]:
-    dead_hi, dead_pen, modal_center, modal_width, modal_bonus, exact_bonus, tight_pow = params
+    (
+        dead_hi,
+        dead_pen,
+        modal_center,
+        modal_width,
+        modal_bonus,
+        exact_bonus,
+        tight_pow,
+    ) = params
 
     def priority(item: int, valid_bins: np.ndarray) -> np.ndarray:
         slack = (valid_bins - item).astype(np.float64)
@@ -572,14 +620,16 @@ def run_bin_packing_benchmark() -> Dict[str, Any]:
     best_p = candidates_p[0]
     best_train = float("inf")
     for cp in candidates_p:
-        sc = evaluate_online_bin_packing(train_ds, make_lean_dag_bin_packing_priority(cp))[
-            "mean_excess_pct"
-        ]
+        sc = evaluate_online_bin_packing(
+            train_ds, make_lean_dag_bin_packing_priority(cp)
+        )["mean_excess_pct"]
         if sc < best_train:
             best_train = sc
             best_p = cp
 
-    ld = evaluate_online_bin_packing(test_ds, make_lean_dag_bin_packing_priority(best_p))
+    ld = evaluate_online_bin_packing(
+        test_ds, make_lean_dag_bin_packing_priority(best_p)
+    )
     return {
         "first_fit_excess_pct": ff["mean_excess_pct"],
         "best_fit_excess_pct": bf["mean_excess_pct"],
@@ -597,7 +647,14 @@ def run_bin_packing_benchmark() -> Dict[str, Any]:
 # ===========================================================================
 
 
-def sinkhorn_reference(a: np.ndarray, b: np.ndarray, M: np.ndarray, reg: float = 0.05, tol: float = 1e-9, max_iter: int = 1000) -> np.ndarray:
+def sinkhorn_reference(
+    a: np.ndarray,
+    b: np.ndarray,
+    M: np.ndarray,
+    reg: float = 0.05,
+    tol: float = 1e-9,
+    max_iter: int = 1000,
+) -> np.ndarray:
     """
     Standard AlgoTune / POT reference implementation of Entropic Optimal Transport
     (Sinkhorn-Knopp matrix scaling).
@@ -616,7 +673,14 @@ def sinkhorn_reference(a: np.ndarray, b: np.ndarray, M: np.ndarray, reg: float =
     return u[:, None] * K * v[None, :]
 
 
-def sinkhorn_lean_dag_hybrid(a: np.ndarray, b: np.ndarray, M: np.ndarray, reg: float = 0.05, tol: float = 1e-9, max_iter: int = 1000) -> np.ndarray:
+def sinkhorn_lean_dag_hybrid(
+    a: np.ndarray,
+    b: np.ndarray,
+    M: np.ndarray,
+    reg: float = 0.05,
+    tol: float = 1e-9,
+    max_iter: int = 1000,
+) -> np.ndarray:
     """
     Lean-DAG-RSI Hybrid (`CROSSOVER` of Branch 0 Zero-Allocation In-Place BLAS GEMV +
     Branch 1 Steffensen / Aitken Delta^2 Vector Extrapolation):
@@ -666,15 +730,21 @@ def run_algotune_sinkhorn_benchmark() -> Dict[str, Any]:
     pts_x = rng.uniform(0.0, 1.0, size=(n, 2))
     pts_y = rng.uniform(0.0, 1.0, size=(n, 2))
     M = squareform(pdist(np.vstack([pts_x, pts_y])))[:n, n:] ** 2
-    a = rng.uniform(0.5, 1.5, size=n); a /= np.sum(a)
-    b = rng.uniform(0.5, 1.5, size=n); b /= np.sum(b)
+    a = rng.uniform(0.5, 1.5, size=n)
+    a /= np.sum(a)
+    b = rng.uniform(0.5, 1.5, size=n)
+    b /= np.sum(b)
 
     # Warmup & untouchable accuracy verification
     P_ref = sinkhorn_reference(a, b, M, reg=0.015, tol=1e-9)
     P_opt = sinkhorn_lean_dag_hybrid(a, b, M, reg=0.015, tol=1e-9)
     max_diff = float(np.max(np.abs(P_ref - P_opt)))
-    rel_cost_diff = abs(float(np.sum(P_ref * M) - np.sum(P_opt * M))) / float(np.sum(P_ref * M))
-    assert max_diff < 1e-9 and rel_cost_diff < 1e-9, f"Mismatch: max_diff={max_diff}, rel_cost_diff={rel_cost_diff}"
+    rel_cost_diff = abs(float(np.sum(P_ref * M) - np.sum(P_opt * M))) / float(
+        np.sum(P_ref * M)
+    )
+    assert max_diff < 1e-9 and rel_cost_diff < 1e-9, (
+        f"Mismatch: max_diff={max_diff}, rel_cost_diff={rel_cost_diff}"
+    )
 
     n_runs = 5
     t0 = time.perf_counter()
@@ -703,7 +773,9 @@ def run_algotune_sinkhorn_benchmark() -> Dict[str, Any]:
 
 def main() -> int:
     print("=" * 84)
-    print("REAL-WORLD SOTA BENCHMARK TOURNAMENT: UPGRADED LEAN-DAG-RSI (`dream-rsi` SKILL)")
+    print(
+        "REAL-WORLD SOTA BENCHMARK TOURNAMENT: UPGRADED LEAN-DAG-RSI (`dream-rsi` SKILL)"
+    )
     print("=" * 84)
 
     cp_res = run_circle_packing_benchmarks()
@@ -712,7 +784,9 @@ def main() -> int:
 
     print("\n[Benchmark 1] AlphaEvolve Circle Packing in a Unit Square (n = 26):")
     print(f"  Classical Human Record (Specht):             {n26['human_record']:.6f}")
-    print(f"  Google DeepMind AlphaEvolve (2025):          {n26['alphaevolve_record']:.6f}")
+    print(
+        f"  Google DeepMind AlphaEvolve (2025):          {n26['alphaevolve_record']:.6f}"
+    )
     print(f"  Branch 0 (Symmetric Grid + Smooth L-BFGS-B): {n26['branch0_score']:.6f}")
     print(f"  Branch 1 (Asymmetric [5,6,5,5,5] + SLSQP):   {n26['branch1_score']:.6f}")
     print(
@@ -722,7 +796,9 @@ def main() -> int:
     assert n26["is_valid"] and n26["lean_dag_score"] > n26["alphaevolve_record"]
 
     print("\n[Benchmark 2] AlphaEvolve Circle Packing in a Unit Square (n = 32):")
-    print(f"  Google DeepMind AlphaEvolve (2025):          {n32['alphaevolve_record']:.6f}")
+    print(
+        f"  Google DeepMind AlphaEvolve (2025):          {n32['alphaevolve_record']:.6f}"
+    )
     print(f"  Branch 0 ([6,5,6,5,5,5] Uniform Radii):      {n32['branch0_score']:.6f}")
     print(f"  Branch 1 ([6,5,5,5,6,5] Uniform Radii):      {n32['branch1_score']:.6f}")
     print(
@@ -732,10 +808,18 @@ def main() -> int:
     assert n32["is_valid"] and n32["lean_dag_score"] > n32["alphaevolve_record"]
 
     bp_res = run_bin_packing_benchmark()
-    print("\n[Benchmark 3] DeepMind FunSearch Online 1D Bin Packing (Weibull 5k, 5 Test Seeds):")
-    print(f"  First Fit (Classical Baseline):              {bp_res['first_fit_excess_pct']:.3f}% excess bins ({bp_res['first_fit_bins']:.1f} bins)")
-    print(f"  FunSearch Priority Baseline (Nature 2024):   {bp_res['funsearch_excess_pct']:.3f}% excess bins")
-    print(f"  Best Fit (Classical Baseline):               {bp_res['best_fit_excess_pct']:.3f}% excess bins ({bp_res['best_fit_bins']:.1f} bins)")
+    print(
+        "\n[Benchmark 3] DeepMind FunSearch Online 1D Bin Packing (Weibull 5k, 5 Test Seeds):"
+    )
+    print(
+        f"  First Fit (Classical Baseline):              {bp_res['first_fit_excess_pct']:.3f}% excess bins ({bp_res['first_fit_bins']:.1f} bins)"
+    )
+    print(
+        f"  FunSearch Priority Baseline (Nature 2024):   {bp_res['funsearch_excess_pct']:.3f}% excess bins"
+    )
+    print(
+        f"  Best Fit (Classical Baseline):               {bp_res['best_fit_excess_pct']:.3f}% excess bins ({bp_res['best_fit_bins']:.1f} bins)"
+    )
     print(
         f"  Lean-DAG-RSI (CROSSOVER + Neuro-Symbolic):   {bp_res['lean_dag_excess_pct']:.3f}% excess bins "
         f"({bp_res['lean_dag_bins']:.1f} bins, time={bp_res['elapsed_s']:.1f}s)"
@@ -744,7 +828,9 @@ def main() -> int:
     assert bp_res["lean_dag_excess_pct"] < bp_res["funsearch_excess_pct"]
 
     at_res = run_algotune_sinkhorn_benchmark()
-    print("\n[Benchmark 4] AlgoTune (NeurIPS 2025) Entropic Optimal Transport (Sinkhorn 700x700):")
+    print(
+        "\n[Benchmark 4] AlgoTune (NeurIPS 2025) Entropic Optimal Transport (Sinkhorn 700x700):"
+    )
     print(f"  Reference Implementation:                    {at_res['t_ref_ms']:.2f} ms")
     print(f"  Lean-DAG-RSI Hybrid (Contiguous + Stride-5): {at_res['t_opt_ms']:.2f} ms")
     print(
@@ -803,8 +889,12 @@ def main() -> int:
             dream_loop.initial_state("alphaevolve-circle-packing-32"),
             tmp_pool,
         )
-        round_rep = dream_loop.run_round("alphaevolve-circle-packing-32", pool_dir=tmp_pool)
-        print("\n[Live Global `dream-rsi` Skill Verification on Recorded Benchmark Tree]:")
+        round_rep = dream_loop.run_round(
+            "alphaevolve-circle-packing-32", pool_dir=tmp_pool
+        )
+        print(
+            "\n[Live Global `dream-rsi` Skill Verification on Recorded Benchmark Tree]:"
+        )
         print(
             f"  Selected Winner Policy: {round_rep['winner']} "
             f"(incumbent_v={round_rep['incumbent_mean_v']} -> winner_v={round_rep['winner_mean_v']})"

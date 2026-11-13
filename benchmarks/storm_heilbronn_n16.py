@@ -16,16 +16,17 @@ Combines:
 """
 
 from __future__ import annotations
-import json
 import math
+import os
 import time
 import numpy as np
 import torch
-from scipy.optimize import linprog, minimize
-from fractions import Fraction
+from scipy.optimize import linprog
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 DTYPE = torch.float64
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ARTIFACTS_DIR = os.path.join(ROOT_DIR, "artifacts")
 
 
 def get_triplets_np(n: int):
@@ -45,7 +46,9 @@ def get_triplets_np(n: int):
 
 TRIPLETS_NP = {n: get_triplets_np(n) for n in (14, 15, 16, 17)}
 TRIPLETS_TORCH = {
-    n: tuple(torch.tensor(arr, dtype=torch.long, device=DEVICE) for arr in TRIPLETS_NP[n])
+    n: tuple(
+        torch.tensor(arr, dtype=torch.long, device=DEVICE) for arr in TRIPLETS_NP[n]
+    )
     for n in (14, 15, 16, 17)
 }
 
@@ -88,7 +91,11 @@ def eval_batch_torch(pts: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     I, J, K = TRIPLETS_TORCH[n]
     x = pts[:, :, 0]
     y = pts[:, :, 1]
-    cross = x[:, I] * (y[:, J] - y[:, K]) + x[:, J] * (y[:, K] - y[:, I]) + x[:, K] * (y[:, I] - y[:, J])
+    cross = (
+        x[:, I] * (y[:, J] - y[:, K])
+        + x[:, J] * (y[:, K] - y[:, I])
+        + x[:, K] * (y[:, I] - y[:, J])
+    )
     areas = torch.abs(cross)
     min_a, worst_idx = torch.min(areas, dim=1)
     return min_a, worst_idx
@@ -118,7 +125,11 @@ def gpu_boltzmann_polish(
         for s in range(1, steps_per_stage + 1):
             x = pts[:, :, 0]
             y = pts[:, :, 1]
-            cross = x[:, I] * (y[:, J] - y[:, K]) + x[:, J] * (y[:, K] - y[:, I]) + x[:, K] * (y[:, I] - y[:, J])
+            cross = (
+                x[:, I] * (y[:, J] - y[:, K])
+                + x[:, J] * (y[:, K] - y[:, I])
+                + x[:, K] * (y[:, I] - y[:, J])
+            )
             areas = torch.abs(cross)
             min_a, _ = torch.min(areas, dim=1, keepdim=True)
             cur_min = min_a.squeeze(1)
@@ -158,8 +169,8 @@ def gpu_boltzmann_polish(
                     grad[:, -1, 0] = gm
                     grad[:, -1, 1] = gm
 
-            bc1 = 1.0 - (b1 ** s)
-            bc2 = 1.0 - (b2 ** s)
+            bc1 = 1.0 - (b1**s)
+            bc2 = 1.0 - (b2**s)
             m_mom.mul_(b1).add_(grad, alpha=1.0 - b1)
             v_mom.mul_(b2).addcmul_(grad, grad, value=1.0 - b2)
             step = lr * (m_mom / bc1) / (torch.sqrt(v_mom / bc2) + 1e-12)
@@ -223,7 +234,9 @@ def gpu_best_pocket_insertion(pts_nm1: torch.Tensor, top_k: int = 4) -> torch.Te
 
 
 @torch.no_grad()
-def gpu_ruin_and_recreate_round(pts: torch.Tensor, n_rounds: int = 6) -> tuple[torch.Tensor, torch.Tensor]:
+def gpu_ruin_and_recreate_round(
+    pts: torch.Tensor, n_rounds: int = 6
+) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Batched Ruin-and-Recreate on GPU:
     Finds the bottleneck triangle for each configuration, removes one of its 3 vertices,
@@ -238,7 +251,9 @@ def gpu_ruin_and_recreate_round(pts: torch.Tensor, n_rounds: int = 6) -> tuple[t
         _, worst_t = eval_batch_torch(best_pts)
         # Pick vertex 0, 1, or 2 of the worst triangle
         which_v = r % 3
-        v_del = (I[worst_t] if which_v == 0 else (J[worst_t] if which_v == 1 else K[worst_t]))
+        v_del = (
+            I[worst_t] if which_v == 0 else (J[worst_t] if which_v == 1 else K[worst_t])
+        )
         # Build (B, n-1, 2) by omitting v_del
         rem_list = []
         for b in range(B):
@@ -263,7 +278,9 @@ def gpu_ruin_and_recreate_round(pts: torch.Tensor, n_rounds: int = 6) -> tuple[t
     return best_pts, best_val
 
 
-def seed_topological_batch(n: int, batch_size: int, seed: int = 42, symmetric_cs: bool = False) -> torch.Tensor:
+def seed_topological_batch(
+    n: int, batch_size: int, seed: int = 42, symmetric_cs: bool = False
+) -> torch.Tensor:
     rng = np.random.default_rng(seed)
     out = np.zeros((batch_size, n, 2), dtype=np.float64)
     for b in range(batch_size):
@@ -274,9 +291,12 @@ def seed_topological_batch(n: int, batch_size: int, seed: int = 42, symmetric_cs
             e1 = rng.uniform(0.12, 0.45)
             e2 = rng.uniform(0.55, 0.88)
             h1 = rng.uniform(0.12, 0.42)
-            pts[0] = [e1, 0.0]; pts[1] = [0.0, e1]
-            pts[2] = [e2, 0.0]; pts[3] = [0.0, e2]
-            pts[4] = [h1, 1.0 - h1]; pts[5] = [1.0 - h1, h1]
+            pts[0] = [e1, 0.0]
+            pts[1] = [0.0, e1]
+            pts[2] = [e2, 0.0]
+            pts[3] = [0.0, e2]
+            pts[4] = [h1, 1.0 - h1]
+            pts[5] = [1.0 - h1, h1]
             for p in range(3, n_pairs):
                 u = rng.uniform(0.04, 0.75)
                 v = rng.uniform(0.04, 0.92 - u)
@@ -304,15 +324,21 @@ def seed_topological_batch(n: int, batch_size: int, seed: int = 42, symmetric_cs
             rot = rng.uniform(0.0, 2.0 * math.pi)
             for r in range(rem):
                 if r < rem - 2:
-                    ang = rot + r * (2.0 * math.pi / max(1, rem - 2)) + rng.normal(0.0, 0.15)
+                    ang = (
+                        rot
+                        + r * (2.0 * math.pi / max(1, rem - 2))
+                        + rng.normal(0.0, 0.15)
+                    )
                     rad = rng.uniform(0.14, 0.24)
                     u = 0.30 + rad * math.cos(ang)
                     v = 0.30 + rad * math.sin(ang)
                 else:
                     u = rng.uniform(0.18, 0.38)
                     v = rng.uniform(0.18, 0.38)
-                if u < 0.01: u = 0.01
-                if v < 0.01: v = 0.01
+                if u < 0.01:
+                    u = 0.01
+                if v < 0.01:
+                    v = 0.01
                 if u + v > 0.99:
                     s = u + v
                     u = 0.98 * u / s
@@ -332,7 +358,9 @@ def verify_exact_np(pts: np.ndarray) -> tuple[float, int]:
     return min_a, ties
 
 
-def trust_region_slp_polish(pts_init: np.ndarray, n_steps: int = 55, rho_init: float = 0.012) -> np.ndarray:
+def trust_region_slp_polish(
+    pts_init: np.ndarray, n_steps: int = 55, rho_init: float = 0.012
+) -> np.ndarray:
     pts = pts_init.copy()
     n_pts = pts.shape[0]
     I, J, K = TRIPLETS_NP[n_pts]
@@ -361,16 +389,29 @@ def trust_region_slp_polish(pts_init: np.ndarray, n_steps: int = 55, rho_init: f
         A_ub = np.zeros((m_act + n_pts, 2 * n_pts + 1), dtype=np.float64)
         b_ub = np.zeros(m_act + n_pts, dtype=np.float64)
 
-        gx_I = sgn * (y[Ja] - y[Ka]); gy_I = sgn * (x[Ka] - x[Ja])
-        gx_J = sgn * (y[Ka] - y[Ia]); gy_J = sgn * (x[Ia] - x[Ka])
-        gx_K = sgn * (y[Ia] - y[Ja]); gy_K = sgn * (x[Ja] - x[Ia])
+        gx_I = sgn * (y[Ja] - y[Ka])
+        gy_I = sgn * (x[Ka] - x[Ja])
+        gx_J = sgn * (y[Ka] - y[Ia])
+        gy_J = sgn * (x[Ia] - x[Ka])
+        gx_K = sgn * (y[Ia] - y[Ja])
+        gy_K = sgn * (x[Ja] - x[Ia])
 
-        A_ub[r_act, 2 * Ia] = -gx_I; A_ub[r_act, 2 * Ia + 1] = -gy_I
-        A_ub[r_act, 2 * Ja] = -gx_J; A_ub[r_act, 2 * Ja + 1] = -gy_J
-        A_ub[r_act, 2 * Ka] = -gx_K; A_ub[r_act, 2 * Ka + 1] = -gy_K
+        A_ub[r_act, 2 * Ia] = -gx_I
+        A_ub[r_act, 2 * Ia + 1] = -gy_I
+        A_ub[r_act, 2 * Ja] = -gx_J
+        A_ub[r_act, 2 * Ja + 1] = -gy_J
+        A_ub[r_act, 2 * Ka] = -gx_K
+        A_ub[r_act, 2 * Ka + 1] = -gy_K
         A_ub[r_act, 2 * n_pts] = 1.0
 
-        dot_p = gx_I * x[Ia] + gy_I * y[Ia] + gx_J * x[Ja] + gy_J * y[Ja] + gx_K * x[Ka] + gy_K * y[Ka]
+        dot_p = (
+            gx_I * x[Ia]
+            + gy_I * y[Ia]
+            + gx_J * x[Ja]
+            + gy_J * y[Ja]
+            + gx_K * x[Ka]
+            + gy_K * y[Ka]
+        )
         b_ub[r_act] = areas[active] - dot_p
 
         for p_idx in range(n_pts):
@@ -380,8 +421,12 @@ def trust_region_slp_polish(pts_init: np.ndarray, n_steps: int = 55, rho_init: f
 
         bounds = []
         for p_idx in range(n_pts):
-            bounds.append((max(0.0, float(x[p_idx] - rho)), min(1.0, float(x[p_idx] + rho))))
-            bounds.append((max(0.0, float(y[p_idx] - rho)), min(1.0, float(y[p_idx] + rho))))
+            bounds.append(
+                (max(0.0, float(x[p_idx] - rho)), min(1.0, float(x[p_idx] + rho)))
+            )
+            bounds.append(
+                (max(0.0, float(y[p_idx] - rho)), min(1.0, float(y[p_idx] + rho)))
+            )
         bounds.append((0.0, 1.0))
 
         res = linprog(c_obj, A_ub=A_ub, b_ub=b_ub, bounds=bounds, method="highs")
@@ -420,10 +465,16 @@ def trust_region_slp_polish(pts_init: np.ndarray, n_steps: int = 55, rho_init: f
 
 def main():
     t0 = time.perf_counter()
-    print(f"=== LAUNCHING GPU CASCADE ON {DEVICE} ({torch.cuda.get_device_name(0)}) ===")
+    print(
+        f"=== LAUNCHING GPU CASCADE ON {DEVICE} ({torch.cuda.get_device_name(0)}) ==="
+    )
 
     # 1. Upward Cascade: Certified n=14* -> n=15 -> n=16
-    pts14_star = torch.tensor(np.load("heilbronn_n14_champion.npy"), dtype=DTYPE, device=DEVICE).unsqueeze(0)
+    pts14_star = torch.tensor(
+        np.load(os.path.join(ARTIFACTS_DIR, "heilbronn_n14_champion.npy")),
+        dtype=DTYPE,
+        device=DEVICE,
+    ).unsqueeze(0)
     # Create 128 perturbed + pocket-lifted n=15 seeds from n=14*
     base14_batch = pts14_star.repeat(64, 1, 1)
     base14_batch[1:] += 0.012 * torch.randn_like(base14_batch[1:])
@@ -432,13 +483,17 @@ def main():
     seeds15_sym = seed_topological_batch(15, 128, seed=101, symmetric_cs=True)
     seeds15_asym = seed_topological_batch(15, 128, seed=102, symmetric_cs=False)
 
-    pts15_sym, val15_sym = gpu_boltzmann_polish(seeds15_sym, symmetric_cs=True, steps_per_stage=150)
+    pts15_sym, val15_sym = gpu_boltzmann_polish(
+        seeds15_sym, symmetric_cs=True, steps_per_stage=150
+    )
     pts15_all = torch.cat([seeds15_up, seeds15_asym, pts15_sym], dim=0)
     pts15_all, val15_all = gpu_boltzmann_polish(pts15_all, steps_per_stage=140)
     pts15_all, val15_all = gpu_ruin_and_recreate_round(pts15_all, n_rounds=5)
 
     vals15, ord15 = torch.sort(val15_all, descending=True)
-    print(f"[{time.perf_counter()-t0:5.1f}s] Stage 1 (n=15 Pool): Top-5 GPU = {[round(x, 7) for x in vals15[:5].tolist()]}")
+    print(
+        f"[{time.perf_counter() - t0:5.1f}s] Stage 1 (n=15 Pool): Top-5 GPU = {[round(x, 7) for x in vals15[:5].tolist()]}"
+    )
 
     # 2. Lift top 96 of n=15 -> n=16 (96 * 4 = 384 seeds) + 384 Direct Asym + 256 Direct Sym
     top15 = pts15_all[ord15[:96]]
@@ -446,13 +501,17 @@ def main():
     seeds16_asym = seed_topological_batch(16, 384, seed=202, symmetric_cs=False)
     seeds16_sym = seed_topological_batch(16, 256, seed=203, symmetric_cs=True)
 
-    pts16_sym, _ = gpu_boltzmann_polish(seeds16_sym, symmetric_cs=True, steps_per_stage=160)
+    pts16_sym, _ = gpu_boltzmann_polish(
+        seeds16_sym, symmetric_cs=True, steps_per_stage=160
+    )
     pts16_pool = torch.cat([seeds16_from15, seeds16_asym, pts16_sym], dim=0)
     pts16_pool, val16_pool = gpu_boltzmann_polish(pts16_pool, steps_per_stage=160)
     pts16_pool, val16_pool = gpu_ruin_and_recreate_round(pts16_pool, n_rounds=6)
 
     vals16, ord16 = torch.sort(val16_pool, descending=True)
-    print(f"[{time.perf_counter()-t0:5.1f}s] Stage 2 (n=16 Upward+Direct): Top-5 GPU = {[round(x, 7) for x in vals16[:5].tolist()]}")
+    print(
+        f"[{time.perf_counter() - t0:5.1f}s] Stage 2 (n=16 Upward+Direct): Top-5 GPU = {[round(x, 7) for x in vals16[:5].tolist()]}"
+    )
 
     # 3. Stage 3: n=17 Pool + Downward Cascade 17 -> 16
     top16_for17 = pts16_pool[ord16[:64]]
@@ -461,7 +520,9 @@ def main():
     pts17_pool = torch.cat([seeds17_from16, seeds17_direct], dim=0)
     pts17_pool, val17_pool = gpu_boltzmann_polish(pts17_pool, steps_per_stage=140)
     vals17, ord17 = torch.sort(val17_pool, descending=True)
-    print(f"[{time.perf_counter()-t0:5.1f}s] Stage 3 (n=17 Pool): Top-5 GPU = {[round(x, 7) for x in vals17[:5].tolist()]}")
+    print(
+        f"[{time.perf_counter() - t0:5.1f}s] Stage 3 (n=17 Pool): Top-5 GPU = {[round(x, 7) for x in vals17[:5].tolist()]}"
+    )
 
     # Downward deletion 17 -> 16 from top 24 of n=17 (24 * 17 = 408 candidates)
     down16_list = []
@@ -476,7 +537,9 @@ def main():
     all16_pts = torch.cat([pts16_pool[ord16[:64]], down16_t], dim=0)
     all16_val, _ = eval_batch_torch(all16_pts)
     vals16_final, ord16_final = torch.sort(all16_val, descending=True)
-    print(f"[{time.perf_counter()-t0:5.1f}s] Stage 4 (Merged n=16 Pool): Top-5 GPU = {[round(x, 7) for x in vals16_final[:5].tolist()]}")
+    print(
+        f"[{time.perf_counter() - t0:5.1f}s] Stage 4 (Merged n=16 Pool): Top-5 GPU = {[round(x, 7) for x in vals16_final[:5].tolist()]}"
+    )
 
     # 4. Polish Top-12 candidates of n=15, n=16, n=17 with HiGHS Trust-Region SLP!
     for n_target, pts_t, ord_t, ref_val in [
@@ -499,7 +562,10 @@ def main():
             f"=== FINAL n={n_target} AFTER HiGHS TR-SLP: Delta_{n_target} = {best_v:.10f} "
             f"(active ties = {best_ties}, vs benchmark {ref_val:.8f}, diff = {best_v - ref_val:+.8f}) ==="
         )
-        np.save(f"heilbronn_n{n_target}_candidate.npy", best_np)
+        os.makedirs(ARTIFACTS_DIR, exist_ok=True)
+        np.save(
+            os.path.join(ARTIFACTS_DIR, f"heilbronn_n{n_target}_candidate.npy"), best_np
+        )
 
 
 if __name__ == "__main__":

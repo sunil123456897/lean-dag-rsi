@@ -1,8 +1,8 @@
 """
 Auto-Dream-RSI: Universal Autonomous Discovery & Optimization Engine.
 
-Connects directly to the upgraded global `dream-rsi` skill
-(`C:/Users/vanya/.gemini/config/skills/dream-rsi/scripts/`) and automates
+Connects directly to the upgraded `dream-rsi` skill
+(`$DREAM_RSI_PLUGIN_DIR` / `./dream_rsi_scripts/`) and automates
 the full multi-round closed loop for any plug-in `TaskCartridge`:
 
   Round 1 (Parallel Exploration):
@@ -33,11 +33,8 @@ from __future__ import annotations
 
 import math
 import os
-import shutil
 import sys
-import tempfile
 import time
-from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
@@ -45,19 +42,50 @@ from scipy.linalg import cho_factor, cho_solve
 from scipy.optimize import linprog, minimize
 from scipy.spatial.distance import cdist
 
-LOCAL_SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dream_rsi_scripts")
-PLUGIN_SCRIPTS_DIR = r"C:\Users\vanya\.gemini\config\plugins\autonomous-research\skills\dream-rsi\scripts"
-SKILL_SCRIPTS_DIR = r"C:\Users\vanya\.gemini\config\skills\dream-rsi\scripts"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+LOCAL_SCRIPTS_DIR = os.path.join(BASE_DIR, "dream_rsi_scripts")
+_plugin_root = os.path.expanduser(
+    os.environ.get(
+        "DREAM_RSI_PLUGIN_DIR",
+        os.environ.get(
+            "AUTONOMOUS_RESEARCH_PLUGIN_DIR",
+            os.path.join("~", ".gemini", "config", "plugins", "autonomous-research"),
+        ),
+    )
+)
+PLUGIN_SCRIPTS_DIR = (
+    _plugin_root
+    if os.path.isfile(os.path.join(_plugin_root, "engine.py"))
+    else os.path.join(_plugin_root, "skills", "dream-rsi", "scripts")
+)
+SKILL_SCRIPTS_DIR = os.path.expanduser(
+    os.environ.get(
+        "DREAM_RSI_SKILL_DIR",
+        os.path.join("~", ".gemini", "config", "skills", "dream-rsi", "scripts"),
+    )
+)
 for _cand_dir in (LOCAL_SCRIPTS_DIR, PLUGIN_SCRIPTS_DIR, SKILL_SCRIPTS_DIR):
     if os.path.isdir(_cand_dir) and _cand_dir not in sys.path:
         sys.path.insert(0, _cand_dir)
 
+
+class OptionalCartridgeUnavailable(RuntimeError):
+    """Raised cleanly when an optional local experiment directory is absent on this machine."""
+
+
+def _resolve_experiment_dir(env_var: str, *subpath: str) -> str:
+    explicit = os.environ.get(env_var, "").strip()
+    if explicit:
+        return os.path.expanduser(explicit)
+    experiments_root = os.path.expanduser(
+        os.environ.get("DREAM_RSI_EXPERIMENTS_DIR", os.path.dirname(BASE_DIR))
+    )
+    return os.path.join(experiments_root, *subpath)
+
+
 import engine as dream_engine  # type: ignore
-import loop as dream_loop  # type: ignore
 from cartridge import (  # type: ignore
     AutoDreamRunner,
-    BlindVaultGuard,
-    BlindVaultViolationError,
     BranchCandidate,
     TaskCartridge,
 )
@@ -309,7 +337,7 @@ def build_bin_packing_cartridge() -> TaskCartridge:
     Powell continuous parameter tuning on a training set before held-out test verification).
     Score = `(10.0 - excess_bins_pct) * 100.0` (higher is better).
     """
-    from benchmark_world_records import (
+    from benchmarks.benchmark_world_records import (
         evaluate_online_bin_packing,
         first_fit_priority,
         generate_weibull_datasets,
@@ -593,8 +621,11 @@ def build_open_autocorrelation_cartridge() -> TaskCartridge:
         - SLEEP-DAG-RSI v7 (P=2560 Dyadic Scar-Healed Sphere-Lagrangian Newton): 1.50382279
     """
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    a_pre_ns_p2560 = np.load(os.path.join(base_dir, "autocorr_c1_pre_ns_p2560.npy"))
-    a_champ_p2560 = np.load(os.path.join(base_dir, "autocorr_c1_champion.npy"))
+    artifacts_dir = os.path.join(base_dir, "artifacts")
+    a_pre_ns_p2560 = np.load(
+        os.path.join(artifacts_dir, "autocorr_c1_pre_ns_p2560.npy")
+    )
+    a_champ_p2560 = np.load(os.path.join(artifacts_dir, "autocorr_c1_champion.npy"))
 
     def verify_and_score(
         solver_fn: Callable[[], np.ndarray],
@@ -635,12 +666,18 @@ def build_open_autocorrelation_cartridge() -> TaskCartridge:
             1 if c1 < 1.5053 else 0,  # Beats Google DeepMind AlphaEvolve v1 (2025)
             1 if c1 < 1.5045 else 0,  # Stage-3 P=160 Scar-Healed Homotopy
             1 if c1 < 1.5040 else 0,  # Stage-3B P=320 Multi-Scale Scar Healing
-            1 if c1 < 1.50385 else 0,  # Stage-4 P=640 Dyadic Scar-Healed Sphere-Lagrangian Newton
+            1
+            if c1 < 1.50385
+            else 0,  # Stage-4 P=640 Dyadic Scar-Healed Sphere-Lagrangian Newton
         ]
         gap = max(0.0, c1 - 1.5030) * 1000.0
         failure_breakdown = {
-            f"coarse_grid_scar_canyons(zero_bins={zero_bins}/{P_len})": round(0.6 * gap + 0.01, 4),
-            f"active_roof_slack(roof_1e3={roof_999}/{2*P_len-1})": round(0.4 * gap + 0.01, 4),
+            f"coarse_grid_scar_canyons(zero_bins={zero_bins}/{P_len})": round(
+                0.6 * gap + 0.01, 4
+            ),
+            f"active_roof_slack(roof_1e3={roof_999}/{2 * P_len - 1})": round(
+                0.4 * gap + 0.01, 4
+            ),
         }
         return (
             True,
@@ -778,9 +815,12 @@ def build_open_autocorrelation_cartridge() -> TaskCartridge:
         """
         p_init = np.array([0.5, 0.3, 0.5, 1e-4, 0.0], dtype=np.float64)
         bounds = [
-            (0.0, 2.2),   # sigma_heal_160 (P=160 Gaussian scar-healing width)
-            (0.0, 1.6),   # sigma_heal_320 (P=320/640 dyadic scar-healing width)
-            (0.3, 1.5),   # homotopy_beta_scale (resolution-matched beta(P) schedule multiplier)
+            (0.0, 2.2),  # sigma_heal_160 (P=160 Gaussian scar-healing width)
+            (0.0, 1.6),  # sigma_heal_320 (P=320/640 dyadic scar-healing width)
+            (
+                0.3,
+                1.5,
+            ),  # homotopy_beta_scale (resolution-matched beta(P) schedule multiplier)
             (0.0, 1e-3),  # redundant_wake_floor (redundant -> pruned by RRSI!)
             (0.0, 0.02),  # redundant_tail_clip (redundant -> pruned by RRSI!)
         ]
@@ -1150,7 +1190,7 @@ def build_open_heilbronn_cartridge() -> TaskCartridge:
 
 def build_pocket_otc_cartridge() -> TaskCartridge:
     """
-    User Project 1 (`e:\\эксперименты\\OTC PocetOption\\dream_rsi_otc`):
+    User Project 1 (`$DREAM_RSI_OTC_DIR` or `$DREAM_RSI_EXPERIMENTS_DIR/OTC PocetOption/dream_rsi_otc`):
       - Loads the 4 historical DiscoveryTrees from `otc_evaluator.py` and runs
         `ideate_over_history()` to surface:
           (a) Repairable anchor `b3a3` (`Mid-Flight Spike Overlay`, which had 17/19 = 89.47% WR
@@ -1161,7 +1201,14 @@ def build_pocket_otc_cartridge() -> TaskCartridge:
           (c) Neuro-Symbolic Split tuning the 6 continuous thresholds strictly on `Train (50%) + Val (25%)`
               while keeping `Untouched Vault (25%)` 100% blind.
     """
-    otc_dir = r"e:\эксперименты\OTC PocetOption\dream_rsi_otc"
+    otc_dir = _resolve_experiment_dir(
+        "DREAM_RSI_OTC_DIR", "OTC PocetOption", "dream_rsi_otc"
+    )
+    if not os.path.isdir(otc_dir):
+        raise OptionalCartridgeUnavailable(
+            f"Local experiment directory missing: {otc_dir!r}. "
+            "Set DREAM_RSI_OTC_DIR or DREAM_RSI_EXPERIMENTS_DIR to enable `pocket-otc-crack`."
+        )
     if otc_dir not in sys.path:
         sys.path.insert(0, otc_dir)
     from forensic_cheatcode_lab import (  # type: ignore
@@ -1516,7 +1563,7 @@ def build_pocket_otc_cartridge() -> TaskCartridge:
 
 def build_simvq_zero_crutch_cartridge() -> TaskCartridge:
     """
-    User Project 2 (`e:\\эксперименты\\Новая нейронка`):
+    User Project 2 (`$DREAM_RSI_SIMVQ_DIR` or `$DREAM_RSI_EXPERIMENTS_DIR/Новая нейронка`):
       - Loads the 4 historical DiscoveryTrees from `dream_rsi_simvq.py` and the live
         1.58-bit ternary champions (`c4_b0_a4_coprime_lock` & `m_nl_transfer`) on CUDA.
       - Runs `ideate_over_history()` to identify the Circuit-2 `k_null` saddle attenuation
@@ -1525,10 +1572,16 @@ def build_simvq_zero_crutch_cartridge() -> TaskCartridge:
         `OOS_T512`, `OOS_T1024`, `OOS_Noise64_s015`, `m_nl OOD-2000 T=128`), achieving
         100.00% across EVERY SINGLE ONE (`S = 100.0000`)!
     """
+    simvq_dir = _resolve_experiment_dir("DREAM_RSI_SIMVQ_DIR", "Новая нейронка")
+    if not os.path.isdir(simvq_dir):
+        raise OptionalCartridgeUnavailable(
+            f"Local experiment directory missing: {simvq_dir!r}. "
+            "Set DREAM_RSI_SIMVQ_DIR or DREAM_RSI_EXPERIMENTS_DIR to enable `simvq-zero-crutch`."
+        )
+
     import random
     import torch
 
-    simvq_dir = r"e:\эксперименты\Новая нейронка"
     if simvq_dir not in sys.path:
         sys.path.insert(0, simvq_dir)
     from simvq_coprime_gpt import (  # type: ignore
@@ -1826,7 +1879,9 @@ def build_open_heilbronn_13_14_cartridge() -> TaskCartridge:
     )
 
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    cand_json_path = os.path.join(base_dir, "heilbronn_cpp_candidates.json")
+    cand_json_path = os.path.join(
+        base_dir, "artifacts", "heilbronn_cpp_candidates.json"
+    )
     with open(cand_json_path, "r", encoding="utf-8") as f:
         cpp_pool = json.load(f)
 
@@ -2172,8 +2227,9 @@ def build_open_heilbronn_13_14_cartridge() -> TaskCartridge:
 
     # Load the exact raw C++ vertical-seeding candidates (`n13[3]` and `n14[0]`),
     # run genuine HiGHS TR-SLP for Round 3, and polish to `p13_champ` / `p14_champ` in Round 4
-    p13_champ = np.load(os.path.join(base_dir, "heilbronn_n13_champion.npy"))
-    p14_champ = np.load(os.path.join(base_dir, "heilbronn_n14_champion.npy"))
+    artifacts_dir = os.path.join(base_dir, "artifacts")
+    p13_champ = np.load(os.path.join(artifacts_dir, "heilbronn_n13_champion.npy"))
+    p14_champ = np.load(os.path.join(artifacts_dir, "heilbronn_n14_champion.npy"))
     p13_vert = np.array(cpp_pool["n13"][3], dtype=np.float64)
     p14_vert = np.array(cpp_pool["n14"][0], dtype=np.float64)
     p13_xover = _tr_slp_polish(p13_vert, n_steps=2, rho_init=5e-4)
@@ -2307,15 +2363,18 @@ def build_open_autocorrelation_c2_cartridge() -> TaskCartridge:
     )
 
     base_dir = os.path.dirname(os.path.abspath(__file__))
+    artifacts_dir = os.path.join(base_dir, "artifacts")
     a_b0_softplus_p128 = np.load(
-        os.path.join(base_dir, "autocorr_c2_b0_softplus_p128.npy")
+        os.path.join(artifacts_dir, "autocorr_c2_b0_softplus_p128.npy")
     )
     a_b1_kron_p384 = np.load(
-        os.path.join(base_dir, "autocorr_c2_b1_kronecker_p384.npy")
+        os.path.join(artifacts_dir, "autocorr_c2_b1_kronecker_p384.npy")
     )
-    a_base_p633 = np.load(os.path.join(base_dir, "autocorr_c2_base_p633.npy"))
-    a_pre_ns_p10128 = np.load(os.path.join(base_dir, "autocorr_c2_pre_ns_p10128.npy"))
-    a_champ_p10128 = np.load(os.path.join(base_dir, "autocorr_c2_champion.npy"))
+    a_base_p633 = np.load(os.path.join(artifacts_dir, "autocorr_c2_base_p633.npy"))
+    a_pre_ns_p10128 = np.load(
+        os.path.join(artifacts_dir, "autocorr_c2_pre_ns_p10128.npy")
+    )
+    a_champ_p10128 = np.load(os.path.join(artifacts_dir, "autocorr_c2_champion.npy"))
 
     def _dinkelbach_lse_step(
         a_init: np.ndarray, project_nonneg: bool = True
@@ -2597,8 +2656,16 @@ def main() -> int:
     else:
         selected = [registry[args.task]]
 
+    executed = 0
+    skipped = 0
     for build_fn in selected:
-        cartridge = build_fn()
+        try:
+            cartridge = build_fn()
+        except OptionalCartridgeUnavailable as exc:
+            skipped += 1
+            print(f"\n[SKIP] {exc}")
+            continue
+        executed += 1
         print(f"\n>>> Plugging in Cartridge: [{cartridge.task_name}]")
         print(f"    {cartridge.description}")
         runner = AutoDreamRunner(cartridge)
@@ -2615,7 +2682,7 @@ def main() -> int:
 
     print("\n" + "=" * 84)
     print(
-        f"AUTO-DREAM-RSI VERIFICATION COMPLETE: ALL {len(selected)} CARTRIDGES SUCCEEDED!"
+        f"AUTO-DREAM-RSI VERIFICATION COMPLETE: {executed} SUCCEEDED, {skipped} SKIPPED!"
     )
     print("=" * 84)
     return 0

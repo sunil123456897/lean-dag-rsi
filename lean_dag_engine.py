@@ -2,7 +2,8 @@
 Lean-DAG-RSI Engine & Forensic Audit of the Local Dream-RSI Skill (`engine.py`).
 
 This module:
-1. Audits the local `dream-rsi` skill (`C:/Users/vanya/.gemini/config/skills/dream-rsi/scripts/engine.py`)
+1. Audits the local `dream-rsi` skill (`~/.gemini/config/skills/dream-rsi/scripts/engine.py`
+   or `$DREAM_RSI_PLUGIN_DIR`)
    and proves FIVE structural bugs in `World` and `Policy` with executable assertions:
    - Bug 1 (Positive Probe Slope in Eq. 1): `v = quality - beta1 * n_probes + beta2 * (n_probes / k)`
      has dV/dN = beta2 / k - beta1 > 0 whenever k < beta2 / beta1 (for default beta1=0.01, beta2=0.05,
@@ -42,12 +43,33 @@ import sys
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
+_plugin_root = os.path.expanduser(
+    os.environ.get(
+        "DREAM_RSI_PLUGIN_DIR",
+        os.environ.get(
+            "AUTONOMOUS_RESEARCH_PLUGIN_DIR",
+            os.path.join("~", ".gemini", "config", "plugins", "autonomous-research"),
+        ),
+    )
+)
+_plugin_scripts = (
+    _plugin_root
+    if os.path.isfile(os.path.join(_plugin_root, "engine.py"))
+    else os.path.join(_plugin_root, "skills", "dream-rsi", "scripts")
+)
 _CANDIDATE_DIRS = [
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "dream_rsi_scripts"),
-    r"C:\Users\vanya\.gemini\config\plugins\autonomous-research\skills\dream-rsi\scripts",
-    r"C:\Users\vanya\.gemini\config\skills\dream-rsi\scripts",
+    _plugin_scripts,
+    os.path.expanduser(
+        os.environ.get(
+            "DREAM_RSI_SKILL_DIR",
+            os.path.join("~", ".gemini", "config", "skills", "dream-rsi", "scripts"),
+        )
+    ),
 ]
-SKILL_SCRIPTS_DIR = next((d for d in _CANDIDATE_DIRS if os.path.isdir(d)), _CANDIDATE_DIRS[0])
+SKILL_SCRIPTS_DIR = next(
+    (d for d in _CANDIDATE_DIRS if os.path.isdir(d)), _CANDIDATE_DIRS[0]
+)
 if os.path.isdir(SKILL_SCRIPTS_DIR) and SKILL_SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SKILL_SCRIPTS_DIR)
 
@@ -79,8 +101,14 @@ def audit_bug1_positive_probe_slope() -> Dict[str, Any]:
     tree = orig_engine.DiscoveryTree(
         task="audit-eq1-bug", baseline_score=100.0, max_parallelism=8
     )
-    tree.add(orig_engine.Node(id="root", parent_id=None, branch=-1, attempt=0, score=100.0))
-    tree.add(orig_engine.Node(id="b0_opt", parent_id="root", branch=0, attempt=1, score=150.0))
+    tree.add(
+        orig_engine.Node(id="root", parent_id=None, branch=-1, attempt=0, score=100.0)
+    )
+    tree.add(
+        orig_engine.Node(
+            id="b0_opt", parent_id="root", branch=0, attempt=1, score=150.0
+        )
+    )
     for b in range(1, 8):
         tree.add(
             orig_engine.Node(
@@ -113,7 +141,8 @@ def audit_bug1_positive_probe_slope() -> Dict[str, Any]:
         "spammer_quality": rew_spammer["quality"],
         "spammer_v": rew_spammer["v"],
         "dv_dn_at_k1": dv_dn_k1,
-        "bug_verified": rew_spammer["v"] > rew_surgical["v"] and math.isclose(dv_dn_k1, 0.04),
+        "bug_verified": rew_spammer["v"] > rew_surgical["v"]
+        and math.isclose(dv_dn_k1, 0.04),
     }
 
 
@@ -125,8 +154,12 @@ def audit_bug2_support_censorship() -> Dict[str, Any]:
     tree = orig_engine.DiscoveryTree(
         task="audit-censoring", baseline_score=100.0, max_parallelism=2
     )
-    tree.add(orig_engine.Node(id="root", parent_id=None, branch=-1, attempt=0, score=100.0))
-    tree.add(orig_engine.Node(id="b0_1", parent_id="root", branch=0, attempt=1, score=128.0))
+    tree.add(
+        orig_engine.Node(id="root", parent_id=None, branch=-1, attempt=0, score=100.0)
+    )
+    tree.add(
+        orig_engine.Node(id="b0_1", parent_id="root", branch=0, attempt=1, score=128.0)
+    )
     parent = "root"
     for step in range(1, 5):
         nid = f"b1_{step}"
@@ -163,8 +196,12 @@ def audit_bug3_unfiltered_failed_score_and_baseline_drop() -> Dict[str, Any]:
     - Case B: 1 failed attempt (`fail_class='algorithmic_failure'`, `error='NaN divergence'`) with
       unverified `score=500.0` is counted as `quality=500.0`!
     """
-    tree_a = orig_engine.DiscoveryTree(task="bug3a", baseline_score=100.0, max_parallelism=2)
-    tree_a.add(orig_engine.Node(id="root", parent_id=None, branch=-1, attempt=0, score=100.0))
+    tree_a = orig_engine.DiscoveryTree(
+        task="bug3a", baseline_score=100.0, max_parallelism=2
+    )
+    tree_a.add(
+        orig_engine.Node(id="root", parent_id=None, branch=-1, attempt=0, score=100.0)
+    )
     tree_a.add(
         orig_engine.Node(
             id="f1",
@@ -180,8 +217,12 @@ def audit_bug3_unfiltered_failed_score_and_baseline_drop() -> Dict[str, Any]:
     wa.probe(["root"])
     rew_a = wa.reward()
 
-    tree_b = orig_engine.DiscoveryTree(task="bug3b", baseline_score=100.0, max_parallelism=2)
-    tree_b.add(orig_engine.Node(id="root", parent_id=None, branch=-1, attempt=0, score=100.0))
+    tree_b = orig_engine.DiscoveryTree(
+        task="bug3b", baseline_score=100.0, max_parallelism=2
+    )
+    tree_b.add(
+        orig_engine.Node(id="root", parent_id=None, branch=-1, attempt=0, score=100.0)
+    )
     tree_b.add(
         orig_engine.Node(
             id="f_corrupt",
@@ -250,7 +291,9 @@ def audit_bug5_beta_degeneracy() -> Dict[str, Any]:
         "dynamic_portfolio_distinct_scores": distinct_dp,
         "deepest_first_distinct_scores": distinct_df,
         "widest_first_distinct_scores": distinct_wf,
-        "bug_verified": len(distinct_df) == 1 and len(distinct_wf) == 1 and len(distinct_dp) <= 3,
+        "bug_verified": len(distinct_df) == 1
+        and len(distinct_wf) == 1
+        and len(distinct_dp) <= 3,
     }
 
 
@@ -355,12 +398,8 @@ class LeanDAGWorld:
 
     def reset(self) -> None:
         root_id = self.tree.root_id
-        self.revealed: Dict[str, orig_engine.Node] = {
-            root_id: self.tree.nodes[root_id]
-        }
-        self.dag_meta: Dict[str, DAGNode] = {
-            root_id: DAGNode(self.tree.nodes[root_id])
-        }
+        self.revealed: Dict[str, orig_engine.Node] = {root_id: self.tree.nodes[root_id]}
+        self.dag_meta: Dict[str, DAGNode] = {root_id: DAGNode(self.tree.nodes[root_id])}
         self.rounds: int = 0
         self.n_probes: int = 0
         self._cf_counter: int = 0
@@ -384,7 +423,8 @@ class LeanDAGWorld:
         return [
             self.tree.nodes[cid]
             for cid in cids
-            if cid not in self.revealed and self._all_parents_revealed(self.tree.nodes[cid])
+            if cid not in self.revealed
+            and self._all_parents_revealed(self.tree.nodes[cid])
         ]
 
     def unopened_root_count(self) -> int:
@@ -394,7 +434,9 @@ class LeanDAGWorld:
         node = self.revealed[nid]
         if not self.problem.is_success(node) or node.parent_id is None:
             return 0.0
-        parent = self.revealed.get(node.parent_id) or self.tree.nodes.get(node.parent_id)
+        parent = self.revealed.get(node.parent_id) or self.tree.nodes.get(
+            node.parent_id
+        )
         if parent is None:
             return 0.0
         return max(0.0, self.problem.score(node) - self.problem.score(parent))
@@ -530,9 +572,7 @@ class LeanDAGWorld:
             self.rounds += 1
         return newly_revealed
 
-    def reward(
-        self, beta1: float = 0.01, beta_lat: float = 0.05
-    ) -> Dict[str, float]:
+    def reward(self, beta1: float = 0.01, beta_lat: float = 0.05) -> Dict[str, float]:
         """
         Fixed Monotone Replay Objective:
             quality = max({baseline_score} U {score(n) : n in revealed, is_success(n)})
@@ -568,7 +608,9 @@ def run_forensic_comparison() -> int:
 
     # 1. Bug 1: Positive Probe Slope in engine.py
     res_slope = audit_bug1_positive_probe_slope()
-    print("\n[Audit 1] Positive-Probe-Slope Bug in `engine.py` (Eq. 1: +beta2 * N / k):")
+    print(
+        "\n[Audit 1] Positive-Probe-Slope Bug in `engine.py` (Eq. 1: +beta2 * N / k):"
+    )
     print(
         f"  Surgical Policy (N={int(res_slope['surgical_probes'])}, k=1): "
         f"quality={res_slope['surgical_quality']:.1f}, V_orig={res_slope['surgical_v']:.4f}"
@@ -586,10 +628,20 @@ def run_forensic_comparison() -> int:
     tree = orig_engine.DiscoveryTree(
         task="audit-eq1-bug", baseline_score=100.0, max_parallelism=8
     )
-    tree.add(orig_engine.Node(id="root", parent_id=None, branch=-1, attempt=0, score=100.0))
-    tree.add(orig_engine.Node(id="b0_opt", parent_id="root", branch=0, attempt=1, score=150.0))
+    tree.add(
+        orig_engine.Node(id="root", parent_id=None, branch=-1, attempt=0, score=100.0)
+    )
+    tree.add(
+        orig_engine.Node(
+            id="b0_opt", parent_id="root", branch=0, attempt=1, score=150.0
+        )
+    )
     for b in range(1, 8):
-        tree.add(orig_engine.Node(id=f"b{b}_junk", parent_id="root", branch=b, attempt=1, score=90.0))
+        tree.add(
+            orig_engine.Node(
+                id=f"b{b}_junk", parent_id="root", branch=b, attempt=1, score=90.0
+            )
+        )
 
     lw_surg = LeanDAGWorld(tree)
     lw_surg.probe(["root", "root"])
@@ -598,7 +650,9 @@ def run_forensic_comparison() -> int:
     lw_spam = LeanDAGWorld(tree)
     lw_spam.probe(["root"] * 8)
     lrew_spam = lw_spam.reward(beta1=0.01, beta_lat=0.05)
-    lean_dv_dn = (lrew_spam["v"] - lrew_surg["v"]) / (lrew_spam["probes"] - lrew_surg["probes"])
+    lean_dv_dn = (lrew_spam["v"] - lrew_surg["v"]) / (
+        lrew_spam["probes"] - lrew_surg["probes"]
+    )
     print(
         f"  Lean-DAG-RSI Objective: V_surgical={lrew_surg['v']:.4f} > V_spammer={lrew_spam['v']:.4f} "
         f"(dV/dN = {lean_dv_dn:+.4f} < 0 -> FIXED!)"
@@ -607,9 +661,11 @@ def run_forensic_comparison() -> int:
 
     # 2. Bug 2: Support Censorship in engine.py vs Counterfactual Estimator in LeanDAGWorld
     res_cens = audit_bug2_support_censorship()
-    print("\n[Audit 2] Support Censorship (Right-Censoring) in `engine.py` vs. Lean-DAG-RSI:")
     print(
-        f"  After Round 1 (`b0_1`=128.0 censored at depth 1, `b1_1`=109.0 recorded to depth 4):"
+        "\n[Audit 2] Support Censorship (Right-Censoring) in `engine.py` vs. Lean-DAG-RSI:"
+    )
+    print(
+        "  After Round 1 (`b0_1`=128.0 censored at depth 1, `b1_1`=109.0 recorded to depth 4):"
     )
     print(
         f"  orig_engine.World.legal_actions() = {res_cens['legal_after_r1']} "
@@ -620,14 +676,22 @@ def run_forensic_comparison() -> int:
     tree_c = orig_engine.DiscoveryTree(
         task="audit-censoring", baseline_score=100.0, max_parallelism=2
     )
-    tree_c.add(orig_engine.Node(id="root", parent_id=None, branch=-1, attempt=0, score=100.0))
-    tree_c.add(orig_engine.Node(id="b0_1", parent_id="root", branch=0, attempt=1, score=128.0))
+    tree_c.add(
+        orig_engine.Node(id="root", parent_id=None, branch=-1, attempt=0, score=100.0)
+    )
+    tree_c.add(
+        orig_engine.Node(id="b0_1", parent_id="root", branch=0, attempt=1, score=128.0)
+    )
     parent = "root"
     for step in range(1, 5):
         nid = f"b1_{step}"
         tree_c.add(
             orig_engine.Node(
-                id=nid, parent_id=parent, branch=1, attempt=step, score=100.0 + 9.0 * step
+                id=nid,
+                parent_id=parent,
+                branch=1,
+                attempt=step,
+                score=100.0 + 9.0 * step,
             )
         )
         parent = nid
@@ -660,7 +724,9 @@ def run_forensic_comparison() -> int:
 
     # 4. Bug 4: Forced serial root opening on Round 1
     res_bug4 = audit_bug4_serial_root_opening()
-    print("\n[Audit 4] Forced Serial Root Opening in Round 1 across all `engine.py` Policies:")
+    print(
+        "\n[Audit 4] Forced Serial Root Opening in Round 1 across all `engine.py` Policies:"
+    )
     print(
         f"  max_parallelism={res_bug4['max_parallelism']}, unopened_roots={res_bug4['unopened_roots_at_r1']}, "
         f"Round 1 batches={res_bug4['round1_batches']} (BUG VERIFIED: {res_bug4['bug_verified']})"
@@ -670,9 +736,15 @@ def run_forensic_comparison() -> int:
     # 5. Bug 5: Beta degeneracy in sweep_beta
     res_bug5 = audit_bug5_beta_degeneracy()
     print("\n[Audit 5] Beta-Sweep Degeneracy in `engine.py` Policies on `synth_trees`:")
-    print(f"  DynamicPortfolio distinct scores across 11 betas: {res_bug5['dynamic_portfolio_distinct_scores']}")
-    print(f"  DeepestFirst distinct scores across 11 betas:     {res_bug5['deepest_first_distinct_scores']}")
-    print(f"  WidestFirst distinct scores across 11 betas:      {res_bug5['widest_first_distinct_scores']}")
+    print(
+        f"  DynamicPortfolio distinct scores across 11 betas: {res_bug5['dynamic_portfolio_distinct_scores']}"
+    )
+    print(
+        f"  DeepestFirst distinct scores across 11 betas:     {res_bug5['deepest_first_distinct_scores']}"
+    )
+    print(
+        f"  WidestFirst distinct scores across 11 betas:      {res_bug5['widest_first_distinct_scores']}"
+    )
     print(f"  (BUG VERIFIED: {res_bug5['bug_verified']})")
     assert res_bug5["bug_verified"]
 

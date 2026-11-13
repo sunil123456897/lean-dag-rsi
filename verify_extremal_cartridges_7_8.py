@@ -144,12 +144,16 @@ def verify_heilbronn_exact_1e50_json(
                 "x2_eq_x5": rat_pts[2][0] == rat_pts[5][0],
                 "y11_eq_y12": rat_pts[11][1] == rat_pts[12][1],
             }
-            assert all(chord_check.values()), f"n=13 chord identity failed: {chord_check}"
+            assert all(chord_check.values()), (
+                f"n=13 chord identity failed: {chord_check}"
+            )
         else:
             chord_check = {
                 "x6_eq_x9": rat_pts[6][0] == rat_pts[9][0],
             }
-            assert all(chord_check.values()), f"n=14 chord identity failed: {chord_check}"
+            assert all(chord_check.values()), (
+                f"n=14 chord identity failed: {chord_check}"
+            )
         out[key] = {
             "exact_fraction_num": str(min_area_rat.numerator),
             "exact_fraction_den": str(min_area_rat.denominator),
@@ -184,7 +188,7 @@ def verify_c1_exact_kronecker_fraction(
     a_pos = np.maximum(np.asarray(a, dtype=np.float64), 0.0)
     a_norm = a_pos / np.sum(a_pos)
     P = len(a_norm)
-    denom = 10 ** denom_power
+    denom = 10**denom_power
     if denom_power <= 16:
         q = [max(0, int(round(float(v) * denom))) for v in a_norm]
     else:
@@ -444,10 +448,11 @@ def autopsy_c2(a: np.ndarray) -> Dict[str, Any]:
 
 def main() -> int:
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    p13_path = os.path.join(base_dir, "heilbronn_n13_champion.npy")
-    p14_path = os.path.join(base_dir, "heilbronn_n14_champion.npy")
-    c2_base_path = os.path.join(base_dir, "autocorr_c2_base_p633.npy")
-    c2_champ_path = os.path.join(base_dir, "autocorr_c2_champion.npy")
+    artifacts_dir = os.path.join(base_dir, "artifacts")
+    p13_path = os.path.join(artifacts_dir, "heilbronn_n13_champion.npy")
+    p14_path = os.path.join(artifacts_dir, "heilbronn_n14_champion.npy")
+    c2_base_path = os.path.join(artifacts_dir, "autocorr_c2_base_p633.npy")
+    c2_champ_path = os.path.join(artifacts_dir, "autocorr_c2_champion.npy")
 
     # 1. Verify Subdivision Invariance of verify_c2
     c2_p1 = verify_c2(np.array([1.0]))
@@ -472,7 +477,7 @@ def main() -> int:
     c2_champ_dec = verify_c2_high_precision_decimal(a_c2_champ)
     aut_c2_champ = autopsy_c2(a_c2_champ)
 
-    c2_p20256_path = os.path.join(base_dir, "autocorr_c2_p20256_champion.npy")
+    c2_p20256_path = os.path.join(artifacts_dir, "autocorr_c2_p20256_champion.npy")
     aut_c2_p20256 = None
     c2_p20256_flt = 0.0
     c2_p20256_dec = 0.0
@@ -488,15 +493,32 @@ def main() -> int:
         aut_c2_base = autopsy_c2(a_c2_base)
 
     # 4. Verify 50-digit exact rational certificates (10^50 denominator) if present
-    exact_1e50_path = os.path.join(base_dir, "heilbronn_13_14_exact_1e50.json")
+    exact_1e50_path = os.path.join(artifacts_dir, "heilbronn_13_14_exact_1e50.json")
     cert_1e50 = None
     lean4_dir = os.path.join(base_dir, "lean4_certificates")
     if os.path.isfile(exact_1e50_path):
         cert_1e50 = verify_heilbronn_exact_1e50_json(exact_1e50_path)
         import sys
+
+        _plugin_root = os.path.expanduser(
+            os.environ.get(
+                "DREAM_RSI_PLUGIN_DIR",
+                os.environ.get(
+                    "AUTONOMOUS_RESEARCH_PLUGIN_DIR",
+                    os.path.join(
+                        "~", ".gemini", "config", "plugins", "autonomous-research"
+                    ),
+                ),
+            )
+        )
+        _plugin_scripts = (
+            _plugin_root
+            if os.path.isfile(os.path.join(_plugin_root, "engine.py"))
+            else os.path.join(_plugin_root, "skills", "dream-rsi", "scripts")
+        )
         for _cand_dir in (
             os.path.join(base_dir, "dream_rsi_scripts"),
-            r"C:\Users\vanya\.gemini\config\plugins\autonomous-research\skills\dream-rsi\scripts",
+            _plugin_scripts,
         ):
             if os.path.isdir(_cand_dir) and _cand_dir not in sys.path:
                 sys.path.insert(0, _cand_dir)
@@ -506,21 +528,21 @@ def main() -> int:
             raw_1e50 = json.load(f10)
         pts13_int = [(int(x), int(y)) for x, y in raw_1e50["n13"]["numerators_1e50"]]
         pts14_int = [(int(x), int(y)) for x, y in raw_1e50["n14"]["numerators_1e50"]]
-        scale_50 = 10 ** 50
+        scale_50 = 10**50
         # Certify strict dominance over Stead 2026 16-digit benchmark (265565289197382 / 10^16)
         lean13 = export_lean4_certificate(
             "heilbronn_n13_beats_stead2026",
             pts13_int,
             scale_50,
             265565289197382,
-            10 ** 16,
+            10**16,
         )
         lean14 = export_lean4_certificate(
             "heilbronn_n14_beats_cantrell2007",
             pts14_int,
             scale_50,
             237757731075727,
-            10 ** 16,
+            10**16,
         )
         assert lean13["verified_exact_int"] and not lean13["has_sorry"]
         assert lean14["verified_exact_int"] and not lean14["has_sorry"]
@@ -530,16 +552,24 @@ def main() -> int:
         with open(
             os.path.join(lean4_dir, "Cert_Heilbronn_13_14.lean"), "w", encoding="utf-8"
         ) as fc:
-            fc.write(lean13["cert_lean_code"] + "\n" + lean14["cert_lean_code"].split("open LeanDAGCert\n\n", 1)[-1])
+            fc.write(
+                lean13["cert_lean_code"]
+                + "\n"
+                + lean14["cert_lean_code"].split("open LeanDAGCert\n\n", 1)[-1]
+            )
 
     # 5. Verify First Autocorrelation Inequality C_1 champion if present
-    c1_path = os.path.join(base_dir, "autocorr_c1_champion.npy")
+    c1_path = os.path.join(artifacts_dir, "autocorr_c1_champion.npy")
     c1_summary = None
     if os.path.isfile(c1_path):
         a_c1 = np.load(c1_path)
         c1_flt = verify_c1(a_c1)
-        c1_rat16, c1_dec16_str = verify_c1_exact_kronecker_fraction(a_c1, denom_power=16)
-        c1_rat50, c1_dec50_str = verify_c1_exact_kronecker_fraction(a_c1, denom_power=50)
+        c1_rat16, c1_dec16_str = verify_c1_exact_kronecker_fraction(
+            a_c1, denom_power=16
+        )
+        c1_rat50, c1_dec50_str = verify_c1_exact_kronecker_fraction(
+            a_c1, denom_power=50
+        )
         aut_c1 = autopsy_c1(a_c1)
         c1_summary = {
             "c1_float64": c1_flt,
@@ -558,7 +588,7 @@ def main() -> int:
         }
 
     # 6. Verify Third Autocorrelation Inequality Phi_3 candidate if present
-    phi3_path = os.path.join(base_dir, "phi3_best_candidate.npy")
+    phi3_path = os.path.join(artifacts_dir, "phi3_best_candidate.npy")
     phi3_summary = None
     if os.path.isfile(phi3_path):
         a_phi3 = np.load(phi3_path)
@@ -647,7 +677,8 @@ def main() -> int:
         },
         "third_autocorrelation_phi3": phi3_summary,
     }
-    json_path = os.path.join(base_dir, "extremal_champions_7_8.json")
+    os.makedirs(artifacts_dir, exist_ok=True)
+    json_path = os.path.join(artifacts_dir, "extremal_champions_7_8.json")
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(export_payload, f, indent=2)
 

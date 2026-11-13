@@ -29,21 +29,23 @@ import math
 import os
 import sys
 import time
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-LOCAL_DIR = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.abspath(__file__))
+LOCAL_DIR = os.path.dirname(HERE)
 SCRIPTS_DIR = os.path.join(LOCAL_DIR, "dream_rsi_scripts")
-for _p in (LOCAL_DIR, SCRIPTS_DIR):
+for _p in (LOCAL_DIR, SCRIPTS_DIR, HERE):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
 import engine as dream_engine  # type: ignore
-import auto_dream_rsi as adr    # type: ignore
+import auto_dream_rsi as adr  # type: ignore
 from sleep_dag_rsi import (
     CounterfactualDreamingEngine,
     DAGKnowledgeSeedingConsolidator,
@@ -56,10 +58,8 @@ from sleep_dag_rsi import (
     SleepDAGRSIOrchestrator,
     SleepLanguageModel,
     compute_r_abs,
-    compute_r_sem_numpy,
     cross_entropy_loss_and_grad,
     generalized_jsd_loss_and_grad,
-    levenshtein_distance,
     softmax_np,
 )
 
@@ -71,7 +71,9 @@ from sleep_dag_rsi import (
 
 def run_suite_1_mathematical_verifications() -> Dict[str, Any]:
     print("=" * 84)
-    print("SUITE 1: MATHEMATICAL & ARCHITECTURAL VERIFICATION OF SLEEP-DAG-RSI (9 CHECKS)")
+    print(
+        "SUITE 1: MATHEMATICAL & ARCHITECTURAL VERIFICATION OF SLEEP-DAG-RSI (9 CHECKS)"
+    )
     print("=" * 84)
     rng = np.random.default_rng(20261028)
     results: Dict[str, Any] = {}
@@ -80,7 +82,9 @@ def run_suite_1_mathematical_verifications() -> Dict[str, Any]:
     s_logits = rng.normal(0.0, 1.0, size=(2, 5, 12))
     t_logits = rng.normal(0.0, 1.0, size=(2, 5, 12))
     weights = rng.uniform(0.5, 1.5, size=(2, 5))
-    loss_0, anal_grad = generalized_jsd_loss_and_grad(s_logits, t_logits, beta=0.4, token_weights=weights)
+    loss_0, anal_grad = generalized_jsd_loss_and_grad(
+        s_logits, t_logits, beta=0.4, token_weights=weights
+    )
     eps = 1e-6
     num_grad = np.zeros_like(s_logits)
     for idx in np.ndindex(s_logits.shape):
@@ -88,12 +92,18 @@ def run_suite_1_mathematical_verifications() -> Dict[str, Any]:
         s_minus = s_logits.copy()
         s_plus[idx] += eps
         s_minus[idx] -= eps
-        l_p, _ = generalized_jsd_loss_and_grad(s_plus, t_logits, beta=0.4, token_weights=weights)
-        l_m, _ = generalized_jsd_loss_and_grad(s_minus, t_logits, beta=0.4, token_weights=weights)
+        l_p, _ = generalized_jsd_loss_and_grad(
+            s_plus, t_logits, beta=0.4, token_weights=weights
+        )
+        l_m, _ = generalized_jsd_loss_and_grad(
+            s_minus, t_logits, beta=0.4, token_weights=weights
+        )
         num_grad[idx] = (l_p - l_m) / (2.0 * eps)
     max_jsd_grad_err = float(np.max(np.abs(anal_grad - num_grad)))
     assert max_jsd_grad_err < 1e-7, f"JSD gradient error too large: {max_jsd_grad_err}"
-    print(f"  [PASS 1.1] Generalized JSD analytical vs finite-diff gradient max_err = {max_jsd_grad_err:.2e} (< 1e-7)")
+    print(
+        f"  [PASS 1.1] Generalized JSD analytical vs finite-diff gradient max_err = {max_jsd_grad_err:.2e} (< 1e-7)"
+    )
     results["jsd_grad_max_err"] = max_jsd_grad_err
 
     # Check 1.2: Analytical vs Finite-Difference Gradient of LowRankExpert {A, B}
@@ -114,7 +124,9 @@ def run_suite_1_mathematical_verifications() -> Dict[str, Any]:
         num_grad_A[idx] = (f_p - f_m) / (2.0 * eps)
     max_lre_err = float(np.max(np.abs(lre.grad_A - num_grad_A)))
     assert max_lre_err < 1e-7, f"LowRankExpert grad_A error: {max_lre_err}"
-    print(f"  [PASS 1.2] LowRankExpert {{A, B}} analytical vs finite-diff grad max_err = {max_lre_err:.2e} (< 1e-7)")
+    print(
+        f"  [PASS 1.2] LowRankExpert {{A, B}} analytical vs finite-diff grad max_err = {max_lre_err:.2e} (< 1e-7)"
+    )
     results["low_rank_grad_max_err"] = max_lre_err
 
     # Check 1.3: Analytical vs Finite-Difference Gradient of LoRALinearWrapper
@@ -136,23 +148,31 @@ def run_suite_1_mathematical_verifications() -> Dict[str, Any]:
         num_lora_A[idx] = (f_p - f_m) / (2.0 * eps)
     max_lora_err = float(np.max(np.abs(lora.grad_A - num_lora_A)))
     assert max_lora_err < 1e-7, f"LoRA grad_A error: {max_lora_err}"
-    print(f"  [PASS 1.3] LoRALinearWrapper analytical vs finite-diff grad max_err = {max_lora_err:.2e} (< 1e-7)")
+    print(
+        f"  [PASS 1.3] LoRALinearWrapper analytical vs finite-diff grad max_err = {max_lora_err:.2e} (< 1e-7)"
+    )
     results["lora_grad_max_err"] = max_lora_err
 
     # Check 1.4: HOPE DeltaRuleFastMemory Associative Error Convergence & Step-by-Step Equivalence
     fast_mem = DeltaRuleFastMemory(d_model=16, rng=rng)
-    fast_mem.b_alpha = np.full((1,), 20.0)  # alpha -> 1.0 (no forgetting on repeated key)
-    fast_mem.b_beta = np.full((1,), 10.0)   # beta -> write_Scale = 0.85
+    fast_mem.b_alpha = np.full(
+        (1,), 20.0
+    )  # alpha -> 1.0 (no forgetting on repeated key)
+    fast_mem.b_beta = np.full((1,), 10.0)  # beta -> write_Scale = 0.85
     single_token = rng.normal(0.0, 1.0, size=(1, 1, 16))
     repeated_seq = np.repeat(single_token, repeats=10, axis=1)  # [1, 8, 16]
     out_full, m_full, err_norms = fast_mem.forward(repeated_seq, write_Scale=0.85)
     # Verify error ||v_0 - M_{t-1} k_0||_2 decays exponentially as (1 - beta)^t
-    assert err_norms[-1] < 1e-5 * err_norms[0], f"Delta rule failed to converge: {err_norms}"
+    assert err_norms[-1] < 1e-5 * err_norms[0], (
+        f"Delta rule failed to converge: {err_norms}"
+    )
     # Verify step-by-step streaming matches full sequence forward
     m_step = None
     step_outs = []
     for t in range(10):
-        o_t, m_step, _ = fast_mem.forward(repeated_seq[:, t : t + 1, :], memory_state=m_step, write_Scale=0.85)
+        o_t, m_step, _ = fast_mem.forward(
+            repeated_seq[:, t : t + 1, :], memory_state=m_step, write_Scale=0.85
+        )
         step_outs.append(o_t)
     out_stream = np.concatenate(step_outs, axis=1)
     stream_diff = float(np.max(np.abs(out_full - out_stream)))
@@ -168,14 +188,18 @@ def run_suite_1_mathematical_verifications() -> Dict[str, Any]:
     # Check 1.5: LTI Levenshtein (Eq. 4) & Semantic Reward (Eq. 3)
     d_ref = [1, 2, 3, 4, 5, 6, 7, 8]
     d_near = [1, 2, 3, 9, 5, 6, 7, 8]  # distance 1 -> r_abs = 1 - 1/8 = 0.875
-    d_far = [9, 9, 9, 9, 9, 9, 9, 9]   # distance 8 > z0=3 -> r_abs = 0.0
+    d_far = [9, 9, 9, 9, 9, 9, 9, 9]  # distance 8 > z0=3 -> r_abs = 0.0
     r_near = compute_r_abs(d_near, d_ref, z0=3)
     r_far = compute_r_abs(d_far, d_ref, z0=3)
     assert abs(r_near - 0.875) < 1e-9 and r_far == 0.0
-    print(f"  [PASS 1.5] LTI Levenshtein reward Eq. (4): r_abs(dist=1)={r_near:.3f}, r_abs(dist=8>z0)={r_far:.1f}")
+    print(
+        f"  [PASS 1.5] LTI Levenshtein reward Eq. (4): r_abs(dist=1)={r_near:.3f}, r_abs(dist=8>z0)={r_far:.1f}"
+    )
 
     # Check 1.6: CMS Exact C^(l) Period Accumulation & Compute->Consolidate->Update Freeze Invariance
-    cfg = SleepDAGConfig(vocab_size=32, d_model=16, d_ff=32, d_low=4, cms_update_periods=(2, 4, 8))
+    cfg = SleepDAGConfig(
+        vocab_size=32, d_model=16, d_ff=32, d_low=4, cms_update_periods=(2, 4, 8)
+    )
     model = SleepLanguageModel(cfg, seed=101)
     consolidator = DAGKnowledgeSeedingConsolidator(cfg)
     batch = rng.integers(1, 30, size=(4, 10))
@@ -183,7 +207,9 @@ def run_suite_1_mathematical_verifications() -> Dict[str, Any]:
     slow_base_w1_before = model.cms_blocks[1].base_experts[0].w1.copy()
     # Unlock first low-rank expert in slow block 1 manually and freeze it to test second unlock invariance
     first_lr_idx = model.cms_blocks[1].unlock_new_low_rank_expert(
-        ExpertFingerprintMeta(expert_slot=2, source_node_id="n0", pass_mask=[1, 1, 0, 0])
+        ExpertFingerprintMeta(
+            expert_slot=2, source_node_id="n0", pass_mask=[1, 1, 0, 0]
+        )
     )
     first_lr_A_before = model.cms_blocks[1].low_rank_experts[first_lr_idx].A.copy()
     # Unlock temporary expert in fast block 0
@@ -211,10 +237,22 @@ def run_suite_1_mathematical_verifications() -> Dict[str, Any]:
     # Verify: (1) fast block 0 temporary experts pruned (num_unlocked_low_rank == 0)
     #         (2) slow block 1 base experts and first low-rank expert untouched (0.0 drift)
     #         (3) slow block 1 second low-rank expert updated
-    assert model.cms_blocks[0].num_unlocked_low_rank == 0, "Fast temporary experts were not pruned!"
-    base_drift = float(np.max(np.abs(model.cms_blocks[1].base_experts[0].w1 - slow_base_w1_before)))
-    first_lr_drift = float(np.max(np.abs(model.cms_blocks[1].low_rank_experts[first_lr_idx].A - first_lr_A_before)))
-    assert base_drift == 0.0 and first_lr_drift == 0.0, f"Frozen weights drifted: {base_drift}, {first_lr_drift}"
+    assert model.cms_blocks[0].num_unlocked_low_rank == 0, (
+        "Fast temporary experts were not pruned!"
+    )
+    base_drift = float(
+        np.max(np.abs(model.cms_blocks[1].base_experts[0].w1 - slow_base_w1_before))
+    )
+    first_lr_drift = float(
+        np.max(
+            np.abs(
+                model.cms_blocks[1].low_rank_experts[first_lr_idx].A - first_lr_A_before
+            )
+        )
+    )
+    assert base_drift == 0.0 and first_lr_drift == 0.0, (
+        f"Frozen weights drifted: {base_drift}, {first_lr_drift}"
+    )
     print(
         f"  [PASS 1.6] Compute->Consolidate->Update invariance: frozen_base_drift={base_drift:.1e}, "
         f"prior_expert_drift={first_lr_drift:.1e}, fast_pruned={model.cms_blocks[0].num_unlocked_low_rank == 0}"
@@ -228,32 +266,81 @@ def run_suite_1_mathematical_verifications() -> Dict[str, Any]:
     #   e2 (AST collision):   pass_mask = [0, 0, 0, 1, 0, 0], ast = {"solve_gram"}    -> high AST collision!
     #   e3 (complementary):   pass_mask = [0, 0, 0, 1, 1, 1], ast = {"cholesky_step"} -> +50% union gain, 0 collision!
     s0 = blk.num_base + blk.unlock_new_low_rank_expert(
-        ExpertFingerprintMeta(expert_slot=0, source_node_id="e0_anchor", pass_mask=[1, 1, 1, 0, 0, 0], ast_symbols={"solve_gram"})
+        ExpertFingerprintMeta(
+            expert_slot=0,
+            source_node_id="e0_anchor",
+            pass_mask=[1, 1, 1, 0, 0, 0],
+            ast_symbols={"solve_gram"},
+        )
     )
     s1 = blk.num_base + blk.unlock_new_low_rank_expert(
-        ExpertFingerprintMeta(expert_slot=0, source_node_id="e1_clone", pass_mask=[1, 1, 1, 0, 0, 0], ast_symbols={"solve_gram_v2"})
+        ExpertFingerprintMeta(
+            expert_slot=0,
+            source_node_id="e1_clone",
+            pass_mask=[1, 1, 1, 0, 0, 0],
+            ast_symbols={"solve_gram_v2"},
+        )
     )
     s2 = blk.num_base + blk.unlock_new_low_rank_expert(
-        ExpertFingerprintMeta(expert_slot=0, source_node_id="e2_collide", pass_mask=[0, 0, 0, 1, 0, 0], ast_symbols={"solve_gram"})
+        ExpertFingerprintMeta(
+            expert_slot=0,
+            source_node_id="e2_collide",
+            pass_mask=[0, 0, 0, 1, 0, 0],
+            ast_symbols={"solve_gram"},
+        )
     )
     s3 = blk.num_base + blk.unlock_new_low_rank_expert(
-        ExpertFingerprintMeta(expert_slot=0, source_node_id="e3_comp", pass_mask=[0, 0, 0, 1, 1, 1], ast_symbols={"cholesky_step"})
+        ExpertFingerprintMeta(
+            expert_slot=0,
+            source_node_id="e3_comp",
+            pass_mask=[0, 0, 0, 1, 1, 1],
+            ast_symbols={"cholesky_step"},
+        )
     )
     comp = blk.select_complementary_crossover_experts()
     assert comp is not None
     sel_u, sel_v, exc_gain = comp
-    assert {sel_u, sel_v} == {s0, s3} and abs(exc_gain - 0.5) < 1e-6, f"Expected ({s0}, {s3}), got {comp}"
+    assert {sel_u, sel_v} == {s0, s3} and abs(exc_gain - 0.5) < 1e-6, (
+        f"Expected ({s0}, {s3}), got {comp}"
+    )
     print(
         f"  [PASS 1.7] Bridge 2 Error-Fingerprint MoE Router skips clone (slot {s1}) & AST-collider (slot {s2}), "
         f"selects complementary slots ({sel_u}, {sel_v}) with excess_gain=+{exc_gain:.4f}"
     )
 
     # Check 1.8: Bridge 1 — DAG-Masked Knowledge Seeding filters out dead-end branches
-    dag_tree = dream_engine.DiscoveryTree(task="test_dag_mask", baseline_score=50.0, max_parallelism=3)
-    dag_tree.add(dream_engine.Node(id="root", parent_id=None, branch=-1, attempt=0, score=50.0))
-    dag_tree.add(dream_engine.Node(id="b0_win", parent_id="root", branch=0, attempt=1, score=90.0))
-    dag_tree.add(dream_engine.Node(id="b1_dead_trap", parent_id="root", branch=1, attempt=1, score=20.0, fail_class="algorithmic_failure"))
-    dag_tree.add(dream_engine.Node(id="b2_syntax_err", parent_id="root", branch=2, attempt=1, score=0.0, fail_class="syntax_error", error="SyntaxError"))
+    dag_tree = dream_engine.DiscoveryTree(
+        task="test_dag_mask", baseline_score=50.0, max_parallelism=3
+    )
+    dag_tree.add(
+        dream_engine.Node(id="root", parent_id=None, branch=-1, attempt=0, score=50.0)
+    )
+    dag_tree.add(
+        dream_engine.Node(
+            id="b0_win", parent_id="root", branch=0, attempt=1, score=90.0
+        )
+    )
+    dag_tree.add(
+        dream_engine.Node(
+            id="b1_dead_trap",
+            parent_id="root",
+            branch=1,
+            attempt=1,
+            score=20.0,
+            fail_class="algorithmic_failure",
+        )
+    )
+    dag_tree.add(
+        dream_engine.Node(
+            id="b2_syntax_err",
+            parent_id="root",
+            branch=2,
+            attempt=1,
+            score=0.0,
+            fail_class="syntax_error",
+            error="SyntaxError",
+        )
+    )
     sft_m = dream_engine.export_masked_sft_dataset(dag_tree)
     dpo_m = dream_engine.export_dag_dpo_pairs(dag_tree)
     assert sft_m["supported_node_ids"] == ["b0_win"] and len(dpo_m["dpo_pairs"]) == 2
@@ -265,10 +352,19 @@ def run_suite_1_mathematical_verifications() -> Dict[str, Any]:
     # Check 1.9: Bridge 3 & 4 — Counterfactual Filter + Flat-Plateau Spike Rejection + 2x2 Gate
     dreamer = CounterfactualDreamingEngine(cfg)
     _, _, passed_spike = dreamer.lora_finetune_and_evaluate(
-        model, batch[:1], evaluator_fn=lambda m: 1.0, base_score=0.5, check_flat_plateau=True, dream_is_sharp_spike=True
+        model,
+        batch[:1],
+        evaluator_fn=lambda m: 1.0,
+        base_score=0.5,
+        check_flat_plateau=True,
+        dream_is_sharp_spike=True,
     )
-    assert not passed_spike, "Sharp needle spike dream should be rejected by flat-plateau gate!"
-    print("  [PASS 1.9] Bridge 3 Flat-Plateau Gate rejects sharp-spike dream (r_dream=0 despite raw train gain)")
+    assert not passed_spike, (
+        "Sharp needle spike dream should be rejected by flat-plateau gate!"
+    )
+    print(
+        "  [PASS 1.9] Bridge 3 Flat-Plateau Gate rejects sharp-spike dream (r_dream=0 despite raw train gain)"
+    )
     print("-" * 84)
     return results
 
@@ -283,7 +379,14 @@ def build_domain_discovery_dataset(
     domain_idx: int,
     vocab_size: int = 64,
     seq_len: int = 12,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, dream_engine.DiscoveryTree, List[str], ExpertFingerprintMeta]:
+) -> Tuple[
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    dream_engine.DiscoveryTree,
+    List[str],
+    ExpertFingerprintMeta,
+]:
     """
     Constructs a structured algorithmic discovery domain D_k (k in 0..4):
       - Each domain has a distinct prompt prefix signature and two kinds of continuations
@@ -298,16 +401,28 @@ def build_domain_discovery_dataset(
           traj_node_ids: ['b0_win', 'b1_xover_win', 'b2_trap', 'b3_bug']
           fingerprint_meta: ExpertFingerprintMeta for the newly unlocked MoE expert
     """
-    base_tok = 4 + domain_idx * 11  # non-overlapping token bands per domain: [4..14], [15..25], ...
-    prefix = np.array([base_tok, base_tok + 1, base_tok + 2, base_tok + 3], dtype=np.int64)
+    base_tok = (
+        4 + domain_idx * 11
+    )  # non-overlapping token bands per domain: [4..14], [15..25], ...
+    prefix = np.array(
+        [base_tok, base_tok + 1, base_tok + 2, base_tok + 3], dtype=np.int64
+    )
 
     # Winning continuation tokens: [base_tok+4 .. base_tok+7] repeated twice
-    win_cont_1 = np.array([base_tok + 4, base_tok + 5, base_tok + 6, base_tok + 7] * 2, dtype=np.int64)
-    win_cont_2 = np.array([base_tok + 5, base_tok + 4, base_tok + 6, base_tok + 7] * 2, dtype=np.int64)
+    win_cont_1 = np.array(
+        [base_tok + 4, base_tok + 5, base_tok + 6, base_tok + 7] * 2, dtype=np.int64
+    )
+    win_cont_2 = np.array(
+        [base_tok + 5, base_tok + 4, base_tok + 6, base_tok + 7] * 2, dtype=np.int64
+    )
 
     # Dead-end / trap continuation tokens: [base_tok+8 .. base_tok+10]
-    trap_cont_1 = np.array([base_tok + 8, base_tok + 9, base_tok + 8, base_tok + 9] * 2, dtype=np.int64)
-    trap_cont_2 = np.array([base_tok + 10, base_tok + 9, base_tok + 10, base_tok + 8] * 2, dtype=np.int64)
+    trap_cont_1 = np.array(
+        [base_tok + 8, base_tok + 9, base_tok + 8, base_tok + 9] * 2, dtype=np.int64
+    )
+    trap_cont_2 = np.array(
+        [base_tok + 10, base_tok + 9, base_tok + 10, base_tok + 8] * 2, dtype=np.int64
+    )
 
     seq_win_1 = np.concatenate([prefix, win_cont_1])
     seq_win_2 = np.concatenate([prefix, win_cont_2])
@@ -316,12 +431,25 @@ def build_domain_discovery_dataset(
 
     # Notice that in realistic exploration, dead ends are at least as frequent as breakthroughs
     # (here 3 dead-end / sub-optimal rollouts vs 2 winning rollouts in the wake buffer)
-    wake_all_seqs = np.stack([seq_win_1, seq_win_2, seq_trap_1, seq_trap_2, seq_trap_1], axis=0)
+    wake_all_seqs = np.stack(
+        [seq_win_1, seq_win_2, seq_trap_1, seq_trap_2, seq_trap_1], axis=0
+    )
     win_eval_seqs = np.stack([seq_win_1, seq_win_2], axis=0)
     trap_eval_seqs = np.stack([seq_trap_1, seq_trap_2], axis=0)
 
-    tree = dream_engine.DiscoveryTree(task=f"domain_{domain_idx}", baseline_score=50.0, max_parallelism=4)
-    tree.add(dream_engine.Node(id="root", parent_id=None, branch=-1, attempt=0, score=50.0, pass_mask=[1, 0, 0, 0, 0]))
+    tree = dream_engine.DiscoveryTree(
+        task=f"domain_{domain_idx}", baseline_score=50.0, max_parallelism=4
+    )
+    tree.add(
+        dream_engine.Node(
+            id="root",
+            parent_id=None,
+            branch=-1,
+            attempt=0,
+            score=50.0,
+            pass_mask=[1, 0, 0, 0, 0],
+        )
+    )
     tree.add(
         dream_engine.Node(
             id="b0_win",
@@ -330,7 +458,10 @@ def build_domain_discovery_dataset(
             attempt=1,
             score=82.0 + domain_idx,
             pass_mask=[1, 1, 1, 0, 0],
-            meta={"stage": "round1_parallel_seed", "artifact_hash": f"h_{domain_idx}_0"},
+            meta={
+                "stage": "round1_parallel_seed",
+                "artifact_hash": f"h_{domain_idx}_0",
+            },
         )
     )
     tree.add(
@@ -407,7 +538,9 @@ def evaluate_domain_metrics(
     prefixes = win_seqs[:, :prefix_len]
     n_rep = (win_seqs.shape[1] // prefix_len) + 1
     prefix_inputs = np.tile(prefixes, (1, n_rep))[:, : win_seqs.shape[1] - 1]
-    logits, _, _ = model.forward(prefix_inputs, dream_mode="none", forced_slow_slot=forced_slot)
+    logits, _, _ = model.forward(
+        prefix_inputs, dream_mode="none", forced_slow_slot=forced_slot
+    )
     probs = softmax_np(logits[:, prefix_len - 1 :, :], axis=-1)  # [B, T_cont, V]
 
     win_targets = win_seqs[:, prefix_len:]
@@ -422,11 +555,13 @@ def evaluate_domain_metrics(
     # Sum probability over the domain's winning token set vs trap token set at each position
     win_tok_set = np.unique(win_targets)
     trap_tok_set = np.unique(trap_targets)
-    mass_win = np.sum(probs[:, :, win_tok_set], axis=-1)    # [B, T_c]
+    mass_win = np.sum(probs[:, :, win_tok_set], axis=-1)  # [B, T_c]
     mass_trap = np.sum(probs[:, :, trap_tok_set], axis=-1)  # [B, T_c]
 
     rel_win_share = float(np.mean(mass_win / (mass_win + mass_trap + 1e-9))) * 100.0
-    trap_contamination = float(np.mean(mass_trap / (mass_win + mass_trap + 1e-9))) * 100.0
+    trap_contamination = (
+        float(np.mean(mass_trap / (mass_win + mass_trap + 1e-9))) * 100.0
+    )
     pref_acc = float(np.mean((mass_win > mass_trap).astype(np.float64))) * 100.0
     tau = float(np.mean(np.log((p_win + 1e-6) / (p_trap + 1e-6))))
 
@@ -440,7 +575,9 @@ def evaluate_domain_metrics(
 
 def run_suite_2_continual_learning_experiment() -> Dict[str, Any]:
     print("=" * 84)
-    print("SUITE 2 (EXPERIMENT 1): CONTINUAL MULTI-DOMAIN DISCOVERY & CATASTROPHIC FORGETTING")
+    print(
+        "SUITE 2 (EXPERIMENT 1): CONTINUAL MULTI-DOMAIN DISCOVERY & CATASTROPHIC FORGETTING"
+    )
     print("Comparing 4 Architectures across 5 Sequential Algorithmic Domains (3 Seeds)")
     print("=" * 84)
 
@@ -484,14 +621,19 @@ def run_suite_2_continual_learning_experiment() -> Dict[str, Any]:
                 consolidation_steps=12,
             )
             orch = SleepDAGRSIOrchestrator(cfg=cfg, seed=seed)
-            diag_after_each: List[float] = []  # accuracy on domain d right after learning d
+            diag_after_each: List[
+                float
+            ] = []  # accuracy on domain d right after learning d
             d1_curve: List[float] = []
 
             for d_idx in range(n_domains):
-                wake_seqs, win_seqs, trap_seqs, tree, traj_ids, fp_meta = domains_data[d_idx]
+                wake_seqs, win_seqs, trap_seqs, tree, traj_ids, fp_meta = domains_data[
+                    d_idx
+                ]
 
                 if m_key == "wake_only_sft":
                     from sleep_dag_rsi import rms_step
+
                     # Standard continual SFT directly on dense base experts (trained on winning sequences of current domain,
                     # overwriting shared base MLP parameters and causing Catastrophic Forgetting of previous domains)
                     prefixes_w = wake_seqs[:, :4]
@@ -499,7 +641,9 @@ def run_suite_2_continual_learning_experiment() -> Dict[str, Any]:
                     for _ in range(cfg.consolidation_steps):
                         orch.model.zero_grad()
                         logits, _, _ = orch.model.forward(p_in_w)
-                        _, grad_l = cross_entropy_loss_and_grad(logits, wake_seqs[:, 1:])
+                        _, grad_l = cross_entropy_loss_and_grad(
+                            logits, wake_seqs[:, 1:]
+                        )
                         orch.model.backward(grad_l)
                         for blk in orch.model.cms_blocks:
                             for be in blk.base_experts:
@@ -508,10 +652,12 @@ def run_suite_2_continual_learning_experiment() -> Dict[str, Any]:
                 else:
                     use_mask = m_key in ("sleep_dag_no_replay", "sleep_dag_rsi_full")
                     use_rep = m_key in ("vanilla_sleep_unmasked", "sleep_dag_rsi_full")
-                    use_fp = (m_key == "sleep_dag_rsi_full")
-                    use_cf = (m_key == "sleep_dag_rsi_full")
+                    use_fp = m_key == "sleep_dag_rsi_full"
+                    use_cf = m_key == "sleep_dag_rsi_full"
 
-                    def eval_ret(mod: SleepLanguageModel, _w=win_seqs, _t=trap_seqs) -> float:
+                    def eval_ret(
+                        mod: SleepLanguageModel, _w=win_seqs, _t=trap_seqs
+                    ) -> float:
                         return evaluate_domain_metrics(mod, _w, _t)["tau"]
 
                     orch.run_wake_sleep_cycle(
@@ -545,9 +691,15 @@ def run_suite_2_continual_learning_experiment() -> Dict[str, Any]:
                 final_shares.append(m_d["win_share_pct"])
                 final_traps.append(m_d["trap_contamination_pct"])
 
-            bwt = float(np.mean([final_shares[d] - diag_after_each[d] for d in range(n_domains - 1)]))
+            bwt = float(
+                np.mean(
+                    [final_shares[d] - diag_after_each[d] for d in range(n_domains - 1)]
+                )
+            )
             for step_i in range(n_domains):
-                agg[m_key]["d1_retention_curve"][step_i] += d1_curve[step_i] / len(seeds)
+                agg[m_key]["d1_retention_curve"][step_i] += d1_curve[step_i] / len(
+                    seeds
+                )
             agg[m_key]["final_avg_win_share"].append(float(np.mean(final_shares)))
             agg[m_key]["final_d1_win_share"].append(final_shares[0])
             agg[m_key]["final_trap_contamination"].append(float(np.mean(final_traps)))
@@ -590,8 +742,12 @@ def run_suite_2_continual_learning_experiment() -> Dict[str, Any]:
 
 def run_suite_3_dreaming_crossover_experiment() -> Dict[str, Any]:
     print("=" * 84)
-    print("SUITE 3 (EXPERIMENT 2): REM DREAMING — RANDOM MoE EXPERT vs ERROR-FINGERPRINT CROSSOVER")
-    print("Evaluating across 30 Multi-Branch Discovery Worlds with Clones, AST Collisions & Spikes")
+    print(
+        "SUITE 3 (EXPERIMENT 2): REM DREAMING — RANDOM MoE EXPERT vs ERROR-FINGERPRINT CROSSOVER"
+    )
+    print(
+        "Evaluating across 30 Multi-Branch Discovery Worlds with Clones, AST Collisions & Spikes"
+    )
     print("=" * 84)
 
     n_worlds = 30
@@ -625,30 +781,69 @@ def run_suite_3_dreaming_crossover_experiment() -> Dict[str, Any]:
         #   - 2 Clone experts (also cover buckets 0..3 -> 0 union gain)
         #   - 1 AST-Colliding expert (covers bucket 4, but collides 100% on AST symbols)
         #   - 1 True Complementary expert (covers buckets 4..7, disjoint AST -> +50% union gain!)
-        cfg = SleepDAGConfig(vocab_size=48, d_model=24, d_ff=48, d_low=6, num_candidate_dreams=10, top_k_dreams=3, random_b_dreams=1)
+        cfg = SleepDAGConfig(
+            vocab_size=48,
+            d_model=24,
+            d_ff=48,
+            d_low=6,
+            num_candidate_dreams=10,
+            top_k_dreams=3,
+            random_b_dreams=1,
+        )
         base_model = SleepLanguageModel(cfg, seed=500 + w_idx)
         slow_blk = base_model.cms_blocks[1]
 
         s_anchor = slow_blk.num_base + slow_blk.unlock_new_low_rank_expert(
-            ExpertFingerprintMeta(expert_slot=0, source_node_id="anchor", pass_mask=[1, 1, 1, 1, 0, 0, 0, 0], ast_symbols={"core_loop"})
+            ExpertFingerprintMeta(
+                expert_slot=0,
+                source_node_id="anchor",
+                pass_mask=[1, 1, 1, 1, 0, 0, 0, 0],
+                ast_symbols={"core_loop"},
+            )
         )
         s_clone1 = slow_blk.num_base + slow_blk.unlock_new_low_rank_expert(
-            ExpertFingerprintMeta(expert_slot=0, source_node_id="clone1", pass_mask=[1, 1, 1, 1, 0, 0, 0, 0], ast_symbols={"core_loop_v1"})
+            ExpertFingerprintMeta(
+                expert_slot=0,
+                source_node_id="clone1",
+                pass_mask=[1, 1, 1, 1, 0, 0, 0, 0],
+                ast_symbols={"core_loop_v1"},
+            )
         )
         s_clone2 = slow_blk.num_base + slow_blk.unlock_new_low_rank_expert(
-            ExpertFingerprintMeta(expert_slot=0, source_node_id="clone2", pass_mask=[1, 1, 1, 0, 0, 0, 0, 0], ast_symbols={"core_loop_v2"})
+            ExpertFingerprintMeta(
+                expert_slot=0,
+                source_node_id="clone2",
+                pass_mask=[1, 1, 1, 0, 0, 0, 0, 0],
+                ast_symbols={"core_loop_v2"},
+            )
         )
         s_collide = slow_blk.num_base + slow_blk.unlock_new_low_rank_expert(
-            ExpertFingerprintMeta(expert_slot=0, source_node_id="collide", pass_mask=[0, 0, 0, 0, 1, 0, 0, 0], ast_symbols={"core_loop"})
+            ExpertFingerprintMeta(
+                expert_slot=0,
+                source_node_id="collide",
+                pass_mask=[0, 0, 0, 0, 1, 0, 0, 0],
+                ast_symbols={"core_loop"},
+            )
         )
         s_comp = slow_blk.num_base + slow_blk.unlock_new_low_rank_expert(
-            ExpertFingerprintMeta(expert_slot=0, source_node_id="comp", pass_mask=[0, 0, 0, 0, 1, 1, 1, 1], ast_symbols={"simd_kernel"})
+            ExpertFingerprintMeta(
+                expert_slot=0,
+                source_node_id="comp",
+                pass_mask=[0, 0, 0, 0, 1, 1, 1, 1],
+                ast_symbols={"simd_kernel"},
+            )
         )
 
         # Target hybrid sequence combines prefix [2,3,4,5] with first half from anchor [10..13] and second half from comp [20..23]
-        seed_a = np.array([[2, 3, 4, 5, 10, 11, 12, 13, 10, 11, 12, 13]], dtype=np.int64)
-        seed_b = np.array([[2, 3, 4, 5, 20, 21, 22, 23, 20, 21, 22, 23]], dtype=np.int64)
-        target_hybrid = np.array([[2, 3, 4, 5, 10, 11, 12, 13, 20, 21, 22, 23]], dtype=np.int64)
+        seed_a = np.array(
+            [[2, 3, 4, 5, 10, 11, 12, 13, 10, 11, 12, 13]], dtype=np.int64
+        )
+        seed_b = np.array(
+            [[2, 3, 4, 5, 20, 21, 22, 23, 20, 21, 22, 23]], dtype=np.int64
+        )
+        target_hybrid = np.array(
+            [[2, 3, 4, 5, 10, 11, 12, 13, 20, 21, 22, 23]], dtype=np.int64
+        )
         context_seeds = np.concatenate([seed_a, seed_b], axis=0)
 
         def eval_hybrid(mod: SleepLanguageModel, _targ=target_hybrid) -> float:
@@ -678,11 +873,15 @@ def run_suite_3_dreaming_crossover_experiment() -> Dict[str, Any]:
             use_counterfactual_filter=False,
             target_slow_block_idx=1,
         )
-        metrics["vanilla_sleep_random_moe"]["verifier_calls_used"] += rep_van["lora_verifier_calls"]
+        metrics["vanilla_sleep_random_moe"]["verifier_calls_used"] += rep_van[
+            "lora_verifier_calls"
+        ]
         # In Vanilla SLEEP without counterfactual/flat-plateau filtering, the high-gradient spike candidate
         # is always selected into top-k and causes a spike leak whenever evaluated without plateau check
         metrics["vanilla_sleep_random_moe"]["sharp_spike_leaks"] += 1
-        metrics["vanilla_sleep_random_moe"]["post_dream_scores"].append(rep_van["post_dream_tau"])
+        metrics["vanilla_sleep_random_moe"]["post_dream_scores"].append(
+            rep_van["post_dream_tau"]
+        )
 
         # 3. SLEEP-DAG-RSI Dreaming (Fingerprint MoE Crossover + Counterfactual Filter + Flat-Plateau Gate)
         m_dag = base_model.clone()
@@ -700,9 +899,13 @@ def run_suite_3_dreaming_crossover_experiment() -> Dict[str, Any]:
             use_counterfactual_filter=True,
             target_slow_block_idx=1,
         )
-        metrics["sleep_dag_rsi_guided_moe"]["verifier_calls_used"] += rep_dag["lora_verifier_calls"]
+        metrics["sleep_dag_rsi_guided_moe"]["verifier_calls_used"] += rep_dag[
+            "lora_verifier_calls"
+        ]
         metrics["sleep_dag_rsi_guided_moe"]["sharp_spike_leaks"] += 0
-        metrics["sleep_dag_rsi_guided_moe"]["post_dream_scores"].append(rep_dag["post_dream_tau"])
+        metrics["sleep_dag_rsi_guided_moe"]["post_dream_scores"].append(
+            rep_dag["post_dream_tau"]
+        )
 
     summary_exp2: Dict[str, Any] = {}
     print(
@@ -710,7 +913,9 @@ def run_suite_3_dreaming_crossover_experiment() -> Dict[str, Any]:
     )
     print("-" * 98)
     for m_key in modes:
-        comp_rate = (metrics[m_key]["complementary_pair_hits"] / float(n_worlds)) * 100.0
+        comp_rate = (
+            metrics[m_key]["complementary_pair_hits"] / float(n_worlds)
+        ) * 100.0
         spike_rate = (metrics[m_key]["sharp_spike_leaks"] / float(n_worlds)) * 100.0
         mean_sc = float(np.mean(metrics[m_key]["post_dream_scores"]))
         std_sc = float(np.std(metrics[m_key]["post_dream_scores"]))
@@ -744,9 +949,15 @@ def encode_tree_into_sequences(
     into token trajectories for `SleepDAGRSIOrchestrator` parametric consolidation.
     """
     base_tok = 4 + cartridge_idx * 12
-    prefix = np.array([base_tok, base_tok + 1, base_tok + 2, base_tok + 3], dtype=np.int64)
-    win_cont = np.array([base_tok + 4, base_tok + 5, base_tok + 6, base_tok + 7] * 2, dtype=np.int64)
-    trap_cont = np.array([base_tok + 8, base_tok + 9, base_tok + 10, base_tok + 11] * 2, dtype=np.int64)
+    prefix = np.array(
+        [base_tok, base_tok + 1, base_tok + 2, base_tok + 3], dtype=np.int64
+    )
+    win_cont = np.array(
+        [base_tok + 4, base_tok + 5, base_tok + 6, base_tok + 7] * 2, dtype=np.int64
+    )
+    trap_cont = np.array(
+        [base_tok + 8, base_tok + 9, base_tok + 10, base_tok + 11] * 2, dtype=np.int64
+    )
 
     ordered = [n for nid, n in tree.nodes.items() if nid != tree.root_id]
     seqs: List[np.ndarray] = []
@@ -764,7 +975,11 @@ def encode_tree_into_sequences(
     win_eval = np.stack([np.concatenate([prefix, win_cont])], axis=0)
     trap_eval = np.stack([np.concatenate([prefix, trap_cont])], axis=0)
 
-    pm = list(best_node.pass_mask) if best_node.pass_mask else [1 if j % 4 == cartridge_idx else 0 for j in range(8)]
+    pm = (
+        list(best_node.pass_mask)
+        if best_node.pass_mask
+        else [1 if j % 4 == cartridge_idx else 0 for j in range(8)]
+    )
     fp_meta = ExpertFingerprintMeta(
         expert_slot=0,
         source_node_id=f"{tree.task}_{best_node.id}",
@@ -779,8 +994,12 @@ def encode_tree_into_sequences(
 
 def run_suite_4_live_cartridges_integration() -> Dict[str, Any]:
     print("=" * 84)
-    print("SUITE 4 (EXPERIMENT 3): LIVE END-TO-END COUPLED RUN ON ALL 8 REAL CARTRIDGES")
-    print("Coupling AutoDreamRunner (DAG Discovery) -> SleepDAGRSIOrchestrator (CMS Consolidation & REM Dreaming)")
+    print(
+        "SUITE 4 (EXPERIMENT 3): LIVE END-TO-END COUPLED RUN ON ALL 8 REAL CARTRIDGES"
+    )
+    print(
+        "Coupling AutoDreamRunner (DAG Discovery) -> SleepDAGRSIOrchestrator (CMS Consolidation & REM Dreaming)"
+    )
     print("=" * 84)
 
     cartridges = [
@@ -794,14 +1013,23 @@ def run_suite_4_live_cartridges_integration() -> Dict[str, Any]:
         adr.build_open_autocorrelation_c2_cartridge(),
     ]
 
-    cfg = SleepDAGConfig(vocab_size=112, d_model=32, d_ff=64, d_low=8, max_low_rank_experts=16, consolidation_steps=12)
+    cfg = SleepDAGConfig(
+        vocab_size=112,
+        d_model=32,
+        d_ff=64,
+        d_low=8,
+        max_low_rank_experts=16,
+        consolidation_steps=12,
+    )
     orch = SleepDAGRSIOrchestrator(cfg=cfg, seed=2026)
 
     live_records: List[Dict[str, Any]] = []
     domain_eval_sets: List[Tuple[str, np.ndarray, np.ndarray]] = []
 
     for c_idx, cart in enumerate(cartridges):
-        import tempfile, shutil
+        import tempfile
+        import shutil
+
         t0 = time.perf_counter()
         tmp_pool = tempfile.mkdtemp(prefix=f"s4_pool_{cart.task_name}_")
         runner = adr.AutoDreamRunner(cart, pool_dir=tmp_pool)
@@ -811,7 +1039,9 @@ def run_suite_4_live_cartridges_integration() -> Dict[str, Any]:
         assert loaded_trees, f"No tree saved for {cart.task_name}"
         dag_tree = loaded_trees[-1]
 
-        wake_seqs, win_eval, trap_eval, node_ids, fp_meta = encode_tree_into_sequences(dag_tree, c_idx)
+        wake_seqs, win_eval, trap_eval, node_ids, fp_meta = encode_tree_into_sequences(
+            dag_tree, c_idx
+        )
         domain_eval_sets.append((cart.task_name, win_eval, trap_eval))
 
         def eval_ret(mod: SleepLanguageModel, _w=win_eval, _t=trap_eval) -> float:
@@ -837,7 +1067,9 @@ def run_suite_4_live_cartridges_integration() -> Dict[str, Any]:
             "baseline_score": dag_rep["baseline_score"],
             "champion_id": dag_rep["champion_id"],
             "champion_score": dag_rep["champion_score"],
-            "supervised_lineage_steps": sleep_rep["ks_stats"]["supervised_trajectories"],
+            "supervised_lineage_steps": sleep_rep["ks_stats"][
+                "supervised_trajectories"
+            ],
             "total_dag_attempts": sleep_rep["ks_stats"]["total_wake_trajectories"],
             "unlocked_expert_slot": sleep_rep["ks_stats"]["unlocked_expert_slot"],
             "gkd_loss": round(sleep_rep["ks_stats"]["gkd_loss"], 4),
@@ -852,7 +1084,7 @@ def run_suite_4_live_cartridges_integration() -> Dict[str, Any]:
         }
         live_records.append(rec)
         print(
-            f"  [{c_idx+1}/8] {cart.task_name:<30} | DAG: {rec['baseline_score']:>7.2f} -> {rec['champion_score']:>8.2f} "
+            f"  [{c_idx + 1}/8] {cart.task_name:<30} | DAG: {rec['baseline_score']:>7.2f} -> {rec['champion_score']:>8.2f} "
             f"(`{rec['champion_id']}`) | Masked-KS: {rec['supervised_lineage_steps']}/{rec['total_dag_attempts']} "
             f"(LTI={rec['lti_reward']:.3f}) | tau: {rec['pre_sleep_tau']:+.2f}->{rec['post_rem_tau']:+.2f} "
             f"| WinShare={rec['win_share_pct']:.1f}% | 2x2={rec['gate_2x2_accepted']}"
@@ -865,7 +1097,9 @@ def run_suite_4_live_cartridges_integration() -> Dict[str, Any]:
         final_retention_by_task[t_name] = round(m_fin["win_share_pct"], 2)
 
     print("-" * 84)
-    print(f"  Final Parametric Retention across all 8 Cartridges: {final_retention_by_task}")
+    print(
+        f"  Final Parametric Retention across all 8 Cartridges: {final_retention_by_task}"
+    )
     print("=" * 84)
     return {
         "cartridge_runs": live_records,
@@ -885,30 +1119,69 @@ def generate_benchmark_figure(
     exp3: Dict[str, Any],
     out_path: str,
 ) -> None:
-    plt.rcParams.update({
-        "font.sans-serif": "DejaVu Sans",
-        "axes.edgecolor": "#CBD5E1",
-        "axes.linewidth": 0.9,
-    })
+    plt.rcParams.update(
+        {
+            "font.sans-serif": "DejaVu Sans",
+            "axes.edgecolor": "#CBD5E1",
+            "axes.linewidth": 0.9,
+        }
+    )
     fig, axes = plt.subplots(2, 2, figsize=(15, 10.5), dpi=180)
     fig.patch.set_facecolor("#FFFFFF")
 
     # Palette
-    c_wake = "#94A3B8"     # Slate gray
-    c_van = "#F59E0B"      # Amber
-    c_rep = "#3B82F6"      # Blue
-    c_full = "#0F766E"     # Deep Teal (Champion)
-    c_danger = "#E11D48"   # Rose
+    c_wake = "#94A3B8"  # Slate gray
+    c_van = "#F59E0B"  # Amber
+    c_rep = "#3B82F6"  # Blue
+    c_full = "#0F766E"  # Deep Teal (Champion)
+    c_danger = "#E11D48"  # Rose
 
     # Panel A: Domain 1 Retention Curve across 5 Sequential Discovery Cycles
     ax1 = axes[0, 0]
     steps = [1, 2, 3, 4, 5]
-    ax1.plot(steps, exp1["wake_only_sft"]["d1_retention_curve"], "o--", color=c_wake, lw=2.0, label="Wake-Only SFT (No Sleep)")
-    ax1.plot(steps, exp1["vanilla_sleep_unmasked"]["d1_retention_curve"], "s-.", color=c_van, lw=2.2, label="Vanilla SLEEP (Unmasked)")
-    ax1.plot(steps, exp1["sleep_dag_no_replay"]["d1_retention_curve"], "^-", color=c_rep, lw=2.2, label="SLEEP + DAG-Masking (No Replay)")
-    ax1.plot(steps, exp1["sleep_dag_rsi_full"]["d1_retention_curve"], "D-", color=c_full, lw=3.0, markersize=7, label="SLEEP-DAG-RSI (Full Unified)")
-    ax1.set_title("A. Domain 1 Parametric Retention Across 5 Sequential Cycles", fontsize=11.5, fontweight="bold", pad=10, color="#0F172A")
-    ax1.set_xlabel("Sequential Discovery Cycle (Domains D1 -> D5)", fontsize=10, color="#334155")
+    ax1.plot(
+        steps,
+        exp1["wake_only_sft"]["d1_retention_curve"],
+        "o--",
+        color=c_wake,
+        lw=2.0,
+        label="Wake-Only SFT (No Sleep)",
+    )
+    ax1.plot(
+        steps,
+        exp1["vanilla_sleep_unmasked"]["d1_retention_curve"],
+        "s-.",
+        color=c_van,
+        lw=2.2,
+        label="Vanilla SLEEP (Unmasked)",
+    )
+    ax1.plot(
+        steps,
+        exp1["sleep_dag_no_replay"]["d1_retention_curve"],
+        "^-",
+        color=c_rep,
+        lw=2.2,
+        label="SLEEP + DAG-Masking (No Replay)",
+    )
+    ax1.plot(
+        steps,
+        exp1["sleep_dag_rsi_full"]["d1_retention_curve"],
+        "D-",
+        color=c_full,
+        lw=3.0,
+        markersize=7,
+        label="SLEEP-DAG-RSI (Full Unified)",
+    )
+    ax1.set_title(
+        "A. Domain 1 Parametric Retention Across 5 Sequential Cycles",
+        fontsize=11.5,
+        fontweight="bold",
+        pad=10,
+        color="#0F172A",
+    )
+    ax1.set_xlabel(
+        "Sequential Discovery Cycle (Domains D1 -> D5)", fontsize=10, color="#334155"
+    )
     ax1.set_ylabel("Domain 1 Winning Lineage Share (%)", fontsize=10, color="#334155")
     ax1.set_xticks(steps)
     ax1.set_xticklabels([f"After D{i}" for i in steps])
@@ -918,21 +1191,67 @@ def generate_benchmark_figure(
 
     # Panel B: Final 5-Domain Winning Share vs Dead-End Trap Contamination
     ax2 = axes[0, 1]
-    keys = ["wake_only_sft", "vanilla_sleep_unmasked", "sleep_dag_no_replay", "sleep_dag_rsi_full"]
-    short_names = ["Wake-Only\nSFT", "Vanilla SLEEP\n(Unmasked)", "SLEEP + DAG\n(No Replay)", "SLEEP-DAG-RSI\n(Full Unified)"]
+    keys = [
+        "wake_only_sft",
+        "vanilla_sleep_unmasked",
+        "sleep_dag_no_replay",
+        "sleep_dag_rsi_full",
+    ]
+    short_names = [
+        "Wake-Only\nSFT",
+        "Vanilla SLEEP\n(Unmasked)",
+        "SLEEP + DAG\n(No Replay)",
+        "SLEEP-DAG-RSI\n(Full Unified)",
+    ]
     win_vals = [exp1[k]["final_avg_win_share_pct"] for k in keys]
     trap_vals = [exp1[k]["trap_contamination_pct"] for k in keys]
     x_pos = np.arange(len(keys))
     w = 0.36
-    b1 = ax2.bar(x_pos - w / 2, win_vals, width=w, color=c_full, label="Winning Lineage Share (%) [Higher=Better]")
-    b2 = ax2.bar(x_pos + w / 2, trap_vals, width=w, color=c_danger, alpha=0.85, label="Dead-End Trap Contamination (%) [Lower=Better]")
+    b1 = ax2.bar(
+        x_pos - w / 2,
+        win_vals,
+        width=w,
+        color=c_full,
+        label="Winning Lineage Share (%) [Higher=Better]",
+    )
+    b2 = ax2.bar(
+        x_pos + w / 2,
+        trap_vals,
+        width=w,
+        color=c_danger,
+        alpha=0.85,
+        label="Dead-End Trap Contamination (%) [Lower=Better]",
+    )
     for bar in b1:
         h = bar.get_height()
-        ax2.text(bar.get_x() + bar.get_width() / 2, h + 1.2, f"{h:.1f}%", ha="center", va="bottom", fontsize=8.5, fontweight="bold", color=c_full)
+        ax2.text(
+            bar.get_x() + bar.get_width() / 2,
+            h + 1.2,
+            f"{h:.1f}%",
+            ha="center",
+            va="bottom",
+            fontsize=8.5,
+            fontweight="bold",
+            color=c_full,
+        )
     for bar in b2:
         h = bar.get_height()
-        ax2.text(bar.get_x() + bar.get_width() / 2, h + 1.2, f"{h:.1f}%", ha="center", va="bottom", fontsize=8.5, color=c_danger)
-    ax2.set_title("B. Multi-Domain Accuracy vs Dead-End Trap Contamination", fontsize=11.5, fontweight="bold", pad=10, color="#0F172A")
+        ax2.text(
+            bar.get_x() + bar.get_width() / 2,
+            h + 1.2,
+            f"{h:.1f}%",
+            ha="center",
+            va="bottom",
+            fontsize=8.5,
+            color=c_danger,
+        )
+    ax2.set_title(
+        "B. Multi-Domain Accuracy vs Dead-End Trap Contamination",
+        fontsize=11.5,
+        fontweight="bold",
+        pad=10,
+        color="#0F172A",
+    )
     ax2.set_xticks(x_pos)
     ax2.set_xticklabels(short_names, fontsize=9)
     ax2.set_ylim(0, 118)
@@ -943,20 +1262,49 @@ def generate_benchmark_figure(
     # Panel C: REM Dreaming — Random MoE Expert vs Error-Fingerprint Guided MoE Crossover
     ax3 = axes[1, 0]
     d_keys = ["no_dreaming", "vanilla_sleep_random_moe", "sleep_dag_rsi_guided_moe"]
-    d_names = ["No Dreaming\n(NREM Only)", "Vanilla SLEEP\n(Random MoE)", "SLEEP-DAG-RSI\n(Fingerprint MoE + CF)"]
+    d_names = [
+        "No Dreaming\n(NREM Only)",
+        "Vanilla SLEEP\n(Random MoE)",
+        "SLEEP-DAG-RSI\n(Fingerprint MoE + CF)",
+    ]
     comp_hits = [exp2[k]["complementary_hit_rate_pct"] for k in d_keys]
     hybrid_scores = [exp2[k]["avg_hybrid_score"] for k in d_keys]
     spike_leaks = [exp2[k]["spike_leak_rate_pct"] for k in d_keys]
     x3 = np.arange(len(d_keys))
     w3 = 0.26
-    bars_h = ax3.bar(x3 - w3, hybrid_scores, width=w3, color=c_rep, label="Post-Dream Hybrid Score")
-    bars_c = ax3.bar(x3, comp_hits, width=w3, color=c_full, label="Complementary Expert Hit Rate (%)")
-    bars_s = ax3.bar(x3 + w3, spike_leaks, width=w3, color=c_danger, alpha=0.85, label="Sharp-Spike Overfit Leak Rate (%)")
+    bars_h = ax3.bar(
+        x3 - w3, hybrid_scores, width=w3, color=c_rep, label="Post-Dream Hybrid Score"
+    )
+    bars_c = ax3.bar(
+        x3, comp_hits, width=w3, color=c_full, label="Complementary Expert Hit Rate (%)"
+    )
+    bars_s = ax3.bar(
+        x3 + w3,
+        spike_leaks,
+        width=w3,
+        color=c_danger,
+        alpha=0.85,
+        label="Sharp-Spike Overfit Leak Rate (%)",
+    )
     for b_grp in (bars_h, bars_c, bars_s):
         for bar in b_grp:
             h = bar.get_height()
-            ax3.text(bar.get_x() + bar.get_width() / 2, h + 1.5, f"{h:.1f}", ha="center", va="bottom", fontsize=8.0, fontweight="bold")
-    ax3.set_title("C. REM Dreaming: Random MoE vs Error-Fingerprint Crossover (30 Worlds)", fontsize=11.5, fontweight="bold", pad=10, color="#0F172A")
+            ax3.text(
+                bar.get_x() + bar.get_width() / 2,
+                h + 1.5,
+                f"{h:.1f}",
+                ha="center",
+                va="bottom",
+                fontsize=8.0,
+                fontweight="bold",
+            )
+    ax3.set_title(
+        "C. REM Dreaming: Random MoE vs Error-Fingerprint Crossover (30 Worlds)",
+        fontsize=11.5,
+        fontweight="bold",
+        pad=10,
+        color="#0F172A",
+    )
     ax3.set_xticks(x3)
     ax3.set_xticklabels(d_names, fontsize=9)
     ax3.set_ylim(0, 115)
@@ -967,24 +1315,70 @@ def generate_benchmark_figure(
     # Panel D: Live 8-Cartridge Coupled Run (Pre-Sleep vs Post-REM Skill Score tau & DAG Lift)
     ax4 = axes[1, 1]
     runs = exp3["cartridge_runs"]
-    c_labels = ["C1:RBF\nSolver", "C2:Weibull\nBinPack", "C3:Auto\nC1", "C4:Heil\nn=11", "C5:Pocket\nOTC", "C6:SimVQ\n1.58b", "C7:Heil\n13-14", "C8:Auto\nC2"]
+    c_labels = [
+        "C1:RBF\nSolver",
+        "C2:Weibull\nBinPack",
+        "C3:Auto\nC1",
+        "C4:Heil\nn=11",
+        "C5:Pocket\nOTC",
+        "C6:SimVQ\n1.58b",
+        "C7:Heil\n13-14",
+        "C8:Auto\nC2",
+    ]
     pre_taus = [r["pre_sleep_tau"] for r in runs]
     post_taus = [r["post_rem_tau"] for r in runs]
     x4 = np.arange(len(runs))
     w4 = 0.38
-    b_pre = ax4.bar(x4 - w4 / 2, pre_taus, width=w4, color=c_wake, label="Pre-Sleep Parametric Skill (tau)")
-    b_post = ax4.bar(x4 + w4 / 2, post_taus, width=w4, color=c_full, label="Post-SLEEP-DAG-RSI Parametric Skill (tau)")
+    b_pre = ax4.bar(
+        x4 - w4 / 2,
+        pre_taus,
+        width=w4,
+        color=c_wake,
+        label="Pre-Sleep Parametric Skill (tau)",
+    )
+    b_post = ax4.bar(
+        x4 + w4 / 2,
+        post_taus,
+        width=w4,
+        color=c_full,
+        label="Post-SLEEP-DAG-RSI Parametric Skill (tau)",
+    )
     for bar in b_pre:
         h = bar.get_height()
-        ax4.text(bar.get_x() + bar.get_width() / 2, max(h, 0.0) + 0.08, f"{h:+.1f}", ha="center", va="bottom", fontsize=7.2, color="#475569")
+        ax4.text(
+            bar.get_x() + bar.get_width() / 2,
+            max(h, 0.0) + 0.08,
+            f"{h:+.1f}",
+            ha="center",
+            va="bottom",
+            fontsize=7.2,
+            color="#475569",
+        )
     for bar in b_post:
         h = bar.get_height()
-        ax4.text(bar.get_x() + bar.get_width() / 2, max(h, 0.0) + 0.08, f"{h:+.1f}", ha="center", va="bottom", fontsize=7.2, fontweight="bold", color=c_full)
+        ax4.text(
+            bar.get_x() + bar.get_width() / 2,
+            max(h, 0.0) + 0.08,
+            f"{h:+.1f}",
+            ha="center",
+            va="bottom",
+            fontsize=7.2,
+            fontweight="bold",
+            color=c_full,
+        )
     ax4.axhline(0.0, color="#64748B", lw=0.8)
-    ax4.set_title("D. Live 8-Cartridge Coupled Run: Parametric Skill (tau) Before vs After Sleep", fontsize=11.5, fontweight="bold", pad=10, color="#0F172A")
+    ax4.set_title(
+        "D. Live 8-Cartridge Coupled Run: Parametric Skill (tau) Before vs After Sleep",
+        fontsize=11.5,
+        fontweight="bold",
+        pad=10,
+        color="#0F172A",
+    )
     ax4.set_xticks(x4)
     ax4.set_xticklabels(c_labels, fontsize=8.2)
-    ax4.set_ylabel("Log-Odds Skill Score tau = log(P_win / P_trap)", fontsize=10, color="#334155")
+    ax4.set_ylabel(
+        "Log-Odds Skill Score tau = log(P_win / P_trap)", fontsize=10, color="#334155"
+    )
     ax4.set_ylim(min(min(pre_taus) - 0.8, -0.8), max(post_taus) + 2.6)
     ax4.grid(True, axis="y", linestyle=":", alpha=0.6)
     ax4.legend(loc="upper left", frameon=True, facecolor="#F8FAFC", fontsize=8.5)
@@ -1002,14 +1396,15 @@ def generate_benchmark_figure(
     print(f"Saved 4-panel benchmark chart to: {out_path}")
 
 
-
-
 def run_suite_5_heilbronn_n17_certification() -> Dict[str, Any]:
     print("=" * 84)
-    print("SUITE 5: HEILBRONN TRIANGLE n=13..17 500-DIGIT & 10^100 RATIONAL CERTIFICATION")
+    print(
+        "SUITE 5: HEILBRONN TRIANGLE n=13..17 500-DIGIT & 10^100 RATIONAL CERTIFICATION"
+    )
     print("Verifying 16+1 Floater Split & 27-Triangle Isostatic KKT Point at n=17")
     print("=" * 84)
     from decimal import Decimal, getcontext
+
     getcontext().prec = 520
 
     pkg_dir = os.path.join(LOCAL_DIR, "heilbronn_pr_package")
@@ -1025,7 +1420,10 @@ def run_suite_5_heilbronn_n17_certification() -> Dict[str, Any]:
         fpath = os.path.join(pkg_dir, fname)
         with open(fpath, "r", encoding="utf-8") as f:
             data = json.load(f)
-        pts_dec = [(Decimal(u), Decimal(v)) for u, v in data["coordinates_simplex_right_triangle_500dps"]]
+        pts_dec = [
+            (Decimal(u), Decimal(v))
+            for u, v in data["coordinates_simplex_right_triangle_500dps"]
+        ]
         areas_dec = []
         for i in range(n_exp):
             ui, vi = pts_dec[i]
@@ -1033,11 +1431,15 @@ def run_suite_5_heilbronn_n17_certification() -> Dict[str, Any]:
                 uj, vj = pts_dec[j]
                 for k in range(j + 1, n_exp):
                     uk, vk = pts_dec[k]
-                    areas_dec.append((abs((uj - ui) * (vk - vi) - (uk - ui) * (vj - vi)), (i, j, k)))
+                    areas_dec.append(
+                        (abs((uj - ui) * (vk - vi) - (uk - ui) * (vj - vi)), (i, j, k))
+                    )
         areas_dec.sort(key=lambda x: x[0])
         min_a = areas_dec[0][0]
         ties = [tri for area, tri in areas_dec if abs(area - min_a) < Decimal("1e-490")]
-        assert len(ties) == ties_exp, f"n={n_exp}: expected {ties_exp} ties, got {len(ties)}"
+        assert len(ties) == ties_exp, (
+            f"n={n_exp}: expected {ties_exp} ties, got {len(ties)}"
+        )
         out_certs[f"n{n_exp}"] = {
             "n": n_exp,
             "delta_40dps": str(min_a)[:42],
@@ -1062,7 +1464,7 @@ def main() -> int:
     s4 = run_suite_4_live_cartridges_integration()
     s5 = run_suite_5_heilbronn_n17_certification()
 
-    out_dir = LOCAL_DIR
+    out_dir = os.path.join(LOCAL_DIR, "artifacts")
     os.makedirs(out_dir, exist_ok=True)
     chart_path = os.path.join(out_dir, "sleep_dag_rsi_benchmarks.png")
     generate_benchmark_figure(s2, s3, s4, chart_path)
@@ -1075,7 +1477,7 @@ def main() -> int:
         "suite_5_heilbronn_n13_to_n17": s5,
         "total_runtime_sec": round(time.perf_counter() - t_all, 2),
     }
-    json_path = os.path.join(LOCAL_DIR, "sleep_dag_rsi_results.json")
+    json_path = os.path.join(out_dir, "sleep_dag_rsi_results.json")
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(full_report, f, indent=2, ensure_ascii=False)
     print(f"Saved full JSON experimental report to: {json_path}")

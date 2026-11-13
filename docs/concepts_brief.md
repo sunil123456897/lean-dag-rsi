@@ -4,10 +4,10 @@
 * **Date:** 2026-10-29
 * **Status:** Ideation & Multi-Lens Brainstorm Synthesis (Swarm Audited)
 * **Target File Paths:**
-  - Concept Deliverable: [`concepts_brief.md`](file:///e:/%D1%8D%D0%BA%D1%81%D0%BF%D0%B5%D1%80%D0%B8%D0%BC%D0%B5%D0%BD%D1%82%D1%8B/%D0%B8%D1%81%D1%81%D0%BB%D0%B5%D0%B4%D0%BE%D0%B2%D0%B0%D0%BD%D0%B8%D1%8F/concepts_brief.md)
-  - Core Search Engine (v1–v4): [`dream_rsi_scripts/engine.py`](file:///e:/%D1%8D%D0%BA%D1%81%D0%BF%D0%B5%D1%80%D0%B8%D0%BC%D0%B5%D0%BD%D1%82%D1%8B/%D0%B8%D1%81%D1%81%D0%BB%D0%B5%D0%B4%D0%BE%D0%B2%D0%B0%D0%BD%D0%B8%D1%8F/dream_rsi_scripts/engine.py)
-  - Neural Sleep Orchestrator (v5): [`sleep_dag_rsi.py`](file:///e:/%D1%8D%D0%BA%D1%81%D0%BF%D0%B5%D1%80%D0%B8%D0%BC%D0%B5%D0%BD%D1%82%D1%8B/%D0%B8%D1%81%D1%81%D0%BB%D0%B5%D0%B4%D0%BE%D0%B2%D0%B0%D0%BD%D0%B8%D1%8F/sleep_dag_rsi.py)
-  - Verification & Self-Test Suite: [`_selftest.py`](file:///C:/Users/vanya/.gemini/config/plugins/autonomous-research/skills/dream-rsi/scripts/_selftest.py)
+  - Concept Deliverable: [`docs/concepts_brief.md`](concepts_brief.md)
+  - Core Search Engine (v1–v4): [`dream_rsi_scripts/engine.py`](../dream_rsi_scripts/engine.py)
+  - Neural Sleep Orchestrator (v5): [`dream_rsi_scripts/sleep_dag_rsi.py`](../dream_rsi_scripts/sleep_dag_rsi.py)
+  - Verification & Self-Test Suite: [`dream_rsi_scripts/_selftest.py`](../dream_rsi_scripts/_selftest.py)
 
 ---
 
@@ -248,5 +248,5 @@ flowchart TD
 #### Milestone 4: End-to-End Orchestrator Integration & Benchmark Validation
 * Hook all stages into `SleepDAGRSIOrchestrator.run_wake_sleep_cycle()` and `LeanDAGPortfolio`.
 * Run full `_selftest.py` ensuring all 20 tests (16 original + 4 new) pass with zero errors.
-* Sync all modified files between `e:\эксперименты\исследования\` and `C:\Users\vanya\.gemini\config\plugins\autonomous-research\skills\dream-rsi\scripts\`.
+* Sync all modified files between `./dream_rsi_scripts/` and `$DREAM_RSI_PLUGIN_DIR` (default `~/.gemini/config/plugins/autonomous-research`) via `python sync_plugin.py`.
 * Execute benchmark runs on extremal math (`verify_extremal_cartridges_7_8.py`) and neural stream adaptation.

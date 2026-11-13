@@ -3,7 +3,7 @@ Atomic Builder, Synchronizer & Zero-Manual QA Validator for the `autonomous-rese
 
 Synchronizes:
   Source repo: `<repo_root>/{plugin_bundle, dream_rsi_scripts, prompts}`
-  Target plugin: `~/.gemini/config/plugins/autonomous-research` (or `$AUTONOMOUS_RESEARCH_PLUGIN_DIR`)
+  Target plugin: `~/.gemini/config/plugins/autonomous-research` (or `$DREAM_RSI_PLUGIN_DIR`)
 
 Usage:
     python sync_plugin.py            # sync, purge .bak clutter, validate, and run _selftest.py
@@ -25,12 +25,24 @@ REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
 BUNDLE_DIR = os.path.join(REPO_ROOT, "plugin_bundle")
 LOCAL_SCRIPTS_DIR = os.path.join(REPO_ROOT, "dream_rsi_scripts")
 PROMPTS_DIR = os.path.join(REPO_ROOT, "prompts")
-TARGET_PLUGIN_DIR = os.environ.get(
-    "AUTONOMOUS_RESEARCH_PLUGIN_DIR",
-    os.path.expanduser(r"~\.gemini\config\plugins\autonomous-research"),
+TARGET_PLUGIN_DIR = os.path.expanduser(
+    os.environ.get(
+        "DREAM_RSI_PLUGIN_DIR",
+        os.environ.get(
+            "AUTONOMOUS_RESEARCH_PLUGIN_DIR",
+            os.path.join("~", ".gemini", "config", "plugins", "autonomous-research"),
+        ),
+    )
 )
 
 CORE_SCRIPT_FILES = (
+    "__init__.py",
+    "tree.py",
+    "skill_state.py",
+    "sentinel.py",
+    "spectral.py",
+    "splicer.py",
+    "boundary.py",
     "engine.py",
     "sleep_dag_rsi.py",
     "cartridge.py",
@@ -189,17 +201,6 @@ def validate_markdown_and_frontmatter(
 
 
 def sync_all(verify_only: bool = False) -> Dict[str, object]:
-    # Keep local mirror copies consistent first
-    if not verify_only:
-        shutil.copyfile(
-            os.path.join(BUNDLE_DIR, "skills", "dream-rsi", "SKILL.md"),
-            os.path.join(LOCAL_SCRIPTS_DIR, "SKILL.md"),
-        )
-        shutil.copyfile(
-            os.path.join(REPO_ROOT, "sleep_dag_rsi.py"),
-            os.path.join(LOCAL_SCRIPTS_DIR, "sleep_dag_rsi.py"),
-        )
-
     manifest = build_sync_manifest()
     removed_bak: List[str] = []
     if not verify_only:
@@ -245,12 +246,16 @@ def sync_all(verify_only: bool = False) -> Dict[str, object]:
                 validate_markdown_and_frontmatter(dst, require_frontmatter=False)
             )
 
-    # Check root sleep_dag_rsi.py parity
-    if sha256_file(os.path.join(REPO_ROOT, "sleep_dag_rsi.py")) != sha256_file(
-        os.path.join(LOCAL_SCRIPTS_DIR, "sleep_dag_rsi.py")
-    ):
+    # Enforce single source of truth for SKILL.md and sleep_dag_rsi.py
+    dup_skill_path = os.path.join(LOCAL_SCRIPTS_DIR, "SKILL.md")
+    if os.path.exists(dup_skill_path):
         errors.append(
-            "Root sleep_dag_rsi.py out of sync with dream_rsi_scripts/sleep_dag_rsi.py"
+            f"Duplicate SKILL.md detected at {dup_skill_path}; keep plugin_bundle/skills/dream-rsi/SKILL.md as single source of truth"
+        )
+    root_facade = os.path.join(REPO_ROOT, "sleep_dag_rsi.py")
+    if os.path.isfile(root_facade) and os.path.getsize(root_facade) > 2048:
+        errors.append(
+            f"Root sleep_dag_rsi.py ({os.path.getsize(root_facade)}B) appears duplicated instead of a thin facade to dream_rsi_scripts/sleep_dag_rsi.py"
         )
 
     # Check zero leftover .bak files in target plugin

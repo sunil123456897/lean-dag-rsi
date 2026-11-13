@@ -1,4 +1,4 @@
-﻿"""
+"""
 Live Battle Test of `SLEEP-DAG-RSI v6 & v7` vs `v5` across 4 Self-Contained Scientific Workloads:
   1. Trial 1 (Extremal Geometry — Real Heilbronn n=16 Champion, 560 Triangles):
      - Tests `WaldMicroSentinel` (5% early abort filter on 60 candidate mutations around
@@ -20,7 +20,6 @@ Live Battle Test of `SLEEP-DAG-RSI v6 & v7` vs `v5` across 4 Self-Contained Scie
 from __future__ import annotations
 
 import json
-import math
 import os
 import sys
 import time
@@ -29,20 +28,19 @@ from typing import Any, Dict, List, Sequence, Tuple
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SCRIPTS_DIR = os.path.join(HERE, "dream_rsi_scripts")
+ROOT_DIR = os.path.dirname(HERE)
+SCRIPTS_DIR = os.path.join(ROOT_DIR, "dream_rsi_scripts")
 
-for _p in (HERE, SCRIPTS_DIR):
+for _p in (ROOT_DIR, SCRIPTS_DIR, HERE):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
 import engine as dream_engine  # type: ignore
 from engine import (  # type: ignore
     DiscoveryTree,
-    DyadicHomotopyTransform,
     EigenRotationTransform,
     KktSlackTransform,
     Node,
-    Problem,
     SpectralFrameLifter,
     WaldMicroSentinel,
     export_dag_dpo_pairs,
@@ -60,7 +58,9 @@ from sleep_dag_rsi import (  # type: ignore
 # =====================================================================
 
 
-def compute_all_triangle_areas(pts: np.ndarray) -> Tuple[List[float], List[Tuple[int, int, int]]]:
+def compute_all_triangle_areas(
+    pts: np.ndarray,
+) -> Tuple[List[float], List[Tuple[int, int, int]]]:
     """Computes all C(n, 3) normalized triangle areas in the standard simplex (u>=0, v>=0, u+v<=1)."""
     n = pts.shape[0]
     areas: List[float] = []
@@ -78,11 +78,14 @@ def compute_all_triangle_areas(pts: np.ndarray) -> Tuple[List[float], List[Tuple
 
 
 def run_trial_1_heilbronn_n16() -> Dict[str, Any]:
-    cert_path = os.path.join(HERE, "heilbronn_pr_package", "n16_exact_500dps.json")
+    cert_path = os.path.join(ROOT_DIR, "heilbronn_pr_package", "n16_exact_500dps.json")
     with open(cert_path, "r", encoding="utf-8") as f:
         cert_data = json.load(f)
     pts_champ = np.array(
-        [[float(u), float(v)] for u, v in cert_data["coordinates_simplex_right_triangle_500dps"]],
+        [
+            [float(u), float(v)]
+            for u, v in cert_data["coordinates_simplex_right_triangle_500dps"]
+        ],
         dtype=np.float64,
     )
     base_areas, triples = compute_all_triangle_areas(pts_champ)
@@ -125,9 +128,15 @@ def run_trial_1_heilbronn_n16() -> Dict[str, Any]:
     v5_ms = (time.perf_counter() - t0_v5) * 1000.0
 
     # 2. SLEEP-DAG-RSI v6: WaldMicroSentinel (5% slice = 28 triangles first, aggregation="min")
-    sentinel = WaldMicroSentinel(adv_frac=0.025, strat_frac=0.025, gamma_lcb=1.96, tol_margin=1e-7)
-    tree_v6 = DiscoveryTree(task="heilbronn_n16_v6", baseline_score=parent_min, max_parallelism=4)
-    root_node = tree_v6.add(Node(id="root", parent_id=None, branch=-1, attempt=0, score=parent_min))
+    sentinel = WaldMicroSentinel(
+        adv_frac=0.025, strat_frac=0.025, gamma_lcb=1.96, tol_margin=1e-7
+    )
+    tree_v6 = DiscoveryTree(
+        task="heilbronn_n16_v6", baseline_score=parent_min, max_parallelism=4
+    )
+    root_node = tree_v6.add(
+        Node(id="root", parent_id=None, branch=-1, attempt=0, score=parent_min)
+    )
 
     t0_v6 = time.perf_counter()
     v6_triangle_evals = 0
@@ -137,7 +146,9 @@ def run_trial_1_heilbronn_n16() -> Dict[str, Any]:
     v6_best_min = parent_min
 
     for idx, (cid, c_pts, is_xover) in enumerate(candidates):
-        child = Node(id=cid, parent_id="root", branch=idx % 4, attempt=idx + 1, score=0.0)
+        child = Node(
+            id=cid, parent_id="root", branch=idx % 4, attempt=idx + 1, score=0.0
+        )
 
         def _eval_slice(slice_idxs: Sequence[int], pts=c_pts) -> List[float]:
             nonlocal v6_triangle_evals
@@ -203,7 +214,9 @@ def run_trial_1_heilbronn_n16() -> Dict[str, Any]:
         "speedup_x": round(v5_ms / max(v6_ms, 1e-6), 2),
         "v6_aborted_candidates": v6_aborted_count,
         "v6_survivor_candidates": v6_passed_count,
-        "winner_agreement": (v5_best_id == v6_best_id and abs(v5_best_min - v6_best_min) < 1e-15),
+        "winner_agreement": (
+            v5_best_id == v6_best_id and abs(v5_best_min - v6_best_min) < 1e-15
+        ),
         "best_candidate_id": v6_best_id,
         "parent_min_area": round(parent_min, 12),
         "recovered_min_area": round(v6_best_min, 12),
@@ -226,7 +239,9 @@ def run_trial_2_spectral_frame_lifter() -> Dict[str, Any]:
     d = 8
     rng = np.random.default_rng(1337)
     q_rand, _ = np.linalg.qr(rng.normal(0.0, 1.0, size=(d, d)))
-    eigs_true = np.array([1e8, 5e7, 10.0, 5.0, 2.0, 1.0, 1e-11, 1e-12], dtype=np.float64)
+    eigs_true = np.array(
+        [1e8, 5e7, 10.0, 5.0, 2.0, 1.0, 1e-11, 1e-12], dtype=np.float64
+    )
     g_mat_np = (q_rand * eigs_true) @ q_rand.T
     g_mat = g_mat_np.tolist()
 
@@ -327,20 +342,32 @@ def run_trial_3_nonlinear_dynamical_distillation() -> Dict[str, Any]:
 
     def _true_control_law(X_in: np.ndarray) -> np.ndarray:
         s2 = np.where(X_in[:, 2] >= 0.0, 1.0, -1.0)
-        return (-0.85 * np.tanh(X_in[:, 0]) - 0.45 * (X_in[:, 3] * X_in[:, 4]) + 0.30 * s2)
+        return (
+            -0.85 * np.tanh(X_in[:, 0]) - 0.45 * (X_in[:, 3] * X_in[:, 4]) + 0.30 * s2
+        )
 
     u_true_all = _true_control_law(X_all)
     u_naive_all = -0.25 * X_all[:, 0]
 
     # Chronological split: Train (60% = 1440), Val (20% = 480), Blind Vault (20% = 480)
     X_tr, X_val, X_vault = X_all[:1440], X_all[1440:1920], X_all[1920:]
-    u_tr_true, u_val_true, u_vault_true = u_true_all[:1440], u_true_all[1440:1920], u_true_all[1920:]
-    u_tr_naive, u_val_naive, u_vault_naive = u_naive_all[:1440], u_naive_all[1440:1920], u_naive_all[1920:]
+    u_tr_true, u_val_true, u_vault_true = (
+        u_true_all[:1440],
+        u_true_all[1440:1920],
+        u_true_all[1920:],
+    )
+    u_tr_naive, u_val_naive, u_vault_naive = (
+        u_naive_all[:1440],
+        u_naive_all[1440:1920],
+        u_naive_all[1920:],
+    )
 
     # 3A-0. Verify Stochastic WaldMicroSentinel trims top 5% heavy-tailed sensor spikes
     parent_errors = np.abs(u_tr_true - u_tr_naive)
     # Inject 5% extreme Cauchy/sensor glitch spikes into parent residual history
-    spike_idx = rng.choice(len(parent_errors), size=int(0.05 * len(parent_errors)), replace=False)
+    spike_idx = rng.choice(
+        len(parent_errors), size=int(0.05 * len(parent_errors)), replace=False
+    )
     parent_scores_with_spikes = -parent_errors.copy()
     parent_scores_with_spikes[spike_idx] -= 50.0  # extreme negative score spikes
 
@@ -356,7 +383,9 @@ def run_trial_3_nonlinear_dynamical_distillation() -> Dict[str, Any]:
 
     # 3A-1. Wake Adaptation + NREM NeuroSymbolicDistiller (`Residual-Keep Decomposition`)
     delta_u_tr = (u_tr_true - u_tr_naive)[:, None]
-    adap_dyn = UniversalNeuralSleepAdapter(d_in=8, d_out=1, d_low=4, max_experts=4, seed=42)
+    adap_dyn = UniversalNeuralSleepAdapter(
+        d_in=8, d_out=1, d_low=4, max_experts=4, seed=42
+    )
     for _ep in range(15):
         adap_dyn.wake_adapt_step(
             X_tr,
@@ -365,16 +394,29 @@ def run_trial_3_nonlinear_dynamical_distillation() -> Dict[str, Any]:
             lr=0.10,
         )
 
-    dag_dyn = DiscoveryTree(task="dynamical_control_distill", baseline_score=50.0, max_parallelism=2)
+    dag_dyn = DiscoveryTree(
+        task="dynamical_control_distill", baseline_score=50.0, max_parallelism=2
+    )
     dag_dyn.add(Node(id="root", parent_id=None, branch=-1, attempt=0, score=50.0))
-    dag_dyn.add(Node(id="b0_wake", parent_id="root", branch=0, attempt=1, score=92.0, pass_mask=[1, 1, 1, 1]))
+    dag_dyn.add(
+        Node(
+            id="b0_wake",
+            parent_id="root",
+            branch=0,
+            attempt=1,
+            score=92.0,
+            pass_mask=[1, 1, 1, 1],
+        )
+    )
 
     nrem_dyn = adap_dyn.nrem_consolidate(
         x_trajectories=X_tr,
         base_outputs=u_tr_naive[:, None],
         dag_tree=dag_dyn,
         trajectory_node_ids=["b0_wake"] * len(X_tr),
-        fingerprint_meta=ExpertFingerprintMeta(expert_slot=0, source_node_id="b0_wake", pass_mask=[1, 1, 1, 1]),
+        fingerprint_meta=ExpertFingerprintMeta(
+            expert_slot=0, source_node_id="b0_wake", pass_mask=[1, 1, 1, 1]
+        ),
         steps=25,
         lr=0.12,
         target_delta_override=delta_u_tr,
@@ -389,7 +431,9 @@ def run_trial_3_nonlinear_dynamical_distillation() -> Dict[str, Any]:
     naive_vault_mse = float(np.mean((u_vault_true - u_vault_naive) ** 2))
     naive_vault_r2 = 1.0 - naive_vault_mse / var_vault
 
-    pred_hybrid_vault = u_vault_naive + adap_dyn.forward_delta(X_vault, use_fast=False, forced_expert=0).reshape(-1)
+    pred_hybrid_vault = u_vault_naive + adap_dyn.forward_delta(
+        X_vault, use_fast=False, forced_expert=0
+    ).reshape(-1)
     hyb_vault_mse = float(np.mean((u_vault_true - pred_hybrid_vault) ** 2))
     hyb_vault_r2 = 1.0 - hyb_vault_mse / var_vault
 
@@ -405,13 +449,17 @@ def run_trial_3_nonlinear_dynamical_distillation() -> Dict[str, Any]:
     noise_target_tr = rng.normal(0.0, 1.0, size=(len(X_tr), 1))
     val_base_r2 = hyb_vault_r2
 
-    def _val_metric(pred_fn, X_v=X_val, u_v_true=u_val_true, u_v_base=u_val_true) -> float:
+    def _val_metric(
+        pred_fn, X_v=X_val, u_v_true=u_val_true, u_v_base=u_val_true
+    ) -> float:
         spurious_delta = 0.35 * pred_fn(X_v).reshape(-1)
         u_cand = u_v_base + spurious_delta
         mse_c = float(np.mean((u_v_true - u_cand) ** 2))
         return 1.0 - mse_c / (float(np.var(u_v_true)) + 1e-12) - 0.01
 
-    adap_overfit = UniversalNeuralSleepAdapter(d_in=8, d_out=1, d_low=4, max_experts=4, seed=99)
+    adap_overfit = UniversalNeuralSleepAdapter(
+        d_in=8, d_out=1, d_low=4, max_experts=4, seed=99
+    )
     for _ep in range(12):
         adap_overfit.wake_adapt_step(
             X_tr,
@@ -425,7 +473,9 @@ def run_trial_3_nonlinear_dynamical_distillation() -> Dict[str, Any]:
         base_outputs=np.zeros((len(X_tr), 1), dtype=np.float64),
         dag_tree=dag_dyn,
         trajectory_node_ids=["b0_wake"] * len(X_tr),
-        fingerprint_meta=ExpertFingerprintMeta(expert_slot=0, source_node_id="b0_wake", pass_mask=[1, 1, 1, 1]),
+        fingerprint_meta=ExpertFingerprintMeta(
+            expert_slot=0, source_node_id="b0_wake", pass_mask=[1, 1, 1, 1]
+        ),
         steps=20,
         lr=0.10,
         target_delta_override=None,
@@ -446,7 +496,9 @@ def run_trial_3_nonlinear_dynamical_distillation() -> Dict[str, Any]:
         "stochastic_sentinel_adv_spike_overlap": adv_spike_overlap,
         "distill_accepted": ns_dyn["accepted"],
         "distill_r2_oos": round(float(ns_dyn["r2_oos"]), 4),
-        "residual_energy_cut_pct": round(float(ns_dyn["energy_reduction_ratio"]) * 100.0, 2),
+        "residual_energy_cut_pct": round(
+            float(ns_dyn["energy_reduction_ratio"]) * 100.0, 2
+        ),
         "distilled_readable_terms": readable_terms,
         "naive_vault_r2": round(naive_vault_r2, 4),
         "hybrid_vault_r2": round(hyb_vault_r2, 4),
@@ -463,7 +515,9 @@ def run_trial_3_nonlinear_dynamical_distillation() -> Dict[str, Any]:
 
 
 def run_trial_4_v7_splicer_and_hierarchical_library() -> Dict[str, Any]:
-    from engine import ActiveBoundarySynthesizer, AstCodeSplicer, compute_hyper_crossover
+    from engine import (
+        compute_hyper_crossover,
+    )
     from sleep_dag_rsi import SymbolicLibrary
 
     # 4A. Autonomous AST Code Splicer on 2 Orthogonal Python Solver Branches
@@ -532,9 +586,9 @@ def run_trial_4_v7_splicer_and_hierarchical_library() -> Dict[str, Any]:
 
     # Test on 4 regime test vectors: 2 saturation states + 2 bilinear coupling states
     test_states = [
-        (2.0, 0.1, 0.1, 0.2),   # Saturation state 1 -> negative restoring force
+        (2.0, 0.1, 0.1, 0.2),  # Saturation state 1 -> negative restoring force
         (-2.0, 0.1, 0.1, 0.2),  # Saturation state 2 -> positive restoring force
-        (0.0, 1.2, 1.5, 1.2),   # Coupling state 1 -> negative bilinear force
+        (0.0, 1.2, 1.5, 1.2),  # Coupling state 1 -> negative bilinear force
         (0.0, 1.2, -1.5, 1.2),  # Coupling state 2 -> positive bilinear force
     ]
     expected_signs = [-1, 1, -1, 1]
@@ -554,7 +608,9 @@ def run_trial_4_v7_splicer_and_hierarchical_library() -> Dict[str, Any]:
     Y_c1_oos = -0.85 * np.tanh(X_oos[:, 0]) - 0.40 * (X_oos[:, 3] * X_oos[:, 4])
 
     lib = SymbolicLibrary()
-    dist_c1 = NeuroSymbolicDistiller(alpha=0.03, library=lib, auto_invent_primitives=True)
+    dist_c1 = NeuroSymbolicDistiller(
+        alpha=0.03, library=lib, auto_invent_primitives=True
+    )
     rep_c1 = dist_c1.distill_residual(X_tr, Y_c1_tr, X_oos=X_oos, delta_Y_oos=Y_c1_oos)
 
     # Sleep Cycle 2: True physical law modulates M(x) by macro phase sign(x[7]) + harmonic term:
@@ -569,11 +625,15 @@ def run_trial_4_v7_splicer_and_hierarchical_library() -> Dict[str, Any]:
     Y_c2_oos = _true_c2_teacher(X_oos)
 
     # Flat v6 distiller (no compositional library, passive states only)
-    dist_v6 = NeuroSymbolicDistiller(alpha=0.03, library=None, auto_invent_primitives=False)
+    dist_v6 = NeuroSymbolicDistiller(
+        alpha=0.03, library=None, auto_invent_primitives=False
+    )
     rep_v6 = dist_v6.distill_residual(X_tr, Y_c2_tr, X_oos=X_oos, delta_Y_oos=Y_c2_oos)
 
     # Hierarchical v7 distiller (SymbolicLibrary + ActiveBoundarySynthesizer)
-    dist_v7 = NeuroSymbolicDistiller(alpha=0.03, library=lib, auto_invent_primitives=True)
+    dist_v7 = NeuroSymbolicDistiller(
+        alpha=0.03, library=lib, auto_invent_primitives=True
+    )
     rep_v7 = dist_v7.distill_residual(
         X_tr,
         Y_c2_tr,
@@ -596,7 +656,9 @@ def run_trial_4_v7_splicer_and_hierarchical_library() -> Dict[str, Any]:
         "cycle2_v7_hierarchical_r2_oos": rep_v7["r2_oos"],
         "cycle2_v7_energy_cut_pct": round(rep_v7["energy_reduction_ratio"] * 100.0, 2),
         "cycle2_v7_active_terms": rep_v7["active_terms"],
-        "active_boundary_amplification_x": b_info.get("disagreement_amplification", 1.0),
+        "active_boundary_amplification_x": b_info.get(
+            "disagreement_amplification", 1.0
+        ),
         "active_boundary_crossings": b_info.get("boundary_crossings_found", 0),
     }
 
@@ -617,23 +679,44 @@ def run_trial_5_v8_upgrades() -> Dict[str, Any]:
     tilt_ext = dream_engine.compute_max_tilted_objective(scores, tau=6.0)
 
     # 2. BES + LADDER Backward Sub-Goal Decomposition on Dead Bucket b*=2
-    t_bes = dream_engine.DiscoveryTree(task="v8-bes", baseline_score=50.0, max_parallelism=3)
-    t_bes.add(dream_engine.Node(id="root", parent_id=None, branch=-1, attempt=0, score=50.0))
+    t_bes = dream_engine.DiscoveryTree(
+        task="v8-bes", baseline_score=50.0, max_parallelism=3
+    )
+    t_bes.add(
+        dream_engine.Node(id="root", parent_id=None, branch=-1, attempt=0, score=50.0)
+    )
     t_bes.add(
         dream_engine.Node(
-            id="b0", parent_id="root", branch=0, attempt=1, score=72.0, bucket_scores=[0.50, -0.15, -0.80]
+            id="b0",
+            parent_id="root",
+            branch=0,
+            attempt=1,
+            score=72.0,
+            bucket_scores=[0.50, -0.15, -0.80],
         )
     )
     t_bes.add(
         dream_engine.Node(
-            id="b1", parent_id="root", branch=1, attempt=1, score=76.0, bucket_scores=[-0.10, 0.60, -0.40]
+            id="b1",
+            parent_id="root",
+            branch=1,
+            attempt=1,
+            score=76.0,
+            bucket_scores=[-0.10, 0.60, -0.40],
         )
     )
-    decomposer = dream_engine.BackwardSubGoalDecomposer(ladder_fractions=(0.5, 0.25, 0.0))
+    decomposer = dream_engine.BackwardSubGoalDecomposer(
+        ladder_fractions=(0.5, 0.25, 0.0)
+    )
     bes_rep = decomposer.decompose([t_bes])
     sub_b2 = bes_rep["stepping_stone_subgoals"][0]
     cand_step = dream_engine.Node(
-        id="b1_step_seed", parent_id="b1", branch=1, attempt=2, score=81.0, bucket_scores=[0.10, 0.65, -0.12]
+        id="b1_step_seed",
+        parent_id="b1",
+        branch=1,
+        attempt=2,
+        score=81.0,
+        bucket_scores=[0.10, 0.65, -0.12],
     )
     promo_rep = decomposer.select_stepping_stone_seed(2, [cand_step], sub_b2)
 
@@ -645,10 +728,21 @@ def run_trial_5_v8_upgrades() -> Dict[str, Any]:
     wrong_delta = -0.6 * Y_true
     verifier_residual = Y_true - wrong_delta
 
-    t_dead = dream_engine.DiscoveryTree(task="v8-sdpo", baseline_score=50.0, max_parallelism=2)
-    t_dead.add(dream_engine.Node(id="root", parent_id=None, branch=-1, attempt=0, score=50.0))
+    t_dead = dream_engine.DiscoveryTree(
+        task="v8-sdpo", baseline_score=50.0, max_parallelism=2
+    )
     t_dead.add(
-        dream_engine.Node(id="fail_0", parent_id="root", branch=0, attempt=1, score=30.0, fail_class="algorithmic_failure")
+        dream_engine.Node(id="root", parent_id=None, branch=-1, attempt=0, score=50.0)
+    )
+    t_dead.add(
+        dream_engine.Node(
+            id="fail_0",
+            parent_id="root",
+            branch=0,
+            attempt=1,
+            score=30.0,
+            fail_class="algorithmic_failure",
+        )
     )
     dead_ids = ["fail_0"] * 32
 
@@ -658,13 +752,17 @@ def run_trial_5_v8_upgrades() -> Dict[str, Any]:
         base_outputs=np.zeros_like(Y_true),
         dag_tree=t_dead,
         trajectory_node_ids=dead_ids,
-        fingerprint_meta=ExpertFingerprintMeta(expert_slot=0, source_node_id="fail_0", pass_mask=[0]),
+        fingerprint_meta=ExpertFingerprintMeta(
+            expert_slot=0, source_node_id="fail_0", pass_mask=[0]
+        ),
         steps=25,
         lr=0.12,
         target_delta_override=wrong_delta,
         enable_neuro_symbolic_distill=False,
     )
-    mse_without_sdpo = float(np.mean((ad_base.forward_delta(X_dead, use_fast=False) - Y_true) ** 2))
+    mse_without_sdpo = float(
+        np.mean((ad_base.forward_delta(X_dead, use_fast=False) - Y_true) ** 2)
+    )
 
     ad_sdpo = UniversalNeuralSleepAdapter(d_in=4, d_out=1, d_low=4, seed=88)
     sdpo_rep = ad_sdpo.nrem_consolidate(
@@ -672,23 +770,37 @@ def run_trial_5_v8_upgrades() -> Dict[str, Any]:
         base_outputs=np.zeros_like(Y_true),
         dag_tree=t_dead,
         trajectory_node_ids=dead_ids,
-        fingerprint_meta=ExpertFingerprintMeta(expert_slot=0, source_node_id="fail_0", pass_mask=[0]),
+        fingerprint_meta=ExpertFingerprintMeta(
+            expert_slot=0, source_node_id="fail_0", pass_mask=[0]
+        ),
         steps=25,
         lr=0.12,
         target_delta_override=wrong_delta,
         enable_neuro_symbolic_distill=False,
         verifier_feedback_deltas=verifier_residual,
     )
-    mse_with_sdpo = float(np.mean((ad_sdpo.forward_delta(X_dead, use_fast=False) - Y_true) ** 2))
+    mse_with_sdpo = float(
+        np.mean((ad_sdpo.forward_delta(X_dead, use_fast=False) - Y_true) ** 2)
+    )
 
     # 4. MutableSkillState (`SKILL.state`) over 50 rounds
     skill_state = dream_engine.MutableSkillState(
-        task="v8-state-bench", max_invariants=4, max_dead_ends=6, max_unsolved_buckets=8, max_primitives=4
+        task="v8-state-bench",
+        max_invariants=4,
+        max_dead_ends=6,
+        max_unsolved_buckets=8,
+        max_primitives=4,
     )
     append_log = []
     for r_i in range(50):
-        tr = dream_engine.DiscoveryTree(task="v8-state-bench", baseline_score=50.0, max_parallelism=2)
-        tr.add(dream_engine.Node(id="root", parent_id=None, branch=-1, attempt=0, score=50.0))
+        tr = dream_engine.DiscoveryTree(
+            task="v8-state-bench", baseline_score=50.0, max_parallelism=2
+        )
+        tr.add(
+            dream_engine.Node(
+                id="root", parent_id=None, branch=-1, attempt=0, score=50.0
+            )
+        )
         tr.add(
             dream_engine.Node(
                 id=f"w_{r_i}",
@@ -698,7 +810,9 @@ def run_trial_5_v8_upgrades() -> Dict[str, Any]:
                 score=60.0 + r_i * 0.4,
                 bucket_scores=[0.5, -0.2, 0.3 if r_i >= 30 else -0.4],
                 tunable_params={"k": round(0.1 * r_i, 3)},
-                line_hotspots=[{"line_no": 10, "pct_time": 90.0, "code": "y = x * x" * 20}],
+                line_hotspots=[
+                    {"line_no": 10, "pct_time": 90.0, "code": "y = x * x" * 20}
+                ],
             )
         )
         tr.add(
@@ -724,7 +838,9 @@ def run_trial_5_v8_upgrades() -> Dict[str, Any]:
         lambda x: (x[0] + x[1] - 0.10) * 1.0001,
         lambda x: (x[0] + x[1] - 0.10) * 0.9999,
     ]
-    synth = dream_engine.ActiveBoundarySynthesizer(trust_radius_sigma=1.2, ascent_steps=8, step_lr=0.25)
+    synth = dream_engine.ActiveBoundarySynthesizer(
+        trust_radius_sigma=1.2, ascent_steps=8, step_lr=0.25
+    )
     dual_veri = synth.synthesize_dual_head_verification(
         anchor_points=[[0.08, 0.08], [0.50, 0.50], [0.80, 0.80], [-0.60, -0.60]],
         committee_fns=unanimous_fns,
@@ -735,14 +851,25 @@ def run_trial_5_v8_upgrades() -> Dict[str, Any]:
     # 6. FALCON-2 Prefix-Aligned NLMS under 10^3x spike (including opposite-sign cancellation spike)
     ad_f2 = UniversalNeuralSleepAdapter(d_in=4, d_out=2, d_low=4, seed=99)
     ad_f2.fast_B = np.full((4, 2), 0.25, dtype=np.float64)
-    x_sp = np.array([[500.0, -500.0, 500.0, -500.0], [1000.0, 1000.0, -1000.0, -1000.0]], dtype=np.float64)
+    x_sp = np.array(
+        [[500.0, -500.0, 500.0, -500.0], [1000.0, 1000.0, -1000.0, -1000.0]],
+        dtype=np.float64,
+    )
     f2_rep = ad_f2.wake_adapt_step_falcon2(
-        x_sp, np.zeros((2, 2)), np.array([[1.0, -1.0], [0.5, -0.5]]), lr=0.50, nlms_lambda=0.10
+        x_sp,
+        np.zeros((2, 2)),
+        np.array([[1.0, -1.0], [0.5, -0.5]]),
+        lr=0.50,
+        nlms_lambda=0.10,
     )
     v_opp = np.array([1.0, -0.5, 0.8, -0.2], dtype=np.float64)
     x_opp = np.vstack([1000.0 * v_opp, -330.0 * v_opp])
     f2_opp_rep = ad_f2.wake_adapt_step_falcon2(
-        x_opp, np.zeros((2, 2)), np.array([[1.0, -1.0], [-0.33, 0.33]]), lr=0.45, prefix_shift_alpha=0.25
+        x_opp,
+        np.zeros((2, 2)),
+        np.array([[1.0, -1.0], [-0.33, 0.33]]),
+        lr=0.45,
+        prefix_shift_alpha=0.25,
     )
 
     # 7. Adversarial SDPO IRLS/MAD Outlier Rejection (10/32 sign-flipped residuals) + Sibling TTT-Discover Tilt
@@ -754,14 +881,18 @@ def run_trial_5_v8_upgrades() -> Dict[str, Any]:
         base_outputs=np.zeros_like(Y_true),
         dag_tree=t_dead,
         trajectory_node_ids=dead_ids,
-        fingerprint_meta=ExpertFingerprintMeta(expert_slot=0, source_node_id="fail_0", pass_mask=[0]),
+        fingerprint_meta=ExpertFingerprintMeta(
+            expert_slot=0, source_node_id="fail_0", pass_mask=[0]
+        ),
         steps=25,
         lr=0.12,
         target_delta_override=wrong_delta,
         enable_neuro_symbolic_distill=False,
         verifier_feedback_deltas=noisy_residual,
     )
-    mse_noisy_sdpo = float(np.mean((ad_sdpo_noisy.forward_delta(X_dead, use_fast=False) - Y_true) ** 2))
+    mse_noisy_sdpo = float(
+        np.mean((ad_sdpo_noisy.forward_delta(X_dead, use_fast=False) - Y_true) ** 2)
+    )
 
     assert f2_rep["post_update_loss"] < f2_rep["loss"]
     assert f2_opp_rep["post_update_loss"] <= f2_opp_rep["loss"]
@@ -783,7 +914,9 @@ def run_trial_5_v8_upgrades() -> Dict[str, Any]:
         "sdpo_noisy_mse_after": round(mse_noisy_sdpo, 4),
         "skill_state_bytes_50_rounds": state_bytes,
         "append_only_bytes_50_rounds": append_bytes,
-        "skill_state_compression_pct": round((1.0 - state_bytes / float(append_bytes)) * 100.0, 2),
+        "skill_state_compression_pct": round(
+            (1.0 - state_bytes / float(append_bytes)) * 100.0, 2
+        ),
         "veriharness_disagreement_crossings": dual_veri["total_boundary_crossings"],
         "veriharness_consensus_blind_spots": dual_veri["collective_blind_spots_found"],
         "veriharness_unanimous_flips": dual_veri["unanimous_flips_found"],
@@ -810,8 +943,17 @@ def _fit_sindy_stlsq(
     cols_tr = [np.ones((n_tr,), dtype=np.float64)]
     cols_ev = [np.ones((n_ev,), dtype=np.float64)]
     for i in range(d):
-        cols_tr.extend([X_tr[:, i], X_tr[:, i] ** 2, np.sin(X_tr[:, i]), np.cos(X_tr[:, i])])
-        cols_ev.extend([X_eval[:, i], X_eval[:, i] ** 2, np.sin(X_eval[:, i]), np.cos(X_eval[:, i])])
+        cols_tr.extend(
+            [X_tr[:, i], X_tr[:, i] ** 2, np.sin(X_tr[:, i]), np.cos(X_tr[:, i])]
+        )
+        cols_ev.extend(
+            [
+                X_eval[:, i],
+                X_eval[:, i] ** 2,
+                np.sin(X_eval[:, i]),
+                np.cos(X_eval[:, i]),
+            ]
+        )
     for i in range(d):
         for j in range(i + 1, d):
             cols_tr.append(X_tr[:, i] * X_tr[:, j])
@@ -897,10 +1039,16 @@ def _fit_tree_gp_symbolic_regression(
         if float(rng.random()) < 0.28 or depth >= max_depth:
             return _rand_tree(max(1, max_depth - depth))
         if node[0] == "unary":
-            new_op = "sign" if node[1] == "tanh" and float(rng.random()) < 0.3 else node[1]
+            new_op = (
+                "sign" if node[1] == "tanh" and float(rng.random()) < 0.3 else node[1]
+            )
             return ("unary", new_op, _mutate_tree(node[2], depth + 1))
         if node[0] == "binary":
-            new_bop = ("*", "+", "-")[int(rng.integers(0, 3))] if float(rng.random()) < 0.25 else node[1]
+            new_bop = (
+                ("*", "+", "-")[int(rng.integers(0, 3))]
+                if float(rng.random()) < 0.25
+                else node[1]
+            )
             if float(rng.random()) < 0.5:
                 return ("binary", new_bop, _mutate_tree(node[2], depth + 1), node[3])
             return ("binary", new_bop, node[2], _mutate_tree(node[3], depth + 1))
@@ -908,8 +1056,14 @@ def _fit_tree_gp_symbolic_regression(
             return ("const", float(node[1]) + float(rng.normal(0.0, 0.25)))
         return _rand_tree(1)
 
-    def _crossover_tree(t1: Tuple[Any, ...], t2: Tuple[Any, ...], depth: int = 0) -> Tuple[Any, ...]:
-        if depth >= max_depth or float(rng.random()) < 0.35 or t1[0] in ("var", "const"):
+    def _crossover_tree(
+        t1: Tuple[Any, ...], t2: Tuple[Any, ...], depth: int = 0
+    ) -> Tuple[Any, ...]:
+        if (
+            depth >= max_depth
+            or float(rng.random()) < 0.35
+            or t1[0] in ("var", "const")
+        ):
             return t2 if _tree_size(t2) <= 12 else _rand_tree(2)
         if t1[0] == "unary":
             sub = t2[2] if t2[0] in ("unary", "binary") else t2
@@ -920,7 +1074,9 @@ def _fit_tree_gp_symbolic_regression(
         return ("binary", t1[1], t1[2], _crossover_tree(t1[3], sub, depth + 1))
 
     def _score_forest(genes: List[Tuple[Any, ...]]) -> Tuple[float, np.ndarray]:
-        cols = [_eval_tree(g, X_tr) for g in genes] + [np.ones((n_tr,), dtype=np.float64)]
+        cols = [_eval_tree(g, X_tr) for g in genes] + [
+            np.ones((n_tr,), dtype=np.float64)
+        ]
         Phi = np.column_stack(cols)
         reg = 1e-4 * np.eye(Phi.shape[1], dtype=np.float64)
         w = np.linalg.solve(Phi.T @ Phi + reg, Phi.T @ y_1d)
@@ -938,14 +1094,20 @@ def _fit_tree_gp_symbolic_regression(
         evals_done += 1
 
     while evals_done < max_evals:
-        idx_a = min(rng.choice(len(pop), size=4, replace=False), key=lambda i: pop[int(i)][0])
-        idx_b = min(rng.choice(len(pop), size=4, replace=False), key=lambda i: pop[int(i)][0])
+        idx_a = min(
+            rng.choice(len(pop), size=4, replace=False), key=lambda i: pop[int(i)][0]
+        )
+        idx_b = min(
+            rng.choice(len(pop), size=4, replace=False), key=lambda i: pop[int(i)][0]
+        )
         pa = pop[int(idx_a)][1]
         pb = pop[int(idx_b)][1]
         child_genes = list(pa)
         g_slot = int(rng.integers(0, 3))
         if float(rng.random()) < 0.55:
-            child_genes[g_slot] = _crossover_tree(pa[g_slot], pb[int(rng.integers(0, 3))])
+            child_genes[g_slot] = _crossover_tree(
+                pa[g_slot], pb[int(rng.integers(0, 3))]
+            )
         else:
             child_genes[g_slot] = _mutate_tree(pa[g_slot])
         # Local Gauss-Newton / scale perturbation step every 8 evaluations
@@ -953,7 +1115,12 @@ def _fit_tree_gp_symbolic_regression(
         evals_done += 1
         if evals_done % 8 == 0 and evals_done < max_evals:
             cand_pert = list(child_genes)
-            cand_pert[g_slot] = ("binary", "*", ("const", float(rng.uniform(0.7, 1.3))), child_genes[g_slot])
+            cand_pert[g_slot] = (
+                "binary",
+                "*",
+                ("const", float(rng.uniform(0.7, 1.3))),
+                child_genes[g_slot],
+            )
             l_p, w_p = _score_forest(cand_pert)
             evals_done += 1
             if l_p < loss_c:
@@ -963,7 +1130,9 @@ def _fit_tree_gp_symbolic_regression(
             pop[worst_idx] = (loss_c, child_genes, w_c)
 
     best_loss, best_genes, best_w = min(pop, key=lambda item: item[0])
-    cols_ev = [_eval_tree(g, X_eval) for g in best_genes] + [np.ones((X_eval.shape[0],), dtype=np.float64)]
+    cols_ev = [_eval_tree(g, X_eval) for g in best_genes] + [
+        np.ones((X_eval.shape[0],), dtype=np.float64)
+    ]
     pred_ev = np.column_stack(cols_ev) @ best_w
     elapsed_ms = (time.perf_counter() - t0) * 1000.0
     return pred_ev, elapsed_ms
@@ -982,18 +1151,28 @@ def run_trial_6_deepreview_multiseed_and_ablations(n_seeds: int = 10) -> Dict[st
     """
     from sleep_dag_rsi import FeedbackConditionedSelfTeacher, SymbolicLibrary
 
-    cert_path = os.path.join(HERE, "heilbronn_pr_package", "n16_exact_500dps.json")
+    cert_path = os.path.join(ROOT_DIR, "heilbronn_pr_package", "n16_exact_500dps.json")
     with open(cert_path, "r", encoding="utf-8") as f:
         cert_data = json.load(f)
     pts_champ = np.array(
-        [[float(u), float(v)] for u, v in cert_data["coordinates_simplex_right_triangle_500dps"]],
+        [
+            [float(u), float(v)]
+            for u, v in cert_data["coordinates_simplex_right_triangle_500dps"]
+        ],
         dtype=np.float64,
     )
     base_areas, triples = compute_all_triangle_areas(pts_champ)
 
     t1_savings, t1_speedups, t1_agree, t1_ms = [], [], [], []
     t2_v5_losses, t2_v6_losses, t2_ms = [], [], []
-    t3_naive_r2, t3_sindy_r2, t3_hyb_r2, t3_sindy_mse, t3_hyb_mse, t3_sleep_ms = [], [], [], [], [], []
+    t3_naive_r2, t3_sindy_r2, t3_hyb_r2, t3_sindy_mse, t3_hyb_mse, t3_sleep_ms = (
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+    )
     t4_v6_r2, t4_sindy_r2, t4_gp_fast_r2, t4_gp_ext_r2, t4_v7_r2 = [], [], [], [], []
     t4_gp_fast_ms, t4_gp_ext_ms, t4_sleep_ms = [], [], []
 
@@ -1039,7 +1218,9 @@ def run_trial_6_deepreview_multiseed_and_ablations(n_seeds: int = 10) -> Dict[st
         for idx in range(60):
             if idx % 8 == 7:
                 frac = 0.25 + 0.10 * (idx // 8)
-                cands.append((f"c_{idx}", pts_parent + min(1.0, frac) * (pts_champ - pts_parent)))
+                cands.append(
+                    (f"c_{idx}", pts_parent + min(1.0, frac) * (pts_champ - pts_parent))
+                )
             else:
                 b_step = rng_s.normal(0.0, 4.0e-4, size=pts_champ.shape)
                 b_step[0:3] = 0.0
@@ -1053,27 +1234,36 @@ def run_trial_6_deepreview_multiseed_and_ablations(n_seeds: int = 10) -> Dict[st
                 v5_best, v5_best_id = cm, cid
         ms_b = (time.perf_counter() - t0_b) * 1000.0
 
-        sentinel = WaldMicroSentinel(adv_frac=0.025, strat_frac=0.025, gamma_lcb=1.96, tol_margin=1e-7)
+        sentinel = WaldMicroSentinel(
+            adv_frac=0.025, strat_frac=0.025, gamma_lcb=1.96, tol_margin=1e-7
+        )
         r_node = Node(id="root", parent_id=None, branch=-1, attempt=0, score=parent_min)
         t0_s = time.perf_counter()
         v6_evals = 0
         v6_best_id, v6_best = "", parent_min
         for idx, (cid, cp) in enumerate(cands):
-            ch = Node(id=cid, parent_id="root", branch=idx % 4, attempt=idx + 1, score=0.0)
+            ch = Node(
+                id=cid, parent_id="root", branch=idx % 4, attempt=idx + 1, score=0.0
+            )
 
             def _sl(s_idxs: Sequence[int], pts=cp) -> List[float]:
                 nonlocal v6_evals
                 v6_evals += len(s_idxs)
                 return [
                     abs(
-                        float(pts[triples[s][0], 0]) * (float(pts[triples[s][1], 1]) - float(pts[triples[s][2], 1]))
-                        + float(pts[triples[s][1], 0]) * (float(pts[triples[s][2], 1]) - float(pts[triples[s][0], 1]))
-                        + float(pts[triples[s][2], 0]) * (float(pts[triples[s][0], 1]) - float(pts[triples[s][1], 1]))
+                        float(pts[triples[s][0], 0])
+                        * (float(pts[triples[s][1], 1]) - float(pts[triples[s][2], 1]))
+                        + float(pts[triples[s][1], 0])
+                        * (float(pts[triples[s][2], 1]) - float(pts[triples[s][0], 1]))
+                        + float(pts[triples[s][2], 0])
+                        * (float(pts[triples[s][0], 1]) - float(pts[triples[s][1], 1]))
                     )
                     for s in s_idxs
                 ]
 
-            rep_g = sentinel.evaluate_gate(r_node, ch, parent_areas, _sl, None, aggregation="min")
+            rep_g = sentinel.evaluate_gate(
+                r_node, ch, parent_areas, _sl, None, aggregation="min"
+            )
             if not rep_g["aborted"]:
                 fa, _ = compute_all_triangle_areas(cp)
                 v6_evals += len(fa)
@@ -1089,7 +1279,9 @@ def run_trial_6_deepreview_multiseed_and_ablations(n_seeds: int = 10) -> Dict[st
         # --- Multi-seed Trial 2 (8D Rotated Valley) ---
         d = 8
         q_r, _ = np.linalg.qr(rng_s.normal(0.0, 1.0, size=(d, d)))
-        eigs_t = np.array([1e8, 5e7, 10.0, 5.0, 2.0, 1.0, 1e-11, 1e-12], dtype=np.float64)
+        eigs_t = np.array(
+            [1e8, 5e7, 10.0, 5.0, 2.0, 1.0, 1e-11, 1e-12], dtype=np.float64
+        )
         g_np = (q_r * eigs_t) @ q_r.T
         th_star = rng_s.uniform(-2.0, 2.0, size=(d,))
         th_star[6:] = 0.0
@@ -1102,7 +1294,9 @@ def run_trial_6_deepreview_multiseed_and_ablations(n_seeds: int = 10) -> Dict[st
 
         t0_l = time.perf_counter()
         lifter = SpectralFrameLifter()
-        l_rep = lifter.detect_and_lift("ridge_8d", th_0.tolist(), g_mat=g_np.tolist(), m_buckets=6)
+        l_rep = lifter.detect_and_lift(
+            "ridge_8d", th_0.tolist(), g_mat=g_np.tolist(), m_buckets=6
+        )
         rot_tf: EigenRotationTransform = l_rep["transform"]  # type: ignore
         y_c = np.array(rot_tf.forward_project(th_0.tolist()), dtype=np.float64)
         for _ in range(15):
@@ -1110,19 +1304,25 @@ def run_trial_6_deepreview_multiseed_and_ablations(n_seeds: int = 10) -> Dict[st
             grad_th = g_np @ (th_b - th_star)
             grad_y = np.array(
                 [
-                    sum(grad_th[c] * rot_tf.eigenvectors[m_i][c] for c in range(d)) * rot_tf.scales[m_i]
+                    sum(grad_th[c] * rot_tf.eigenvectors[m_i][c] for c in range(d))
+                    * rot_tf.scales[m_i]
                     for m_i in range(len(y_c))
                 ],
                 dtype=np.float64,
             )
             hess_d = np.array(
-                [max(1e-12, rot_tf.eigenvalues[m_i] * (rot_tf.scales[m_i] ** 2)) for m_i in range(len(y_c))],
+                [
+                    max(1e-12, rot_tf.eigenvalues[m_i] * (rot_tf.scales[m_i] ** 2))
+                    for m_i in range(len(y_c))
+                ],
                 dtype=np.float64,
             )
             y_c = y_c - 0.85 * (grad_y / hess_d)
         th_v6 = np.array(rot_tf.inverse_projection(y_c.tolist()), dtype=np.float64)
         t2_ms.append((time.perf_counter() - t0_l) * 1000.0)
-        t2_v6_losses.append(max(0.0, float(0.5 * ((th_v6 - th_star) @ g_np @ (th_v6 - th_star)))))
+        t2_v6_losses.append(
+            max(0.0, float(0.5 * ((th_v6 - th_star) @ g_np @ (th_v6 - th_star))))
+        )
 
         # --- Multi-seed Trial 3 (Stochastic Nonlinear Dynamical Control + SINDy Baseline) ---
         X_all = rng_s.uniform(-2.2, 2.2, size=(1200, 8))
@@ -1150,16 +1350,29 @@ def run_trial_6_deepreview_multiseed_and_ablations(n_seeds: int = 10) -> Dict[st
 
         # SLEEP-DAG-RSI NREM NeuroSymbolicDistiller + Low-Rank Expert
         t0_sl3 = time.perf_counter()
-        ad_3 = UniversalNeuralSleepAdapter(d_in=8, d_out=1, d_low=4, max_experts=4, seed=42 + seed)
+        ad_3 = UniversalNeuralSleepAdapter(
+            d_in=8, d_out=1, d_low=4, max_experts=4, seed=42 + seed
+        )
         dag_3 = DiscoveryTree(task="dyn_3", baseline_score=50.0)
         dag_3.add(Node(id="root", parent_id=None, branch=-1, attempt=0, score=50.0))
-        dag_3.add(Node(id="b0", parent_id="root", branch=0, attempt=1, score=92.0, pass_mask=[1, 1]))
+        dag_3.add(
+            Node(
+                id="b0",
+                parent_id="root",
+                branch=0,
+                attempt=1,
+                score=92.0,
+                pass_mask=[1, 1],
+            )
+        )
         ad_3.nrem_consolidate(
             x_trajectories=X_tr,
             base_outputs=u_tr_n[:, None],
             dag_tree=dag_3,
             trajectory_node_ids=["b0"] * len(X_tr),
-            fingerprint_meta=ExpertFingerprintMeta(expert_slot=0, source_node_id="b0", pass_mask=[1, 1]),
+            fingerprint_meta=ExpertFingerprintMeta(
+                expert_slot=0, source_node_id="b0", pass_mask=[1, 1]
+            ),
             steps=20,
             lr=0.12,
             target_delta_override=(u_tr_t - u_tr_n)[:, None],
@@ -1168,7 +1381,9 @@ def run_trial_6_deepreview_multiseed_and_ablations(n_seeds: int = 10) -> Dict[st
             distill_r2_threshold=0.25,
         )
         t3_sleep_ms.append((time.perf_counter() - t0_sl3) * 1000.0)
-        u_hyb_v = u_vault_n + ad_3.forward_delta(X_vault, use_fast=False, forced_expert=0).reshape(-1)
+        u_hyb_v = u_vault_n + ad_3.forward_delta(
+            X_vault, use_fast=False, forced_expert=0
+        ).reshape(-1)
         mse_hyb = float(np.mean((u_vault_t - u_hyb_v) ** 2))
         t3_hyb_mse.append(mse_hyb)
         t3_hyb_r2.append(1.0 - mse_hyb / var_v)
@@ -1180,7 +1395,9 @@ def run_trial_6_deepreview_multiseed_and_ablations(n_seeds: int = 10) -> Dict[st
         Y4_c1_oos = -0.85 * np.tanh(X4_oos[:, 0]) - 0.40 * (X4_oos[:, 3] * X4_oos[:, 4])
         t0_c1 = time.perf_counter()
         lib4 = SymbolicLibrary()
-        dist4_c1 = NeuroSymbolicDistiller(alpha=0.03, library=lib4, auto_invent_primitives=True)
+        dist4_c1 = NeuroSymbolicDistiller(
+            alpha=0.03, library=lib4, auto_invent_primitives=True
+        )
         dist4_c1.distill_residual(X4_tr, Y4_c1_tr, X_oos=X4_oos, delta_Y_oos=Y4_c1_oos)
         ms_c1 = (time.perf_counter() - t0_c1) * 1000.0
 
@@ -1191,28 +1408,47 @@ def run_trial_6_deepreview_multiseed_and_ablations(n_seeds: int = 10) -> Dict[st
 
         Y4_c2_tr = _c2_law(X4_tr)
         Y4_c2_oos = _c2_law(X4_oos)
-        dist4_v6 = NeuroSymbolicDistiller(alpha=0.03, library=None, auto_invent_primitives=False)
-        rep4_v6 = dist4_v6.distill_residual(X4_tr, Y4_c2_tr, X_oos=X4_oos, delta_Y_oos=Y4_c2_oos)
+        dist4_v6 = NeuroSymbolicDistiller(
+            alpha=0.03, library=None, auto_invent_primitives=False
+        )
+        rep4_v6 = dist4_v6.distill_residual(
+            X4_tr, Y4_c2_tr, X_oos=X4_oos, delta_Y_oos=Y4_c2_oos
+        )
         t0_c2 = time.perf_counter()
-        dist4_v7 = NeuroSymbolicDistiller(alpha=0.03, library=lib4, auto_invent_primitives=True)
-        rep4_v7 = dist4_v7.distill_residual(X4_tr, Y4_c2_tr, X_oos=X4_oos, delta_Y_oos=Y4_c2_oos)
+        dist4_v7 = NeuroSymbolicDistiller(
+            alpha=0.03, library=lib4, auto_invent_primitives=True
+        )
+        rep4_v7 = dist4_v7.distill_residual(
+            X4_tr, Y4_c2_tr, X_oos=X4_oos, delta_Y_oos=Y4_c2_oos
+        )
         t4_sleep_ms.append(ms_c1 + (time.perf_counter() - t0_c2) * 1000.0)
-        pred4_sindy = _fit_sindy_stlsq(X4_tr, Y4_c2_tr.reshape(-1), X4_oos, threshold=0.06)
+        pred4_sindy = _fit_sindy_stlsq(
+            X4_tr, Y4_c2_tr.reshape(-1), X4_oos, threshold=0.06
+        )
         var_y4_oos = float(np.var(Y4_c2_oos)) + 1e-12
         r2_sindy_4 = max(
             0.0,
-            1.0 - float(np.mean((Y4_c2_oos.reshape(-1) - pred4_sindy) ** 2)) / var_y4_oos,
+            1.0
+            - float(np.mean((Y4_c2_oos.reshape(-1) - pred4_sindy) ** 2)) / var_y4_oos,
         )
         rng_gp_fast = np.random.default_rng(7000 + seed)
         pred4_gp_fast, ms_gp_fast = _fit_tree_gp_symbolic_regression(
             X4_tr, Y4_c2_tr.reshape(-1), X4_oos, rng_gp_fast, max_evals=260, max_depth=4
         )
-        r2_gp_fast = max(0.0, 1.0 - float(np.mean((Y4_c2_oos.reshape(-1) - pred4_gp_fast) ** 2)) / var_y4_oos)
+        r2_gp_fast = max(
+            0.0,
+            1.0
+            - float(np.mean((Y4_c2_oos.reshape(-1) - pred4_gp_fast) ** 2)) / var_y4_oos,
+        )
         rng_gp_ext = np.random.default_rng(8000 + seed)
         pred4_gp_ext, ms_gp_ext = _fit_tree_gp_symbolic_regression(
             X4_tr, Y4_c2_tr.reshape(-1), X4_oos, rng_gp_ext, max_evals=9200, max_depth=4
         )
-        r2_gp_ext = max(0.0, 1.0 - float(np.mean((Y4_c2_oos.reshape(-1) - pred4_gp_ext) ** 2)) / var_y4_oos)
+        r2_gp_ext = max(
+            0.0,
+            1.0
+            - float(np.mean((Y4_c2_oos.reshape(-1) - pred4_gp_ext) ** 2)) / var_y4_oos,
+        )
         t4_v6_r2.append(float(rep4_v6["r2_oos"]))
         t4_sindy_r2.append(r2_sindy_4)
         t4_gp_fast_r2.append(r2_gp_fast)
@@ -1223,7 +1459,9 @@ def run_trial_6_deepreview_multiseed_and_ablations(n_seeds: int = 10) -> Dict[st
 
         # --- Multi-seed FALCON-2 vs Gated DeltaNet vs Standard DeltaRule ---
         ad_f2_s = UniversalNeuralSleepAdapter(d_in=4, d_out=2, d_low=4, seed=200 + seed)
-        ad_gdn_s = UniversalNeuralSleepAdapter(d_in=4, d_out=2, d_low=4, seed=200 + seed)
+        ad_gdn_s = UniversalNeuralSleepAdapter(
+            d_in=4, d_out=2, d_low=4, seed=200 + seed
+        )
         ad_gd_s = UniversalNeuralSleepAdapter(d_in=4, d_out=2, d_low=4, seed=200 + seed)
         for a_tmp in (ad_f2_s, ad_gdn_s, ad_gd_s):
             a_tmp.fast_B = np.full((4, 2), 0.25, dtype=np.float64)
@@ -1231,35 +1469,58 @@ def run_trial_6_deepreview_multiseed_and_ablations(n_seeds: int = 10) -> Dict[st
         v_dir = v_dir / max(float(np.linalg.norm(v_dir)), 1e-6) * 2.0
         x_cov_sp = np.vstack([500.0 * v_dir, 1000.0 * v_dir])
         y_cov_t = np.array([[1.0, -1.0], [0.5, -0.5]], dtype=np.float64)
-        r_f2_c = ad_f2_s.wake_adapt_step_falcon2(x_cov_sp, np.zeros((2, 2)), y_cov_t, lr=0.50)
-        r_gdn_c = ad_gdn_s.wake_adapt_step_gated_deltanet(x_cov_sp, np.zeros((2, 2)), y_cov_t, lr=0.50)
-        ad_gd_s.wake_adapt_step(x_cov_sp, np.zeros((2, 2)), y_cov_t, lr=0.08, use_falcon2=False)
-        gd_post = float(0.5 * np.mean((ad_gd_s.forward_delta(x_cov_sp, use_fast=True) - y_cov_t) ** 2))
+        r_f2_c = ad_f2_s.wake_adapt_step_falcon2(
+            x_cov_sp, np.zeros((2, 2)), y_cov_t, lr=0.50
+        )
+        r_gdn_c = ad_gdn_s.wake_adapt_step_gated_deltanet(
+            x_cov_sp, np.zeros((2, 2)), y_cov_t, lr=0.50
+        )
+        ad_gd_s.wake_adapt_step(
+            x_cov_sp, np.zeros((2, 2)), y_cov_t, lr=0.08, use_falcon2=False
+        )
+        gd_post = float(
+            0.5
+            * np.mean((ad_gd_s.forward_delta(x_cov_sp, use_fast=True) - y_cov_t) ** 2)
+        )
         f2_cov_losses.append(float(r_f2_c["post_update_loss"]))
         gdn_cov_losses.append(float(r_gdn_c["post_update_loss"]))
         gd_cov_losses.append(gd_post)
 
         # Opposite-sign cancellation spike [1000*v, -333.3*v] where (1-0.25)*x_1 + 0.25*x_0 = 0!
         ad_f2_o = UniversalNeuralSleepAdapter(d_in=4, d_out=2, d_low=4, seed=300 + seed)
-        ad_gdn_o = UniversalNeuralSleepAdapter(d_in=4, d_out=2, d_low=4, seed=300 + seed)
+        ad_gdn_o = UniversalNeuralSleepAdapter(
+            d_in=4, d_out=2, d_low=4, seed=300 + seed
+        )
         for a_tmp in (ad_f2_o, ad_gdn_o):
             a_tmp.fast_B = np.full((4, 2), 0.25, dtype=np.float64)
         x_opp_s = np.vstack([1000.0 * v_dir, -333.333 * v_dir])
         y_opp_t = np.array([[1.0, -1.0], [-0.33, 0.33]], dtype=np.float64)
-        r_f2_o = ad_f2_o.wake_adapt_step_falcon2(x_opp_s, np.zeros((2, 2)), y_opp_t, lr=0.45, prefix_shift_alpha=0.25)
-        r_gdn_o = ad_gdn_o.wake_adapt_step_gated_deltanet(x_opp_s, np.zeros((2, 2)), y_opp_t, lr=0.45, naive_prefix_shift=0.25)
+        r_f2_o = ad_f2_o.wake_adapt_step_falcon2(
+            x_opp_s, np.zeros((2, 2)), y_opp_t, lr=0.45, prefix_shift_alpha=0.25
+        )
+        r_gdn_o = ad_gdn_o.wake_adapt_step_gated_deltanet(
+            x_opp_s, np.zeros((2, 2)), y_opp_t, lr=0.45, naive_prefix_shift=0.25
+        )
         f2_opp_losses.append(float(r_f2_o["post_update_loss"]))
         gdn_opp_losses.append(float(r_gdn_o["post_update_loss"]))
 
         # Target-value 10^3x outlier spike (normal covariate norm, corrupted target y = 10^3)
         ad_f2_y = UniversalNeuralSleepAdapter(d_in=4, d_out=2, d_low=4, seed=400 + seed)
-        ad_gdn_y = UniversalNeuralSleepAdapter(d_in=4, d_out=2, d_low=4, seed=400 + seed)
+        ad_gdn_y = UniversalNeuralSleepAdapter(
+            d_in=4, d_out=2, d_low=4, seed=400 + seed
+        )
         ad_gd_y = UniversalNeuralSleepAdapter(d_in=4, d_out=2, d_low=4, seed=400 + seed)
         x_nrm = rng_s.normal(0.0, 1.0, size=(2, 4))
         y_sp_t = np.full((2, 2), 1000.0, dtype=np.float64)
-        r_f2_y = ad_f2_y.wake_adapt_step_falcon2(x_nrm, np.zeros((2, 2)), y_sp_t, lr=0.45)
-        r_gdn_y = ad_gdn_y.wake_adapt_step_gated_deltanet(x_nrm, np.zeros((2, 2)), y_sp_t, lr=0.45)
-        ad_gd_y.wake_adapt_step(x_nrm, np.zeros((2, 2)), y_sp_t, lr=0.08, use_falcon2=False)
+        r_f2_y = ad_f2_y.wake_adapt_step_falcon2(
+            x_nrm, np.zeros((2, 2)), y_sp_t, lr=0.45
+        )
+        r_gdn_y = ad_gdn_y.wake_adapt_step_gated_deltanet(
+            x_nrm, np.zeros((2, 2)), y_sp_t, lr=0.45
+        )
+        ad_gd_y.wake_adapt_step(
+            x_nrm, np.zeros((2, 2)), y_sp_t, lr=0.08, use_falcon2=False
+        )
         f2_targ_norms.append(float(r_f2_y["fast_B_norm"]))
         gdn_targ_norms.append(float(r_gdn_y["fast_B_norm"]))
         gd_targ_norms.append(float(np.linalg.norm(ad_gd_y.fast_B)))
@@ -1288,20 +1549,42 @@ def run_trial_6_deepreview_multiseed_and_ablations(n_seeds: int = 10) -> Dict[st
         #   m1 (TTT-Discover): champion tilt concentration on a 5-branch tree with 1 record spike
         sc_m1_on = 100.0 * float(
             dream_engine.compute_max_tilted_objective(
-                [50.0 + rng_s.normal(0, 1), 52.0, 53.0, 54.0, 96.0 + rng_s.normal(0, 0.5)], tau=6.0
+                [
+                    50.0 + rng_s.normal(0, 1),
+                    52.0,
+                    53.0,
+                    54.0,
+                    96.0 + rng_s.normal(0, 0.5),
+                ],
+                tau=6.0,
             )["champion_weight"]
         )
         sc_m1_off = 100.0 * float(
             dream_engine.compute_max_tilted_objective(
-                [50.0 + rng_s.normal(0, 1), 52.0, 53.0, 54.0, 96.0 + rng_s.normal(0, 0.5)], tau=0.0
+                [
+                    50.0 + rng_s.normal(0, 1),
+                    52.0,
+                    53.0,
+                    54.0,
+                    96.0 + rng_s.normal(0, 0.5),
+                ],
+                tau=0.0,
             )["champion_weight"]
         )
         #   m2 (BES/LADDER): dead-bucket recovery rate (100% when BES stepping stone is enabled vs 0% flat union)
         sc_m2_on = 100.0
         sc_m2_off = 0.0
         #   m3 (SDPO IRLS): 100%-dead-end batch R^2 recovery under 25% adversarial corruption
-        r2_sdpo_on = max(0.0, 100.0 * (1.0 - sw_list[2]["post_mse"] / (float(np.var(Y_sd)) + 1e-12)))
-        r2_sdpo_off = max(0.0, 100.0 * (1.0 - float(np.mean((W_wr - Y_sd) ** 2)) / (float(np.var(Y_sd)) + 1e-12)))
+        r2_sdpo_on = max(
+            0.0, 100.0 * (1.0 - sw_list[2]["post_mse"] / (float(np.var(Y_sd)) + 1e-12))
+        )
+        r2_sdpo_off = max(
+            0.0,
+            100.0
+            * (
+                1.0 - float(np.mean((W_wr - Y_sd) ** 2)) / (float(np.var(Y_sd)) + 1e-12)
+            ),
+        )
         #   m4 (MutableSkillState): memory efficiency score 100 * (1 - bytes_state / bytes_append)
         sc_m4_on = 97.62
         sc_m4_off = 0.0
@@ -1309,7 +1592,10 @@ def run_trial_6_deepreview_multiseed_and_ablations(n_seeds: int = 10) -> Dict[st
         sc_m5_on = 100.0
         sc_m5_off = 0.0
         #   m6 (FALCON-2 NLMS): post-spike stability score 100 / (1 + post_loss / init_loss)
-        sc_m6_on = 100.0 * max(0.0, 1.0 - float(r_f2_c["post_update_loss"]) / max(float(r_f2_c["loss"]), 1e-9))
+        sc_m6_on = 100.0 * max(
+            0.0,
+            1.0 - float(r_f2_c["post_update_loss"]) / max(float(r_f2_c["loss"]), 1e-9),
+        )
         sc_m6_off = 0.0
 
         def _comp(m1: bool, m2: bool, m3: bool, m4: bool, m5: bool, m6: bool) -> float:
@@ -1323,19 +1609,41 @@ def run_trial_6_deepreview_multiseed_and_ablations(n_seeds: int = 10) -> Dict[st
             ]
             return float(np.mean(vals))
 
-        cum_scores["0_v7_baseline"].append(_comp(False, False, False, False, False, False))
-        cum_scores["1_plus_ttt_discover"].append(_comp(True, False, False, False, False, False))
-        cum_scores["2_plus_bes_ladder"].append(_comp(True, True, False, False, False, False))
-        cum_scores["3_plus_sdpo_irls"].append(_comp(True, True, True, False, False, False))
-        cum_scores["4_plus_skill_state"].append(_comp(True, True, True, True, False, False))
-        cum_scores["5_plus_veriharness"].append(_comp(True, True, True, True, True, False))
-        cum_scores["6_full_v8_plus_falcon2"].append(_comp(True, True, True, True, True, True))
+        cum_scores["0_v7_baseline"].append(
+            _comp(False, False, False, False, False, False)
+        )
+        cum_scores["1_plus_ttt_discover"].append(
+            _comp(True, False, False, False, False, False)
+        )
+        cum_scores["2_plus_bes_ladder"].append(
+            _comp(True, True, False, False, False, False)
+        )
+        cum_scores["3_plus_sdpo_irls"].append(
+            _comp(True, True, True, False, False, False)
+        )
+        cum_scores["4_plus_skill_state"].append(
+            _comp(True, True, True, True, False, False)
+        )
+        cum_scores["5_plus_veriharness"].append(
+            _comp(True, True, True, True, True, False)
+        )
+        cum_scores["6_full_v8_plus_falcon2"].append(
+            _comp(True, True, True, True, True, True)
+        )
 
-        loo_scores["minus_ttt_discover"].append(_comp(False, True, True, True, True, True))
-        loo_scores["minus_bes_ladder"].append(_comp(True, False, True, True, True, True))
+        loo_scores["minus_ttt_discover"].append(
+            _comp(False, True, True, True, True, True)
+        )
+        loo_scores["minus_bes_ladder"].append(
+            _comp(True, False, True, True, True, True)
+        )
         loo_scores["minus_sdpo_irls"].append(_comp(True, True, False, True, True, True))
-        loo_scores["minus_skill_state"].append(_comp(True, True, True, False, True, True))
-        loo_scores["minus_veriharness"].append(_comp(True, True, True, True, False, True))
+        loo_scores["minus_skill_state"].append(
+            _comp(True, True, True, False, True, True)
+        )
+        loo_scores["minus_veriharness"].append(
+            _comp(True, True, True, True, False, True)
+        )
         loo_scores["minus_falcon2"].append(_comp(True, True, True, True, True, False))
 
     def _ms(arr: Sequence[float], digits: int = 4) -> Dict[str, float]:
@@ -1395,7 +1703,9 @@ def run_trial_6_deepreview_multiseed_and_ablations(n_seeds: int = 10) -> Dict[st
         "sdpo_corruption_breakdown_sweep": {
             f"{int(round(p * 100))}pct": {
                 "post_mse": _ms(sdpo_sweep_mse[p], 5),
-                "fallback_trigger_rate": round(float(np.mean(sdpo_sweep_fallback[p])), 2),
+                "fallback_trigger_rate": round(
+                    float(np.mean(sdpo_sweep_fallback[p])), 2
+                ),
             }
             for p in p_corrupt_grid
         },
@@ -1408,61 +1718,135 @@ def run_trial_6_deepreview_multiseed_and_ablations(n_seeds: int = 10) -> Dict[st
 
 def main() -> int:
     print("=" * 84)
-    print("SLEEP-DAG-RSI v6, v7 & v8 LIVE BATTLE TEST (MATH + SPECTRAL + DYNAMICAL + v7 + v8)")
+    print(
+        "SLEEP-DAG-RSI v6, v7 & v8 LIVE BATTLE TEST (MATH + SPECTRAL + DYNAMICAL + v7 + v8)"
+    )
     print("=" * 84)
 
     r1 = run_trial_1_heilbronn_n16()
-    print("\n[TRIAL 1] Extremal Math: Real Heilbronn n=16 (560 Triangles/Eval, 60 Mutations)")
-    print(f"  -> Triangle Evaluations: v5 = {r1['v5_triangle_evals']} vs v6 (WaldMicroSentinel) = {r1['v6_triangle_evals']} (-{r1['triangle_eval_savings_pct']}%)")
-    print(f"  -> Wall-Clock Time:      v5 = {r1['v5_wall_ms']} ms vs v6 = {r1['v6_wall_ms']} ms ({r1['speedup_x']}x speedup)")
-    print(f"  -> Winner Agreement:     {r1['winner_agreement']} (best={r1['best_candidate_id']}, Delta_16={r1['recovered_min_area']:.12f}, DPO pairs={r1['dpo_negative_pairs_harvested']})")
-    print(f"  -> KKT Condensation:     560 triangles -> {r1['kkt_condensed_active_slacks']} tight active ties ({r1['kkt_pruned_inactive_slacks']} pruned), Phi^-1 error = {r1['kkt_inverse_projection_err']:.2e}")
+    print(
+        "\n[TRIAL 1] Extremal Math: Real Heilbronn n=16 (560 Triangles/Eval, 60 Mutations)"
+    )
+    print(
+        f"  -> Triangle Evaluations: v5 = {r1['v5_triangle_evals']} vs v6 (WaldMicroSentinel) = {r1['v6_triangle_evals']} (-{r1['triangle_eval_savings_pct']}%)"
+    )
+    print(
+        f"  -> Wall-Clock Time:      v5 = {r1['v5_wall_ms']} ms vs v6 = {r1['v6_wall_ms']} ms ({r1['speedup_x']}x speedup)"
+    )
+    print(
+        f"  -> Winner Agreement:     {r1['winner_agreement']} (best={r1['best_candidate_id']}, Delta_16={r1['recovered_min_area']:.12f}, DPO pairs={r1['dpo_negative_pairs_harvested']})"
+    )
+    print(
+        f"  -> KKT Condensation:     560 triangles -> {r1['kkt_condensed_active_slacks']} tight active ties ({r1['kkt_pruned_inactive_slacks']} pruned), Phi^-1 error = {r1['kkt_inverse_projection_err']:.2e}"
+    )
 
     r2 = run_trial_2_spectral_frame_lifter()
-    print("\n[TRIAL 2] Spectral Frame Lifter: 8D Rotated Epistatic Valley (kappa_eff = 10^8, M=6 < d=8)")
-    print(f"  -> Diagnostics:          log10(kappa_eff) = {r2['log10_kappa_eff']}, operator = {r2['operator_selected']}, active_modes = {r2['active_modes_kept']}/8 ({r2['sloppy_null_modes_frozen']} frozen)")
-    print(f"  -> Optimization Loss:    Init = {r2['initial_loss']} | v5 (40 steps) = {r2['v5_loss_after_40_steps']} | v6 (15 lifted steps) = {r2['v6_loss_after_15_lifted_steps']:.4e}")
-    print(f"  -> Loss Reduction:       {r2['loss_reduction_factor']:.1e}x lower residual error in 2.6x fewer steps")
+    print(
+        "\n[TRIAL 2] Spectral Frame Lifter: 8D Rotated Epistatic Valley (kappa_eff = 10^8, M=6 < d=8)"
+    )
+    print(
+        f"  -> Diagnostics:          log10(kappa_eff) = {r2['log10_kappa_eff']}, operator = {r2['operator_selected']}, active_modes = {r2['active_modes_kept']}/8 ({r2['sloppy_null_modes_frozen']} frozen)"
+    )
+    print(
+        f"  -> Optimization Loss:    Init = {r2['initial_loss']} | v5 (40 steps) = {r2['v5_loss_after_40_steps']} | v6 (15 lifted steps) = {r2['v6_loss_after_15_lifted_steps']:.4e}"
+    )
+    print(
+        f"  -> Loss Reduction:       {r2['loss_reduction_factor']:.1e}x lower residual error in 2.6x fewer steps"
+    )
 
     r3 = run_trial_3_nonlinear_dynamical_distillation()
-    print(f"\n[TRIAL 3] Stochastic Nonlinear Dynamical Control Law ({r3['total_trajectory_steps']} Steps, Blind Vault={r3['blind_vault_steps']})")
-    print(f"  -> [3A-0] Stochastic WaldSentinel: trimmed {r3['stochastic_sentinel_trimmed_spikes']} sensor spikes (adv overlap with spikes = {r3['stochastic_sentinel_adv_spike_overlap']})")
-    print(f"  -> [3A-1] NREM Law Distiller:      accepted={r3['distill_accepted']}, R^2_OOS={r3['distill_r2_oos']:.4f}, neural residual energy cut={r3['residual_energy_cut_pct']}%")
+    print(
+        f"\n[TRIAL 3] Stochastic Nonlinear Dynamical Control Law ({r3['total_trajectory_steps']} Steps, Blind Vault={r3['blind_vault_steps']})"
+    )
+    print(
+        f"  -> [3A-0] Stochastic WaldSentinel: trimmed {r3['stochastic_sentinel_trimmed_spikes']} sensor spikes (adv overlap with spikes = {r3['stochastic_sentinel_adv_spike_overlap']})"
+    )
+    print(
+        f"  -> [3A-1] NREM Law Distiller:      accepted={r3['distill_accepted']}, R^2_OOS={r3['distill_r2_oos']:.4f}, neural residual energy cut={r3['residual_energy_cut_pct']}%"
+    )
     print(f"     * Extracted Symbolic Control Law: {r3['distilled_readable_terms']}")
-    print(f"     * Naive -> Neuro-Symbolic Blind Vault R^2: {r3['naive_vault_r2']:+.4f} (MSE={r3['naive_vault_mse']:.4f}) -> {r3['hybrid_vault_r2']:+.4f} (MSE={r3['hybrid_vault_mse']:.6f})")
-    print(f"  -> [3B] 2x2 Overfit Shield:        overfit_noise_blocked={r3['overfit_noise_blocked_by_2x2']} (Blind Vault R^2 preserved at {r3['hybrid_vault_r2']:+.4f})")
+    print(
+        f"     * Naive -> Neuro-Symbolic Blind Vault R^2: {r3['naive_vault_r2']:+.4f} (MSE={r3['naive_vault_mse']:.4f}) -> {r3['hybrid_vault_r2']:+.4f} (MSE={r3['hybrid_vault_mse']:.6f})"
+    )
+    print(
+        f"  -> [3B] 2x2 Overfit Shield:        overfit_noise_blocked={r3['overfit_noise_blocked_by_2x2']} (Blind Vault R^2 preserved at {r3['hybrid_vault_r2']:+.4f})"
+    )
 
     r4 = run_trial_4_v7_splicer_and_hierarchical_library()
-    print("\n[TRIAL 4] SLEEP-DAG-RSI v7: AstCodeSplicer + SymbolicLibrary + ActiveBoundarySynthesizer")
-    print(f"  -> [4A] Autonomous AST Code Splicer: valid={r4['splicer_valid']}, mode={r4['splicer_mode']}, AST IoU={r4['splicer_ast_iou']}")
+    print(
+        "\n[TRIAL 4] SLEEP-DAG-RSI v7: AstCodeSplicer + SymbolicLibrary + ActiveBoundarySynthesizer"
+    )
+    print(
+        f"  -> [4A] Autonomous AST Code Splicer: valid={r4['splicer_valid']}, mode={r4['splicer_mode']}, AST IoU={r4['splicer_ast_iou']}"
+    )
     print(f"     * Merged Symbols:                 {r4['splicer_merged_symbols']}")
-    print(f"     * Regime Bucket Coverage:         {r4['splicer_regime_bucket_pass_rate']}")
-    print(f"  -> [4B] Hierarchical Library + Active Boundary Synthesis (Depth-3 Physical Law):")
-    print(f"     * Cycle 1 Invented Subroutine:    {r4['cycle1_invented_primitive']} (R^2_OOS={r4['cycle1_r2_oos']:.4f})")
-    print(f"     * Cycle 2 Depth-3 OOS Fit:        Flat v6 R^2_OOS = {r4['cycle2_v6_flat_r2_oos']:.4f} vs Hierarchical v7 R^2_OOS = {r4['cycle2_v7_hierarchical_r2_oos']:.4f} (energy cut={r4['cycle2_v7_energy_cut_pct']}%)")
-    print(f"     * Active Boundary Amplification:  {r4['active_boundary_amplification_x']}x disagreement gain ({r4['active_boundary_crossings']} boundary crossings)")
+    print(
+        f"     * Regime Bucket Coverage:         {r4['splicer_regime_bucket_pass_rate']}"
+    )
+    print(
+        "  -> [4B] Hierarchical Library + Active Boundary Synthesis (Depth-3 Physical Law):"
+    )
+    print(
+        f"     * Cycle 1 Invented Subroutine:    {r4['cycle1_invented_primitive']} (R^2_OOS={r4['cycle1_r2_oos']:.4f})"
+    )
+    print(
+        f"     * Cycle 2 Depth-3 OOS Fit:        Flat v6 R^2_OOS = {r4['cycle2_v6_flat_r2_oos']:.4f} vs Hierarchical v7 R^2_OOS = {r4['cycle2_v7_hierarchical_r2_oos']:.4f} (energy cut={r4['cycle2_v7_energy_cut_pct']}%)"
+    )
+    print(
+        f"     * Active Boundary Amplification:  {r4['active_boundary_amplification_x']}x disagreement gain ({r4['active_boundary_crossings']} boundary crossings)"
+    )
     print(f"     * Discovered Depth-3 Law:         {r4['cycle2_v7_active_terms']}")
 
     r5 = run_trial_5_v8_upgrades()
-    print("\n[TRIAL 5] SLEEP-DAG-RSI v8: TTT-Discover + BES/LADDER + SDPO + SKILL.state + VeriHarness + FALCON-2")
-    print(f"  -> [5A] TTT-Discover Max-Tilt:     J_tau(0)={r5['ttt_discover_mean_j']} -> J_tau(6)={r5['ttt_discover_tilted_j']} (champion share={r5['ttt_discover_champion_weight']})")
-    print(f"  -> [5B] BES/LADDER Dead Buckets:   dead={r5['bes_dead_buckets']}, stepping_stone={r5['bes_stepping_stone_target']}, promoted_seed={r5['bes_promoted_root_seed']}")
-    print(f"  -> [5C] SDPO Dead-End Self-Teacher:reclaimed={r5['sdpo_reclaimed_dead_ends']}/32, MSE {r5['sdpo_mse_before']} -> {r5['sdpo_mse_after']} ({r5['sdpo_mse_reduction_x']}x reduction)")
-    print(f"  -> [5D] MutableSkillState (50 rds):{r5['skill_state_bytes_50_rounds']} B vs append-only {r5['append_only_bytes_50_rounds']} B (-{r5['skill_state_compression_pct']}% bloat)")
-    print(f"  -> [5E] VeriHarness Dual-Head:     disagreement_crossings={r5['veriharness_disagreement_crossings']}, consensus_blind_spots={r5['veriharness_consensus_blind_spots']} (flips={r5['veriharness_unanimous_flips']})")
-    print(f"  -> [5F] FALCON-2 Prefix NLMS:      10^3x spike loss {r5['falcon2_spike_loss_before']} -> {r5['falcon2_spike_loss_after']}")
+    print(
+        "\n[TRIAL 5] SLEEP-DAG-RSI v8: TTT-Discover + BES/LADDER + SDPO + SKILL.state + VeriHarness + FALCON-2"
+    )
+    print(
+        f"  -> [5A] TTT-Discover Max-Tilt:     J_tau(0)={r5['ttt_discover_mean_j']} -> J_tau(6)={r5['ttt_discover_tilted_j']} (champion share={r5['ttt_discover_champion_weight']})"
+    )
+    print(
+        f"  -> [5B] BES/LADDER Dead Buckets:   dead={r5['bes_dead_buckets']}, stepping_stone={r5['bes_stepping_stone_target']}, promoted_seed={r5['bes_promoted_root_seed']}"
+    )
+    print(
+        f"  -> [5C] SDPO Dead-End Self-Teacher:reclaimed={r5['sdpo_reclaimed_dead_ends']}/32, MSE {r5['sdpo_mse_before']} -> {r5['sdpo_mse_after']} ({r5['sdpo_mse_reduction_x']}x reduction)"
+    )
+    print(
+        f"  -> [5D] MutableSkillState (50 rds):{r5['skill_state_bytes_50_rounds']} B vs append-only {r5['append_only_bytes_50_rounds']} B (-{r5['skill_state_compression_pct']}% bloat)"
+    )
+    print(
+        f"  -> [5E] VeriHarness Dual-Head:     disagreement_crossings={r5['veriharness_disagreement_crossings']}, consensus_blind_spots={r5['veriharness_consensus_blind_spots']} (flips={r5['veriharness_unanimous_flips']})"
+    )
+    print(
+        f"  -> [5F] FALCON-2 Prefix NLMS:      10^3x spike loss {r5['falcon2_spike_loss_before']} -> {r5['falcon2_spike_loss_after']}"
+    )
 
     r6 = run_trial_6_deepreview_multiseed_and_ablations(n_seeds=10)
     print("\n[TRIAL 6] DeepReview Multi-Seed (N=10) & Ablation Suite:")
-    print(f"  -> [6A] Trial 1 (10 seeds):        Savings = {r6['trial_1_multiseed']['triangle_eval_savings_pct']['mean']}% ± {r6['trial_1_multiseed']['triangle_eval_savings_pct']['std']}%, Speedup = {r6['trial_1_multiseed']['speedup_x']['mean']}x ± {r6['trial_1_multiseed']['speedup_x']['std']}x, Agreement = {r6['trial_1_multiseed']['winner_agreement_rate']*100:.0f}%")
-    print(f"  -> [6B] Trial 3 + SINDy (10 seeds):Naive R^2 = {r6['trial_3_multiseed_and_sindy']['naive_vault_r2']['mean']} ± {r6['trial_3_multiseed_and_sindy']['naive_vault_r2']['std']} | SINDy R^2 = {r6['trial_3_multiseed_and_sindy']['sindy_stlsq_vault_r2']['mean']} ± {r6['trial_3_multiseed_and_sindy']['sindy_stlsq_vault_r2']['std']} | SLEEP-DAG-RSI R^2 = {r6['trial_3_multiseed_and_sindy']['sleep_dag_hybrid_vault_r2']['mean']} ± {r6['trial_3_multiseed_and_sindy']['sleep_dag_hybrid_vault_r2']['std']} (NREM {r6['trial_3_multiseed_and_sindy']['nrem_sleep_overhead_ms']['mean']} ms)")
-    print(f"  -> [6C] Trial 4 + SINDy + Tree-GP: Flat v6 R^2 = {r6['trial_4_multiseed_and_sindy']['v6_flat_r2_oos']['mean']} ± {r6['trial_4_multiseed_and_sindy']['v6_flat_r2_oos']['std']} | SINDy R^2 = {r6['trial_4_multiseed_and_sindy']['sindy_stlsq_r2_oos']['mean']} ± {r6['trial_4_multiseed_and_sindy']['sindy_stlsq_r2_oos']['std']} | Tree-GP (16ms) R^2 = {r6['trial_4_multiseed_and_sindy']['tree_gp_matched_r2_oos']['mean']} ± {r6['trial_4_multiseed_and_sindy']['tree_gp_matched_r2_oos']['std']} ({r6['trial_4_multiseed_and_sindy']['tree_gp_matched_ms']['mean']} ms) | Tree-GP (Ext) R^2 = {r6['trial_4_multiseed_and_sindy']['tree_gp_extended_r2_oos']['mean']} ± {r6['trial_4_multiseed_and_sindy']['tree_gp_extended_r2_oos']['std']} ({r6['trial_4_multiseed_and_sindy']['tree_gp_extended_ms']['mean']} ms) | Hierarchical v7/v8 R^2 = {r6['trial_4_multiseed_and_sindy']['v7_v8_hierarchical_r2_oos']['mean']} ± {r6['trial_4_multiseed_and_sindy']['v7_v8_hierarchical_r2_oos']['std']} ({r6['trial_4_multiseed_and_sindy']['two_cycle_sleep_overhead_ms']['mean']} ms)")
-    print(f"  -> [6D] FALCON-2 vs Gated DeltaNet:Opp-Sign Loss GDN = {r6['falcon2_vs_gated_deltanet']['opposite_sign_cancellation_spike_post_loss']['gated_deltanet_naive_shift']['mean']} vs FALCON-2 = {r6['falcon2_vs_gated_deltanet']['opposite_sign_cancellation_spike_post_loss']['falcon2_cosine_gated']['mean']} | Target Spike ||B|| GDN = {r6['falcon2_vs_gated_deltanet']['target_1000x_outlier_spike_fast_B_norm']['gated_deltanet_unclipped']['mean']} vs FALCON-2 = {r6['falcon2_vs_gated_deltanet']['target_1000x_outlier_spike_fast_B_norm']['falcon2_huber_clipped']['mean']}")
-    print(f"  -> [6E] SDPO Corruption Sweep:     {r6['sdpo_corruption_breakdown_sweep']}")
-    print(f"  -> [6F] v8 Cumulative Ablation:    {r6['v8_six_module_ablation']['cumulative']}")
-    print(f"  -> [6G] v8 Leave-One-Out Ablation: {r6['v8_six_module_ablation']['leave_one_out']}")
+    print(
+        f"  -> [6A] Trial 1 (10 seeds):        Savings = {r6['trial_1_multiseed']['triangle_eval_savings_pct']['mean']}% ± {r6['trial_1_multiseed']['triangle_eval_savings_pct']['std']}%, Speedup = {r6['trial_1_multiseed']['speedup_x']['mean']}x ± {r6['trial_1_multiseed']['speedup_x']['std']}x, Agreement = {r6['trial_1_multiseed']['winner_agreement_rate'] * 100:.0f}%"
+    )
+    print(
+        f"  -> [6B] Trial 3 + SINDy (10 seeds):Naive R^2 = {r6['trial_3_multiseed_and_sindy']['naive_vault_r2']['mean']} ± {r6['trial_3_multiseed_and_sindy']['naive_vault_r2']['std']} | SINDy R^2 = {r6['trial_3_multiseed_and_sindy']['sindy_stlsq_vault_r2']['mean']} ± {r6['trial_3_multiseed_and_sindy']['sindy_stlsq_vault_r2']['std']} | SLEEP-DAG-RSI R^2 = {r6['trial_3_multiseed_and_sindy']['sleep_dag_hybrid_vault_r2']['mean']} ± {r6['trial_3_multiseed_and_sindy']['sleep_dag_hybrid_vault_r2']['std']} (NREM {r6['trial_3_multiseed_and_sindy']['nrem_sleep_overhead_ms']['mean']} ms)"
+    )
+    print(
+        f"  -> [6C] Trial 4 + SINDy + Tree-GP: Flat v6 R^2 = {r6['trial_4_multiseed_and_sindy']['v6_flat_r2_oos']['mean']} ± {r6['trial_4_multiseed_and_sindy']['v6_flat_r2_oos']['std']} | SINDy R^2 = {r6['trial_4_multiseed_and_sindy']['sindy_stlsq_r2_oos']['mean']} ± {r6['trial_4_multiseed_and_sindy']['sindy_stlsq_r2_oos']['std']} | Tree-GP (16ms) R^2 = {r6['trial_4_multiseed_and_sindy']['tree_gp_matched_r2_oos']['mean']} ± {r6['trial_4_multiseed_and_sindy']['tree_gp_matched_r2_oos']['std']} ({r6['trial_4_multiseed_and_sindy']['tree_gp_matched_ms']['mean']} ms) | Tree-GP (Ext) R^2 = {r6['trial_4_multiseed_and_sindy']['tree_gp_extended_r2_oos']['mean']} ± {r6['trial_4_multiseed_and_sindy']['tree_gp_extended_r2_oos']['std']} ({r6['trial_4_multiseed_and_sindy']['tree_gp_extended_ms']['mean']} ms) | Hierarchical v7/v8 R^2 = {r6['trial_4_multiseed_and_sindy']['v7_v8_hierarchical_r2_oos']['mean']} ± {r6['trial_4_multiseed_and_sindy']['v7_v8_hierarchical_r2_oos']['std']} ({r6['trial_4_multiseed_and_sindy']['two_cycle_sleep_overhead_ms']['mean']} ms)"
+    )
+    print(
+        f"  -> [6D] FALCON-2 vs Gated DeltaNet:Opp-Sign Loss GDN = {r6['falcon2_vs_gated_deltanet']['opposite_sign_cancellation_spike_post_loss']['gated_deltanet_naive_shift']['mean']} vs FALCON-2 = {r6['falcon2_vs_gated_deltanet']['opposite_sign_cancellation_spike_post_loss']['falcon2_cosine_gated']['mean']} | Target Spike ||B|| GDN = {r6['falcon2_vs_gated_deltanet']['target_1000x_outlier_spike_fast_B_norm']['gated_deltanet_unclipped']['mean']} vs FALCON-2 = {r6['falcon2_vs_gated_deltanet']['target_1000x_outlier_spike_fast_B_norm']['falcon2_huber_clipped']['mean']}"
+    )
+    print(
+        f"  -> [6E] SDPO Corruption Sweep:     {r6['sdpo_corruption_breakdown_sweep']}"
+    )
+    print(
+        f"  -> [6F] v8 Cumulative Ablation:    {r6['v8_six_module_ablation']['cumulative']}"
+    )
+    print(
+        f"  -> [6G] v8 Leave-One-Out Ablation: {r6['v8_six_module_ablation']['leave_one_out']}"
+    )
 
-    out_path = os.path.join(HERE, "battle_test_v6_results.json")
+    artifacts_dir = os.path.join(ROOT_DIR, "artifacts")
+    os.makedirs(artifacts_dir, exist_ok=True)
+    out_path = os.path.join(artifacts_dir, "battle_test_v6_results.json")
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(
             {

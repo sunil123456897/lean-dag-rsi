@@ -18,7 +18,7 @@
 
 ## 1. Обзор архитектуры (`Lean-DAG-RSI` $\to$ `SLEEP-DAG-RSI v8`)
 
-Проект объединяет три исследовательских направления в единую замкнутую систему рекурсивного самоулучшения без внешних зависимостей в базовом ядре ([`dream_rsi_scripts/engine.py`](dream_rsi_scripts/engine.py) и [`sleep_dag_rsi.py`](sleep_dag_rsi.py)):
+Проект объединяет три исследовательских направления в единую замкнутую систему рекурсивного самоулучшения без внешних зависимостей в базовом ядре ([`dream_rsi_scripts/engine.py`](dream_rsi_scripts/engine.py) и [`dream_rsi_scripts/sleep_dag_rsi.py`](dream_rsi_scripts/sleep_dag_rsi.py)):
 
 1. **Контрфактический поиск на графах открытий (`Lean-DAG-RSI v1–v4` + `v8` Extremal Search)** — развитие идей *Dream-RSI* (Google DeepMind, 2026), *DiscoveryRSI* (`arXiv:2610.23839v1`), *TTT-Discover* (`arXiv:2601.16175`) и *BES / LADDER* (`arXiv:2509.21077`, `arXiv:2503.00735`). Заменяет изолированные деревья поиска ориентированным ациклическим графом (`DAG`), ранжирует родителей по **экстремальному (max-tilted) энтропийному функционалу** $J_\tau = \frac{1}{\tau}\log \mathbb{E}[\exp(\tau R)]$ (`compute_max_tilted_objective`, `rank_parents_max_tilted`), расщепляет «мёртвые» тестовые корзины через **обратную декомпозицию подцелей** (`BackwardSubGoalDecomposer`), скрещивает ветви по бинарным и непрерывным отпечаткам ошибок (`compute_error_fingerprint`, `compute_hyper_crossover`), автоматически сшивает AST-код родителей (`AstCodeSplicer`), отсекает лишние непрерывные ручки через спектральный секатор Гаусса–Ньютона (`prune_epistatic_gauss_newton`), проверяет устойчивость плато (`evaluate_flat_plateau`) и хранит знания между циклами в **компактном типизированном состоянии** `SKILL.state` (`MutableSkillState`).
 2. **Спектральный подъём координат и ранний фильтр Вальда (`SLEEP-DAG-RSI v6`)** — автоматическое обнаружение оврагов и вырожденных KKT-систем через эффективное число обусловленности $\kappa_{\text{eff}}(G)$ матрицы Гаусса–Ньютона $G = \frac{1}{M}J^\top J$ (`SpectralFrameLifter`: `EigenRotationTransform`, `KktSlackTransform` с конденсацией активного множества `condense_active_set`, `DyadicHomotopyTransform`) и отсев заведомо провальных мутаций на `5%` бюджета (`WaldMicroSentinel`).
@@ -97,7 +97,7 @@ flowchart TD
 
 > [!IMPORTANT]
 > **Двухэтапный протокол (Cold-Start Discovery vs. Fast Reproducible Replay)**:
-> 1. **Этап A — Холодный поиск с нуля (Cold-Start Discovery, минуты–часы на CPU/GPU)**: многостадийный поиск из случайных сидов Латинского гиперкуба / Канторовых профилей (`heilbronn_13_14_cpp.cpp`, каскады `L-BFGS-B -> HiGHS LP -> 500-dps Levenberg-Marquardt KKT` для $n=11..17$; GPU-поиск по `4096` сидам + 4-ступенчатая диадическая лестницу $P=160 \to 2560$ для $C_1$; GPU-бандл Больцмана при $P=10128 \to 20256$ для $C_2$ и $P=3200$ для $\Phi_3$). Найденные промежуточные чекпоинты и финальные чемпионы сохранены в репозитории (`.npy` / `.json`).
+> 1. **Этап A — Холодный поиск с нуля (Cold-Start Discovery, минуты–часы на CPU/GPU)**: многостадийный поиск из случайных сидов Латинского гиперкуба / Канторовых профилей (`cpp/heilbronn_13_14_cpp.cpp`, каскады `L-BFGS-B -> HiGHS LP -> 500-dps Levenberg-Marquardt KKT` для $n=11..17$; GPU-поиск по `4096` сидам + 4-ступенчатая диадическая лестницу $P=160 \to 2560$ для $C_1$; GPU-бандл Больцмана при $P=10128 \to 20256$ для $C_2$ и $P=3200$ для $\Phi_3$). Найденные промежуточные чекпоинты и финальные чемпионы сохранены в [`artifacts/`](artifacts/) (`.npy` / `.json`).
 > 2. **Этап B — Быстрый воспроизводимый реплей и локальная полировка (`auto_dream_rsi.py`, `0.4s–3.9s`)**: загружает сохранённые промежуточные стадии из Этапа A, прогоняет вживую 5 раундов `AutoDreamRunner` (`DAG Crossover`, `RRSI Pruner`, `20-dir Flat-Plateau Jitter`, `2x2 Gate`) и выполняет точную математическую верификацию за секунды.
 
 | Задача / Картридж | Наш результат | Сравнение с мировыми ориентирами и верификация |
@@ -108,9 +108,9 @@ flowchart TD
 | **Треугольник Хейльбронна $n = 16$** ([`n16_exact_500dps.json`](heilbronn_pr_package/n16_exact_500dps.json), [`heilbronn_n16_champion.npy`](heilbronn_pr_package/heilbronn_n16_champion.npy)) | $\Delta_{16}^\star = \mathbf{0.018355546355461140412325363653\dots}$ | **`+5.769027637240e-14`** выше 30-значного решения Fable 5.1 & Shengtong Zhang (сентябрь 2026, `0.0183555463554034501359529610459`). Впервые доказано **расщепление $15 + 1$ с внутренним флоатером** (`p_13` имеет `0` активных треугольников, зазор `0.018532001428`) и коранг-1 вырождение каркаса ($\operatorname{rank}(J_{\text{frame}}) = 23 < 24$, кривая $\Gamma_{16}(s)$ с кривизной $c_{16} = 0.011234563954 > 0$, хорда $(u_1+v_1) \equiv (u_{10}+v_{10})$). |
 | **Треугольник Хейльбронна $n = 17$** ([`n17_exact_500dps.json`](heilbronn_pr_package/n17_exact_500dps.json)) | $\Delta_{17}^\star = \mathbf{0.015873844567914898558694564865\dots}$ | **`+3.4455%`** выше предыдущего локального подъёма (`0.0153451315213836`); 500-значный KKT-сертификат расщепления **$16 + 1$** (`27` активных треугольников, полноранговый якобиан каркаса $27 \times 26$, зазор флоатера `p_7` равен `0.016314496144`). |
 | **Треугольник Хейльбронна $n = 11$** ([`auto_dream_rsi.py`](auto_dream_rsi.py)) | $\Delta_{11}^\star = \mathbf{0.03651835}$ | Превышает порог `0.0365` за счёт гибридного каскада гладкого LogSumExp L-BFGS-B и точного `HiGHS Trust-Region SLP`. |
-| **Первое неравенство автокорреляции $C_1$** ([`autocorr_c1_champion.npy`](autocorr_c1_champion.npy)) | $C_1 \le \mathbf{1.503822792008}$ ($P = 2\,560$) | В классе односеточных ступенчатых функций при $P \le 2\,560$ пробивает классическую оценку Matolcsi & Vinuesa (2010, `1.5098`) на **`-0.00597721`** и оценку Google DeepMind AlphaEvolve v1 (2025, `1.5053`) на **`-0.00147721`** (тогда как в режиме переменного шага и сеток $P \ge 30\,000$ получены оценки `1.50314` в AlphaEvolve v2 / *ThetaEvolve* (`arXiv:2511.23473`), `1.502870` в `arXiv:2603.22929` и `1.50286` в TTT-Discover). Найдено через точную KKT-кривизну Лагранжиана на сфере $2\max(g_k - \mu, 0)$ (`2*clamp(g_a - mu, 0)`) + `Micro-Wakeup` + диадическое залечивание шрамов грубой сетки ($P=160 \to 320 \to 640 \to 1280 \to 2560$). Сертифицировано во всех $2P-1 = 5119$ сдвигах в `fractions.Fraction` при $10^{16}$ и $10^{50}$. |
-| **Второе неравенство автокорреляции $C_2$** ([`autocorr_c2_p20256_champion.npy`](autocorr_c2_p20256_champion.npy), [`autocorr_c2_champion.npy`](autocorr_c2_champion.npy)) | $C_2 \ge \mathbf{0.942158772814}$ ($P = 20\,256$)<br>$C_2 \ge \mathbf{0.942111374293}$ ($P = 10\,128$) | В режиме умеренного разрешения $P \le 20\,256$ превосходит прямые ступенчатые конструкции Matolcsi & Vinuesa (`0.88922`), Boyer & Li (`0.901562`), DeepMind AlphaEvolve v1 (`0.90530`) и Jaech & Joseph (2025, `0.94136` при $P=2399$) на **`+0.00079877`** (`50.93%` сдвигов автосвёртки лежат на плоской крыше $\ge 0.95 \max g$; комплементарно сеткам $P \ge 50\,000$ в *ThetaEvolve* (`arXiv:2511.23473`), TTT-Discover `0.9595` и AlphaEvolve v2 `0.9610`). |
-| **Третье неравенство автокорреляции $\Phi_3$** ([`phi3_best_candidate.npy`](phi3_best_candidate.npy)) | $\Phi_3 \le \mathbf{1.457058511867}$ ($P = 3\,200$) | Превосходит OpenEvolve (`1.4600`), EvoX (`1.4589`), Cilleruelo–Ruzsa–Vinuesa (2010, `1.4581`) и ShinkaEvolve (`1.4578`). Найдено через аналитический PSD Гаусс–Ньютон + полногессиановый Ньютон при $\beta = 5 \times 10^6$ + `Boltzmann Roof-Bundle Subgradient`. |
+| **Первое неравенство автокорреляции $C_1$** ([`artifacts/autocorr_c1_champion.npy`](artifacts/autocorr_c1_champion.npy)) | $C_1 \le \mathbf{1.503822792008}$ ($P = 2\,560$) | В классе односеточных ступенчатых функций при $P \le 2\,560$ пробивает классическую оценку Matolcsi & Vinuesa (2010, `1.5098`) на **`-0.00597721`** и оценку Google DeepMind AlphaEvolve v1 (2025, `1.5053`) на **`-0.00147721`** (тогда как в режиме переменного шага и сеток $P \ge 30\,000$ получены оценки `1.50314` в AlphaEvolve v2 / *ThetaEvolve* (`arXiv:2511.23473`), `1.502870` в `arXiv:2603.22929` и `1.50286` в TTT-Discover). Найдено через точную KKT-кривизну Лагранжиана на сфере $2\max(g_k - \mu, 0)$ (`2*clamp(g_a - mu, 0)`) + `Micro-Wakeup` + диадическое залечивание шрамов грубой сетки ($P=160 \to 320 \to 640 \to 1280 \to 2560$). Сертифицировано во всех $2P-1 = 5119$ сдвигах в `fractions.Fraction` при $10^{16}$ и $10^{50}$. |
+| **Второе неравенство автокорреляции $C_2$** ([`artifacts/autocorr_c2_p20256_champion.npy`](artifacts/autocorr_c2_p20256_champion.npy), [`artifacts/autocorr_c2_champion.npy`](artifacts/autocorr_c2_champion.npy)) | $C_2 \ge \mathbf{0.942158772814}$ ($P = 20\,256$)<br>$C_2 \ge \mathbf{0.942111374293}$ ($P = 10\,128$) | В режиме умеренного разрешения $P \le 20\,256$ превосходит прямые ступенчатые конструкции Matolcsi & Vinuesa (`0.88922`), Boyer & Li (`0.901562`), DeepMind AlphaEvolve v1 (`0.90530`) и Jaech & Joseph (2025, `0.94136` при $P=2399$) на **`+0.00079877`** (`50.93%` сдвигов автосвёртки лежат на плоской крыше $\ge 0.95 \max g$; комплементарно сеткам $P \ge 50\,000$ в *ThetaEvolve* (`arXiv:2511.23473`), TTT-Discover `0.9595` и AlphaEvolve v2 `0.9610`). |
+| **Третье неравенство автокорреляции $\Phi_3$** ([`artifacts/phi3_best_candidate.npy`](artifacts/phi3_best_candidate.npy)) | $\Phi_3 \le \mathbf{1.457058511867}$ ($P = 3\,200$) | Превосходит OpenEvolve (`1.4600`), EvoX (`1.4589`), Cilleruelo–Ruzsa–Vinuesa (2010, `1.4581`) и ShinkaEvolve (`1.4578`). Найдено через аналитический PSD Гаусс–Ньютон + полногессиановый Ньютон при $\beta = 5 \times 10^6$ + `Boltzmann Roof-Bundle Subgradient`. |
 
 ---
 
@@ -132,14 +132,14 @@ flowchart TD
 
 ## 5. Испытания `SLEEP-DAG-RSI v5–v8`: Непрерывный сон и изобретение AST-библиотек
 
-### 5.1. Параметрический сон `SLEEP-DAG-RSI v5` ([`run_sleep_dag_experiments.py`](run_sleep_dag_experiments.py))
+### 5.1. Параметрический сон `SLEEP-DAG-RSI v5` ([`benchmarks/run_sleep_dag_experiments.py`](benchmarks/run_sleep_dag_experiments.py))
 Сравнение стандартного нефильтрационного сна (*Vanilla SLEEP*, `arXiv:2606.03979v2`) и `SLEEP-DAG-RSI v5` на 5 последовательных доменах:
 * **Удержание знаний (5-Domain Continual Retention)**: `SLEEP-DAG-RSI v5` сохраняет **`97.63%`** точности на Домене 1 после 5 циклов сна (среднее по 5 доменам **`97.82%`**) против `54.12%` у наивного fine-tuning и `81.40%` у Vanilla SLEEP.
 * **Подавление заражения ловушками (Trap Contamination)**: благодаря маске потерь DAG (`loss_mask = 0` на тупиках и симметричных ловушках) и DPO-отталкиванию доля генерации токенов-ловушек снижена с `39.49%` (Vanilla SLEEP) до **`2.18%`**.
 * **Эффективность REM-кроссовера экспертов**: детерминированный роутер `ExpandableMoEMLP` по отпечаткам ошибок достигает **`100%`** частоты выбора комплементарных пар экспертов (`+111.8%` гибридного счёта) против `10%` при случайном смешивании в стиле Drop-Upcycling.
 
-### 5.2. Сравнительный стресс-тест `v5` vs `v6` vs `v7` vs `v8` + `SINDy`, `Tree-GP SR` и `Gated DeltaNet` ([`battle_test_sleep_dag_v6.py`](battle_test_sleep_dag_v6.py), 10 сидов)
-Шесть живых испытаний в [`battle_test_sleep_dag_v6.py`](battle_test_sleep_dag_v6.py) (включая 10-сидовые доверительные интервалы $\text{Mean} \pm \text{SD}$, замеры времени, сравнение с *SINDy* STLSQ, эволюционным поиском деревьев `Tree-GP SR` и *Gated DeltaNet*, кривую пробоя SDPO при $0\%\dots 60\%$ заражения и 6-модульные кумулятивные / Leave-One-Out абляции; результаты сохраняются в [`battle_test_v6_results.json`](battle_test_v6_results.json)):
+### 5.2. Сравнительный стресс-тест `v5` vs `v6` vs `v7` vs `v8` + `SINDy`, `Tree-GP SR` и `Gated DeltaNet` ([`benchmarks/battle_test_sleep_dag_v6.py`](benchmarks/battle_test_sleep_dag_v6.py), 10 сидов)
+Шесть живых испытаний в [`benchmarks/battle_test_sleep_dag_v6.py`](benchmarks/battle_test_sleep_dag_v6.py) (включая 10-сидовые доверительные интервалы $\text{Mean} \pm \text{SD}$, замеры времени, сравнение с *SINDy* STLSQ, эволюционным поиском деревьев `Tree-GP SR` и *Gated DeltaNet*, кривую пробоя SDPO при $0\%\dots 60\%$ заражения и 6-модульные кумулятивные / Leave-One-Out абляции; результаты сохраняются в [`artifacts/battle_test_v6_results.json`](artifacts/battle_test_v6_results.json)):
 
 | Испытание | Задача и условие стресс-теста | Базовый `v5 / v6 / SINDy / Tree-GP SR / Gated DeltaNet` (10 сидов) | **`SLEEP-DAG-RSI v6 / v7 / v8` (10 сидов)** | Прирост / Вердикт и время |
 | :--- | :--- | :---: | :---: | :--- |
@@ -156,44 +156,55 @@ flowchart TD
 
 ```text
 ├── dream_rsi_scripts/                 # Ядро универсального движка, SDK картриджей и CLI
-│   ├── engine.py                      # Lean-DAG-RSI v1..v4 + SLEEP-DAG-RSI v6..v8 (WaldSentinel, SpectralFrameLifter, AstCodeSplicer, ActiveBoundarySynthesizer, TTT-Discover, BES/LADDER, MutableSkillState)
-│   ├── sleep_dag_rsi.py               # SLEEP-DAG-RSI v5..v8 (HOPE/FALCON-2 DeltaRule, DAG-KS, SDPO Self-Teacher, ExpandableMoE, NeuroSymbolicDistiller, SymbolicLibrary, UniversalNeuralSleepAdapter)
+│   ├── __init__.py                    # Инициализация пакета ядра
+│   ├── engine.py                      # Ядро (World, Policy, LeanDAGPortfolio, ideate_over_history, DiscoveryRSI-гейты) + фасад всех подмодулей
+│   ├── tree.py                        # Структуры DAG (Problem, Node, DiscoveryTree), пул истории, отпечатки ошибок и Tukey CF
+│   ├── skill_state.py                 # Обратная декомпозиция подцелей BES/LADDER и ограниченное состояние SKILL.state
+│   ├── sentinel.py                    # Многоуровневый ранний фильтр Вальда (WaldMicroSentinel, SentinelSlice)
+│   ├── spectral.py                    # Секатор Гаусса–Ньютона, дуальный Грама-спектр и SpectralFrameLifter
+│   ├── splicer.py                     # Метрики AST IoU, compute_hyper_crossover, JEPA и AstCodeSplicer
+│   ├── boundary.py                    # ActiveBoundarySynthesizer (Bichromatic Chord + VeriHarness Dual-Head)
+│   ├── sleep_dag_rsi.py               # Единый источник правды SLEEP-DAG-RSI v5..v8 (HOPE/FALCON-2 DeltaRule, DAG-KS, SDPO Self-Teacher, ExpandableMoE, NeuroSymbolicDistiller, SymbolicLibrary, UniversalNeuralSleepAdapter)
 │   ├── cartridge.py                   # Универсальный SDK v2.0 (TaskCartridge, BranchCandidate, AutoDreamRunner, одноразовый замок BlindVaultGuard, авто-сплайсинг AstCodeSplicer)
 │   ├── _selftest.py                   # 21 самодостаточный тестовый набор (Suites 1..20, включая v8 и SDK v2.0)
 │   ├── dreamrsi.py                    # CLI-интерфейс (scaffold, state, init, round, prompt, apply, status, trees, ideate, sleep, demo)
 │   ├── loop.py                        # Замкнутый цикл выбора и сохранения политик исследования
-│   ├── simulator.py                   # Обёртка реплея исторических деревьев
-│   └── SKILL.md                       # Компактный ранбук навыка dream-rsi (v2.0.0, Progressive Disclosure)
+│   └── simulator.py                   # Обёртка реплея исторических деревьев
 ├── plugin_bundle/                     # Модульный пакет плагина Antigravity `autonomous-research v2.0`
 │   ├── plugin.json                    # Манифест плагина v2.0.0 и стартовые промпты
-│   ├── skills/                        # 3 навыка (< 7 КБ каждый): dream-rsi (+ references/), neural-sleep, epistemic-research
+│   ├── skills/                        # 3 навыка (< 7 КБ каждый, единый источник правды SKILL.md): dream-rsi (+ references/), neural-sleep, epistemic-research
 │   └── agents/                        # 2 изолированных субагента: rsi-branch-worker и rsi-blind-auditor
 ├── sync_plugin.py                     # Атомарный синхронизатор и Zero-Manual QA валидатор плагина (SHA-256, YAML, Suites 1..20)
-├── heilbronn_pr_package/              # Пакет 500-значных и 10^100-рациональных сертификатов Хейльбронна (n=13..17)
+├── benchmarks/                        # Стресс-тесты, мировые бенчмарки и эксперименты
+│   ├── battle_test_sleep_dag_v6.py    # Сравнительный стресс-тест v5 vs v6 vs v7 vs v8 + SINDy & Gated DeltaNet (Trials 1..6, 10 сидов)
+│   ├── benchmark_world_records.py     # Экстремальные бенчмарки (упаковка кругов в квадрате n=26, 32 и др.)
+│   ├── run_sleep_dag_experiments.py   # Экспериментальные стенды SLEEP-DAG-RSI v5 (Suites A..D)
+│   └── storm_heilbronn_n16.py         # GPU + HiGHS TR-SLP каскад для Heilbronn n=15..17
+├── artifacts/                         # Сохранённые чекпоинты чемпионов (.npy) и JSON-результаты/сертификаты
+│   ├── autocorr_c1_champion.npy       # Чемпион 1-й задачи автокорреляции C_1 <= 1.503822792008 (P=2560)
+│   ├── autocorr_c2_champion.npy       # Чемпион 2-й задачи автокорреляции C_2 >= 0.942111374293 (P=10128)
+│   ├── autocorr_c2_p20256_champion.npy# Ультра-разрешение 2-й задачи автокорреляции C_2 >= 0.942158772814 (P=20256)
+│   ├── phi3_best_candidate.npy        # Чемпион 3-й задачи автокорреляции Phi_3 <= 1.457058511867 (P=3200)
+│   ├── heilbronn_n13_champion.npy     # Координаты чемпиона Хейльбронна n=13
+│   ├── heilbronn_n14_champion.npy     # Координаты чемпиона Хейльбронна n=14
+│   └── *.json                         # Рациональные 10^50-сертификаты, кандидаты и результаты стресс-тестов
+├── cpp/                               # Нативные C++ солверы и бенчмарки (benchmark_lasso_cpp.cpp, heilbronn_*_cpp.cpp)
+├── docs/                              # Научные статьи (.pdf, .tex, .md) и технические отчёты (concepts_brief.md и др.)
+├── heilbronn_pr_package/              # Самодостаточный пакет 500-значных и 10^100-рациональных сертификатов Хейльбронна (n=13..17)
 │   ├── n13_exact_500dps.json          # 500-значный KKT-сертификат для n=13 (+3.73e-14 над Stead 2026)
 │   ├── n14_exact_500dps.json          # 500-значный KKT-сертификат для n=14 (Cantrell 2007)
 │   ├── n15_exact_500dps.json          # 500-значный сертификат расщепления 12+3 и многочлена 5-й степени для n=15
 │   ├── n16_exact_500dps.json          # 500-значный KKT-сертификат расщепления 15+1 для n=16 (+5.77e-14 над Fable 5.1 / Zhang 2026)
 │   ├── n17_exact_500dps.json          # 500-значный KKT-сертификат расщепления 16+1 для n=17 (0.0158738445679149)
-│   ├── verify_pr_package.py           # Независимый верификатор пакета (ранги якобианов, множители Лагранжа, кривизна KKT)
+│   ├── verify_pr_package.py           # Независимый верификатор пакета (ранги якобианов, мнотели Лагранжа, кривизна KKT)
 │   └── PR_DESCRIPTION.md              # Математическое описание для репозитория tejstead/heilbronn-site
 ├── lean4_certificates/                # Двухуровневые формальные сертификаты Lean 4 (без Float и без sorryAx)
 │   ├── Defs.lean                      # Базовые определения точной целочисленной удвоенной площади в Lean 4
 │   └── Cert_Heilbronn_13_14.lean      # Теоремы native_decide для n=13 и n=14 при знаменателе 10^50
 ├── auto_dream_rsi.py                  # Автономный стенд открытий (AutoDreamRunner + TaskCartridge)
-├── battle_test_sleep_dag_v6.py        # Сравнительный стресс-тест v5 vs v6 vs v7 vs v8 + SINDy & Gated DeltaNet (Trials 1..6, 10 сидов)
-├── run_sleep_dag_experiments.py       # Экспериментальные стенды SLEEP-DAG-RSI v5 (Suites A..D)
+├── sleep_dag_rsi.py                   # Тонкий корневой фасад-реэкспорт -> dream_rsi_scripts/sleep_dag_rsi.py
 ├── verify_extremal_cartridges_7_8.py  # Независимый Zero-Gaming верификатор (C1, C2, Phi3, Heilbronn n=13, 14)
 ├── verify_dream_rsi.py                # Математическая проверка аудита Dream-RSI Eq. 1, цензурирования и C++ Lasso
-├── autocorr_c1_champion.npy           # Чемпион 1-й задачи автокорреляции C_1 <= 1.503822792008 (P=2560)
-├── autocorr_c2_champion.npy           # Чемпион 2-й задачи автокорреляции C_2 >= 0.942111374293 (P=10128)
-├── autocorr_c2_p20256_champion.npy    # Ультра-разрешение 2-й задачи автокорреляции C_2 >= 0.942158772814 (P=20256)
-├── phi3_best_candidate.npy            # Чемпион 3-й задачи автокорреляции Phi_3 <= 1.457058511867 (P=3200)
-├── heilbronn_n13_champion.npy         # Координаты чемпиона Хейльбронна n=13
-├── heilbronn_n14_champion.npy         # Координаты чемпиона Хейльбронна n=14
-├── SLEEP_DAG_RSI_v8_Preprint_EN.pdf   # Полный академический препринт SLEEP-DAG-RSI v8 на английском языке (PDF, MD, LaTeX)
-├── Полная_Статья_SLEEP_DAG_RSI_v8_RU.pdf # Полная академическая статья SLEEP-DAG-RSI v8 на русском языке (PDF, MD)
-├── concepts_brief.md                  # Архитектурное резюме эволюции SLEEP-DAG-RSI v5 -> v6 -> v7 -> v8
 └── AGENTS.md                          # Контекстные указатели и правила верификации для ИИ-агентов
 ```
 
@@ -208,7 +219,7 @@ flowchart TD
 python dream_rsi_scripts/_selftest.py
 
 # 2. Запустить стресс-тест SLEEP-DAG-RSI v5 vs v6 vs v7 vs v8 + SINDy & Gated DeltaNet (Trials 1..6, 10 сидов, ~2 сек)
-python battle_test_sleep_dag_v6.py
+python benchmarks/battle_test_sleep_dag_v6.py
 
 # 3. Независимая Zero-Gaming верификация экстремальных чемпионов C1, C2, Phi3 и Heilbronn n=13, 14 (~1.5 сек)
 #    Проверяет float64, 50-значный Decimal и точные рациональные дроби Fraction(10^16) и Fraction(10^50)
@@ -353,10 +364,10 @@ summary = AutoDreamRunner(cartridge).run(verbose=True)
 ---
 
 ## Публикации и отчёты в репозитории
-* [`SLEEP_DAG_RSI_v8_Preprint_EN.pdf`](SLEEP_DAG_RSI_v8_Preprint_EN.pdf), [`SLEEP_DAG_RSI_v8_Preprint_EN.md`](SLEEP_DAG_RSI_v8_Preprint_EN.md) и [`SLEEP_DAG_RSI_v8_Preprint_EN.tex`](SLEEP_DAG_RSI_v8_Preprint_EN.tex) — полный рецензируемый препринт `SLEEP-DAG-RSI v8` на английском языке (включая аудит `v1–v8`, доказательства Предложений 1–4 и Теорем 1–2, 500-значные сертификаты Хейльбронна $n=13..17$, автокорреляцию $C_1, C_2, \Phi_3$, 10-сидовые сравнения с `SINDy` и `Gated DeltaNet`, кривую пробоя SDPO и 6-модульные LOO абляции).
-* [`Полная_Статья_SLEEP_DAG_RSI_v8_RU.pdf`](Полная_Статья_SLEEP_DAG_RSI_v8_RU.pdf) и [`Полная_Статья_SLEEP_DAG_RSI_v8_RU.md`](Полная_Статья_SLEEP_DAG_RSI_v8_RU.md) — полная академическая статья `SLEEP-DAG-RSI v8` на русском языке.
-* [`Полная_Статья_Lean_DAG_RSI_v3.pdf`](Полная_Статья_Lean_DAG_RSI_v3.pdf) и [`Полная_Статья_Lean_DAG_RSI_v3.md`](Полная_Статья_Lean_DAG_RSI_v3.md) — статья по `Lean-DAG-RSI v1–v4`, математическому аудиту `Dream-RSI` / `DiscoveryRSI` и экстремальным задачам.
-* [`lean_dag_rsi_v5_sleep_paper.pdf`](lean_dag_rsi_v5_sleep_paper.pdf) и [`Полная_Статья_Lean_DAG_RSI_v5_SLEEP.md`](Полная_Статья_Lean_DAG_RSI_v5_SLEEP.md) — статья по `SLEEP-DAG-RSI v5` (`SLEEP + HOPE + CMS`).
-* [`concepts_brief.md`](concepts_brief.md) — техническое описание архитектуры `SLEEP-DAG-RSI v6–v8` (`WaldMicroSentinel`, `SpectralFrameLifter`, `AstCodeSplicer`, `ActiveBoundarySynthesizer`, `NeuroSymbolicDistiller`, `SymbolicLibrary`, `TTT-Discover`, `BES/LADDER`, `SDPO`, `MutableSkillState`, `VeriHarness`, `FALCON-2`).
+* [`docs/SLEEP_DAG_RSI_v8_Preprint_EN.pdf`](docs/SLEEP_DAG_RSI_v8_Preprint_EN.pdf), [`docs/SLEEP_DAG_RSI_v8_Preprint_EN.md`](docs/SLEEP_DAG_RSI_v8_Preprint_EN.md) и [`docs/SLEEP_DAG_RSI_v8_Preprint_EN.tex`](docs/SLEEP_DAG_RSI_v8_Preprint_EN.tex) — полный рецензируемый препринт `SLEEP-DAG-RSI v8` на английском языке (включая аудит `v1–v8`, доказательства Предложений 1–4 и Теорем 1–2, 500-значные сертификаты Хейльбронна $n=13..17$, автокорреляцию $C_1, C_2, \Phi_3$, 10-сидовые сравнения с `SINDy` и `Gated DeltaNet`, кривую пробоя SDPO и 6-модульные LOO абляции).
+* [`docs/Полная_Статья_SLEEP_DAG_RSI_v8_RU.pdf`](docs/Полная_Статья_SLEEP_DAG_RSI_v8_RU.pdf) и [`docs/Полная_Статья_SLEEP_DAG_RSI_v8_RU.md`](docs/Полная_Статья_SLEEP_DAG_RSI_v8_RU.md) — полная академическая статья `SLEEP-DAG-RSI v8` на русском языке.
+* [`docs/Полная_Статья_Lean_DAG_RSI_v3.pdf`](docs/Полная_Статья_Lean_DAG_RSI_v3.pdf) и [`docs/Полная_Статья_Lean_DAG_RSI_v3.md`](docs/Полная_Статья_Lean_DAG_RSI_v3.md) — статья по `Lean-DAG-RSI v1–v4`, математическому аудиту `Dream-RSI` / `DiscoveryRSI` и экстремальным задачам.
+* [`docs/lean_dag_rsi_v5_sleep_paper.pdf`](docs/lean_dag_rsi_v5_sleep_paper.pdf) и [`docs/Полная_Статья_Lean_DAG_RSI_v5_SLEEP.md`](docs/Полная_Статья_Lean_DAG_RSI_v5_SLEEP.md) — статья по `SLEEP-DAG-RSI v5` (`SLEEP + HOPE + CMS`).
+* [`docs/concepts_brief.md`](docs/concepts_brief.md) — техническое описание архитектуры `SLEEP-DAG-RSI v6–v8` (`WaldMicroSentinel`, `SpectralFrameLifter`, `AstCodeSplicer`, `ActiveBoundarySynthesizer`, `NeuroSymbolicDistiller`, `SymbolicLibrary`, `TTT-Discover`, `BES/LADDER`, `SDPO`, `MutableSkillState`, `VeriHarness`, `FALCON-2`).
 * [`heilbronn_pr_package/PR_DESCRIPTION.md`](heilbronn_pr_package/PR_DESCRIPTION.md) — математическое описание 500-значных сертификатов для `tejstead/heilbronn-site` ($n=13, 14, 15, 16, 17$).
 
