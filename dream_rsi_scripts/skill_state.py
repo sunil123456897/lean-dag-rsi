@@ -296,6 +296,8 @@ class MutableSkillState:
         max_dead_ends: int = 16,
         max_unsolved_buckets: int = 32,
         max_primitives: int = 12,
+        max_problems: int = 8,
+        max_attempts_per_problem: int = 3,
     ) -> None:
         self.task = str(task)
         self.round_index = int(round_index)
@@ -303,12 +305,40 @@ class MutableSkillState:
         self.max_dead_ends = max(1, int(max_dead_ends))
         self.max_unsolved_buckets = max(1, int(max_unsolved_buckets))
         self.max_primitives = max(1, int(max_primitives))
+        self.max_problems = max(1, int(max_problems))
+        self.max_attempts_per_problem = max(1, int(max_attempts_per_problem))
 
         self.best_invariants: List[Dict[str, Any]] = []
         self.dead_end_fingerprints: List[Dict[str, Any]] = []
         self.unsolved_buckets: List[Dict[str, Any]] = []
         self.active_library_primitives: List[Dict[str, Any]] = []
+        self.problem_ledger: List[Dict[str, Any]] = []
+        self.carried_from: Optional[Dict[str, Any]] = None
         self.discarded_raw_traces_count: int = 0
+
+    def carry_from(
+        self,
+        source_state: "MutableSkillState",
+        target_provenance: Optional[Dict[str, Any]] = None,
+    ) -> "MutableSkillState":
+        """Carry problem_ledger, invariants, dead ends, and primitives across model/dataset shifts."""
+        self.problem_ledger = [
+            dict(p, attempts=[dict(a) for a in p.get("attempts", [])][-self.max_attempts_per_problem :])
+            for p in source_state.problem_ledger[: self.max_problems]
+        ]
+        self.best_invariants = [dict(x) for x in source_state.best_invariants[: self.max_invariants]]
+        self.dead_end_fingerprints = [
+            dict(x) for x in source_state.dead_end_fingerprints[: self.max_dead_ends]
+        ]
+        self.active_library_primitives = [
+            dict(x) for x in source_state.active_library_primitives[: self.max_primitives]
+        ]
+        self.carried_from = {
+            "source_task": source_state.task,
+            "source_round": int(source_state.round_index),
+            "target_provenance": dict(target_provenance or {}),
+        }
+        return self
 
     def commit_cycle(
         self,
@@ -316,6 +346,7 @@ class MutableSkillState:
         problem: Optional[Problem] = None,
         library_primitives: Optional[Sequence[Any]] = None,
         coupled_invariants: Optional[Sequence[Any]] = None,
+        provenance: Optional[Dict[str, Any]] = None,
     ) -> "MutableSkillState":
         """
         Atomic state transition S_t -> S_{t+1}:
@@ -468,7 +499,119 @@ class MutableSkillState:
             )
             self.active_library_primitives = sorted_prims[: self.max_primitives]
 
+        # 5. Update SIM problem_ledger only when nodes supply root_cause / predicted_buckets
+        self._update_problem_ledger(tree, prob, provenance=provenance)
+
         return self
+
+    def _update_problem_ledger(
+        self,
+        tree: DiscoveryTree,
+        prob: Problem,
+        provenance: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        prob_by_key: Dict[str, Dict[str, Any]] = {}
+        max_pnum = 0
+        for item in self.problem_ledger:
+            rc_key = " ".join(
+                str(item.get("root_cause", "unspecified_problem")).strip().lower().split()
+            )
+            entry = dict(item)
+            entry["attempts"] = [dict(a) for a in item.get("attempts", [])]
+            prob_by_key[rc_key] = entry
+            pid_str = str(entry.get("problem_id", ""))
+            if pid_str.startswith("P") and pid_str[1:].isdigit():
+                max_pnum = max(max_pnum, int(pid_str[1:]))
+
+        base_sc = float(tree.baseline_score) if math.isfinite(float(tree.baseline_score)) else 0.0
+        for nid, node in tree.nodes.items():
+            if nid == tree.root_id:
+                continue
+            n_meta = node.meta if isinstance(node.meta, dict) else {}
+            raw_rc = n_meta.get("root_cause")
+            raw_pred = n_meta.get("predicted_buckets")
+            has_rc = isinstance(raw_rc, str) and bool(raw_rc.strip())
+            has_pred = isinstance(raw_pred, (list, tuple))
+            if not has_rc and not has_pred:
+                continue
+
+            rc_text = " ".join(str(raw_rc).strip().split()) if has_rc else "unspecified_problem"
+            rc_key = rc_text.lower()
+            pred_list: List[int] = []
+            if has_pred:
+                for b_raw in raw_pred:
+                    try:
+                        pred_list.append(int(b_raw))
+                    except (TypeError, ValueError):
+                        continue
+
+            node_margins = BackwardSubGoalDecomposer._extract_node_margins(node)
+            fixed_buckets: List[int] = []
+            missed_buckets: List[int] = []
+            for b_idx in pred_list:
+                if (
+                    node_margins is not None
+                    and 0 <= b_idx < len(node_margins)
+                    and math.isfinite(node_margins[b_idx])
+                    and node_margins[b_idx] > 0.0
+                ):
+                    fixed_buckets.append(b_idx)
+                else:
+                    missed_buckets.append(b_idx)
+
+            node_prov: Dict[str, Any] = {}
+            if isinstance(provenance, dict):
+                node_prov.update(provenance)
+            if isinstance(n_meta.get("provenance"), dict):
+                node_prov.update(n_meta["provenance"])
+
+            raw_sc = float(prob.score(node))
+            safe_sc = round(raw_sc, 6) if math.isfinite(raw_sc) else -1e9
+            accepted = bool(prob.is_success(node) and safe_sc > base_sc)
+            attempt_rec: Dict[str, Any] = {
+                "node_id": nid,
+                "round": self.round_index,
+                "accepted": accepted,
+                "score": safe_sc,
+                "what": str(n_meta.get("description", ""))[:96],
+                "predicted_buckets": pred_list,
+                "fixed_buckets": fixed_buckets,
+                "missed_buckets": missed_buckets,
+                "provenance": node_prov,
+            }
+
+            if rc_key not in prob_by_key:
+                max_pnum += 1
+                prob_by_key[rc_key] = {
+                    "problem_id": f"P{max_pnum}",
+                    "root_cause": rc_text,
+                    "opened_round": self.round_index,
+                    "updated_round": self.round_index,
+                    "attempts": [attempt_rec],
+                }
+            else:
+                p_entry = prob_by_key[rc_key]
+                prev_att = next(
+                    (a for a in p_entry.get("attempts", []) if a.get("node_id") == nid),
+                    None,
+                )
+                if prev_att is not None:
+                    attempt_rec["round"] = int(prev_att.get("round", self.round_index))
+                    existing_atts = [
+                        attempt_rec if a.get("node_id") == nid else a
+                        for a in p_entry.get("attempts", [])
+                    ]
+                else:
+                    p_entry["updated_round"] = self.round_index
+                    existing_atts = list(p_entry.get("attempts", [])) + [attempt_rec]
+                p_entry["attempts"] = existing_atts[-self.max_attempts_per_problem :]
+
+        sorted_probs = sorted(
+            prob_by_key.values(),
+            key=lambda item: (int(item.get("updated_round", 0)), int(item.get("opened_round", 0))),
+            reverse=True,
+        )
+        self.problem_ledger = sorted_probs[: self.max_problems]
 
     def validate_schema(self) -> Dict[str, Any]:
         forbidden_raw_keys = {"raw_trace", "stdout_log", "stderr_log", "line_hotspots"}
@@ -478,18 +621,30 @@ class MutableSkillState:
             self.dead_end_fingerprints,
             self.unsolved_buckets,
             self.active_library_primitives,
+            self.problem_ledger,
         ):
             for entry in coll:
                 if isinstance(entry, dict):
                     overlap = forbidden_raw_keys.intersection(entry.keys())
                     if overlap:
                         leaked_keys.extend(sorted(overlap))
+                    for sub in entry.get("attempts", []):
+                        if isinstance(sub, dict):
+                            sub_overlap = forbidden_raw_keys.intersection(sub.keys())
+                            if sub_overlap:
+                                leaked_keys.extend(sorted(sub_overlap))
 
         within_caps = (
             len(self.best_invariants) <= self.max_invariants
             and len(self.dead_end_fingerprints) <= self.max_dead_ends
             and len(self.unsolved_buckets) <= self.max_unsolved_buckets
             and len(self.active_library_primitives) <= self.max_primitives
+            and len(self.problem_ledger) <= self.max_problems
+            and all(
+                len(p.get("attempts", [])) <= self.max_attempts_per_problem
+                for p in self.problem_ledger
+                if isinstance(p, dict)
+            )
         )
         valid = within_caps and len(leaked_keys) == 0
         return {
@@ -501,6 +656,7 @@ class MutableSkillState:
                 "dead_end_fingerprints": len(self.dead_end_fingerprints),
                 "unsolved_buckets": len(self.unsolved_buckets),
                 "active_library_primitives": len(self.active_library_primitives),
+                "problem_ledger": len(self.problem_ledger),
             },
             "discarded_raw_traces_count": self.discarded_raw_traces_count,
             "serialized_byte_size": self.serialized_byte_size(),
@@ -514,12 +670,19 @@ class MutableSkillState:
             "dead_end_fingerprints": list(self.dead_end_fingerprints),
             "unsolved_buckets": list(self.unsolved_buckets),
             "active_library_primitives": list(self.active_library_primitives),
+            "problem_ledger": [
+                dict(p, attempts=[dict(a) for a in p.get("attempts", [])])
+                for p in self.problem_ledger
+            ],
+            "carried_from": dict(self.carried_from) if self.carried_from is not None else None,
             "discarded_raw_traces_count": self.discarded_raw_traces_count,
             "caps": {
                 "max_invariants": self.max_invariants,
                 "max_dead_ends": self.max_dead_ends,
                 "max_unsolved_buckets": self.max_unsolved_buckets,
                 "max_primitives": self.max_primitives,
+                "max_problems": self.max_problems,
+                "max_attempts_per_problem": self.max_attempts_per_problem,
             },
         }
 
@@ -533,6 +696,8 @@ class MutableSkillState:
             max_dead_ends=int(caps.get("max_dead_ends", 16)),
             max_unsolved_buckets=int(caps.get("max_unsolved_buckets", 32)),
             max_primitives=int(caps.get("max_primitives", 12)),
+            max_problems=int(caps.get("max_problems", 8)),
+            max_attempts_per_problem=int(caps.get("max_attempts_per_problem", 3)),
         )
         obj.best_invariants = list(data.get("best_invariants", []))[: obj.max_invariants]
         obj.dead_end_fingerprints = list(data.get("dead_end_fingerprints", []))[: obj.max_dead_ends]
@@ -540,6 +705,18 @@ class MutableSkillState:
         obj.active_library_primitives = list(data.get("active_library_primitives", []))[
             : obj.max_primitives
         ]
+        raw_probs = data.get("problem_ledger", [])
+        if isinstance(raw_probs, list):
+            obj.problem_ledger = [
+                dict(
+                    p,
+                    attempts=[dict(a) for a in p.get("attempts", [])][-obj.max_attempts_per_problem :],
+                )
+                for p in raw_probs[: obj.max_problems]
+                if isinstance(p, dict)
+            ]
+        cf = data.get("carried_from")
+        obj.carried_from = dict(cf) if isinstance(cf, dict) else None
         obj.discarded_raw_traces_count = int(data.get("discarded_raw_traces_count", 0))
         return obj
 
@@ -547,17 +724,19 @@ class MutableSkillState:
         return len(json.dumps(self.to_dict(), sort_keys=True).encode("utf-8"))
 
     def compact_prompt_context(self) -> str:
-        payload = {
-            "SKILL.state": {
-                "task": self.task,
-                "round": self.round_index,
-                "best_invariants": self.best_invariants,
-                "dead_end_fingerprints": self.dead_end_fingerprints,
-                "unsolved_buckets": self.unsolved_buckets,
-                "active_library_primitives": self.active_library_primitives,
-            }
+        inner: Dict[str, Any] = {
+            "task": self.task,
+            "round": self.round_index,
+            "best_invariants": self.best_invariants,
+            "dead_end_fingerprints": self.dead_end_fingerprints,
+            "unsolved_buckets": self.unsolved_buckets,
+            "active_library_primitives": self.active_library_primitives,
         }
-        return json.dumps(payload, indent=2, sort_keys=True)
+        if self.problem_ledger:
+            inner["problem_ledger"] = self.problem_ledger
+        if self.carried_from is not None:
+            inner["carried_from"] = self.carried_from
+        return json.dumps({"SKILL.state": inner}, indent=2, sort_keys=True)
 
 __all__ = [
     "BackwardSubGoalDecomposer",

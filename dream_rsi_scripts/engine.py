@@ -2856,6 +2856,11 @@ def export_lean4_certificate(
     is guaranteed valid before invoking `lean`.
     """
     n_pts = len(points_num_den)
+    all_in_unit_triangle = bool(
+        scale_denom > 0
+        and n_pts >= 3
+        and all(0 <= x and 0 <= y and x + y <= scale_denom for x, y in points_num_den)
+    )
     min_num: Optional[int] = None
     for i in range(n_pts):
         xi, yi = points_num_den[i]
@@ -2870,7 +2875,7 @@ def export_lean4_certificate(
     actual_den = scale_denom ** 2
     lhs = actual_num * bound_den
     rhs = bound_num * actual_den
-    verified_in_exact_int = bool(lhs >= rhs)
+    verified_in_exact_int = bool(all_in_unit_triangle and lhs >= rhs)
 
     defs_lean = (
         "-- Lean-DAG-RSI v4 Static Formal Specification (Zero sorryAx, Exact Int/Rat)\n"
@@ -2878,6 +2883,32 @@ def export_lean4_certificate(
         "def absInt (x : Int) : Int := if x < 0 then -x else x\n\n"
         "def unitTriangleNormAreaScaled (p1 p2 p3 : Int × Int) : Int :=\n"
         "  absInt (p1.1 * (p2.2 - p3.2) + p2.1 * (p3.2 - p1.2) + p3.1 * (p1.2 - p2.2))\n\n"
+        "def inUnitTriangleScaled (scale : Int) (p : Int × Int) : Bool :=\n"
+        "  decide (0 <= p.1 ∧ 0 <= p.2 ∧ p.1 + p.2 <= scale)\n\n"
+        "def allInUnitTriangleScaled (scale : Int) (pts : List (Int × Int)) : Bool :=\n"
+        "  pts.all (inUnitTriangleScaled scale)\n\n"
+        "def pairWithThird (p1 p2 : Int × Int) (rest : List (Int × Int)) (boundNum boundDen scaleSq : Int) : Bool :=\n"
+        "  match rest with\n"
+        "  | [] => true\n"
+        "  | p3 :: tl =>\n"
+        "      decide (unitTriangleNormAreaScaled p1 p2 p3 * boundDen >= boundNum * scaleSq) &&\n"
+        "      pairWithThird p1 p2 tl boundNum boundDen scaleSq\n\n"
+        "def firstWithPairs (p1 : Int × Int) (rest : List (Int × Int)) (boundNum boundDen scaleSq : Int) : Bool :=\n"
+        "  match rest with\n"
+        "  | [] => true\n"
+        "  | p2 :: tl =>\n"
+        "      pairWithThird p1 p2 tl boundNum boundDen scaleSq &&\n"
+        "      firstWithPairs p1 tl boundNum boundDen scaleSq\n\n"
+        "def allTriplesMeetBound (pts : List (Int × Int)) (scale boundNum boundDen : Int) : Bool :=\n"
+        "  let scaleSq := scale * scale\n"
+        "  let rec go : List (Int × Int) -> Bool\n"
+        "    | [] => true\n"
+        "    | p1 :: tl => firstWithPairs p1 tl boundNum boundDen scaleSq && go tl\n"
+        "  go pts\n\n"
+        "def heilbronnCertificateValid (pts : List (Int × Int)) (nExpected : Nat) (scale boundNum boundDen : Int) : Bool :=\n"
+        "  decide (pts.length == nExpected) &&\n"
+        "  allInUnitTriangleScaled scale pts &&\n"
+        "  allTriplesMeetBound pts scale boundNum boundDen\n\n"
         "end LeanDAGCert\n"
     )
     pts_Initializer = ", ".join(f"({x}, {y})" for x, y in points_num_den)
@@ -2885,14 +2916,16 @@ def export_lean4_certificate(
         "import LeanDAGCert.Defs\n"
         "open LeanDAGCert\n\n"
         f"def pts_{theorem_name} : List (Int × Int) := [{pts_Initializer}]\n\n"
-        f"-- Certifies Scale^2 * Delta_n >= {actual_num} (i.e. Delta_n >= {bound_num} / {bound_den})\n"
-        f"theorem {theorem_name}_valid : "
-        f"({actual_num} * {bound_den} : Int) >= ({bound_num} * {actual_den} : Int) := by\n"
+        f"-- Certifies all {n_pts} points lie in the scaled unit triangle and every triple satisfies\n"
+        f"-- Scale^2 * Delta_n >= {actual_num} (i.e. Delta_n >= {bound_num} / {bound_den})\n"
+        f"theorem {theorem_name}_valid :\n"
+        f"    heilbronnCertificateValid pts_{theorem_name} {n_pts} {scale_denom} {bound_num} {bound_den} = true := by\n"
         "  native_decide\n"
     )
     return {
         "theorem_name": theorem_name,
         "n_points": n_pts,
+        "all_in_unit_triangle": all_in_unit_triangle,
         "verified_exact_int": verified_in_exact_int,
         "min_det_scaled": actual_num,
         "defs_lean_code": defs_lean,

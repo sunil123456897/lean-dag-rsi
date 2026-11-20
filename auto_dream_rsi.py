@@ -64,7 +64,7 @@ SKILL_SCRIPTS_DIR = os.path.expanduser(
         os.path.join("~", ".gemini", "config", "skills", "dream-rsi", "scripts"),
     )
 )
-for _cand_dir in (LOCAL_SCRIPTS_DIR, PLUGIN_SCRIPTS_DIR, SKILL_SCRIPTS_DIR):
+for _cand_dir in reversed((LOCAL_SCRIPTS_DIR, PLUGIN_SCRIPTS_DIR, SKILL_SCRIPTS_DIR)):
     if os.path.isdir(_cand_dir) and _cand_dir not in sys.path:
         sys.path.insert(0, _cand_dir)
 

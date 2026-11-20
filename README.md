@@ -113,7 +113,7 @@ flowchart TD
 | **Треугольник Хейльбронна $n = 13$** ([`n13_exact_500dps.json`](heilbronn_pr_package/n13_exact_500dps.json), [`Cert_Heilbronn_13_14.lean`](lean4_certificates/Cert_Heilbronn_13_14.lean)) | $\Delta_{13}^\star = \mathbf{0.026556528919775580138364411226\dots}$ | **`+3.731566397517e-14`** выше опубликованных `float64`-координат Tej Stead (июль 2026, `0.026556528919738264474389245471`) и **`+5.52e-5`** выше P. Karpov (2018, `0.0265013`). Доказано, что якобиан 20 активных треугольников имеет коранг 1 ($`\mathrm{rank}(J_{13}) = 19 < 20`$), задавая 1D эквиареальную кривую $\Gamma_{13}(s)$ с инвариантом кривизны KKT $c_{13} = 0.036078780238 > 0$ и 3 точными параллельными хордами ($u_0 \equiv u_9, u_2 \equiv u_5, v_{11} \equiv v_{12}$). |
 | **Треугольник Хейльбронна $n = 14$** ([`n14_exact_500dps.json`](heilbronn_pr_package/n14_exact_500dps.json), [`Cert_Heilbronn_13_14.lean`](lean4_certificates/Cert_Heilbronn_13_14.lean)) | $\Delta_{14}^\star = \mathbf{0.023775773107573057671296916141\dots}$ | Независимое переоткрытие с нуля 19-летнего рекорда D. W. Cantrell (июнь 2007, `0.0237757731`), сертифицированное до **500 знаков** и точных дробей со знаменателем $10^{100}$ (`23` активных треугольника, точная хорда $u_6 \equiv u_9$, теорема `Lean 4`). |
 | **Треугольник Хейльбронна $n = 15$** ([`n15_exact_500dps.json`](heilbronn_pr_package/n15_exact_500dps.json)) | $\Delta_{15}^\star = \mathbf{0.021090769460266687959320407664\dots}$ | Независимое каскадное переоткрытие ($14^\star \to 15$) и 500-значная сертификация расщепления $12+3$ (3 свободных флоатера) и минимального многочлена 5-й степени $5250987 \Delta_{15}^5 + 1609650 \Delta_{15}^4 + 161469 \Delta_{15}^3 + 5438 \Delta_{15}^2 - 13 \Delta_{15} - 4 = 0$ ($`\lVert P_{15}(\Delta_{15}^\star)\rVert = 2.78 \times 10^{-503}`$). |
-| **Треугольник Хейльбронна $n = 16$** ([`n16_exact_500dps.json`](heilbronn_pr_package/n16_exact_500dps.json), [`heilbronn_n16_champion.npy`](heilbronn_pr_package/heilbronn_n16_champion.npy)) | $\Delta_{16}^\star = \mathbf{0.018355546355461140412325363653\dots}$ | **`+5.769027637240e-14`** выше 30-значного решения Fable 5.1 & Shengtong Zhang (сентябрь 2026, `0.0183555463554034501359529610459`). Впервые доказано **расщепление $15 + 1$ с внутренним флоатером** (`p_13` имеет `0` активных треугольников, зазор `0.018532001428`) и коранг-1 вырождение каркаса ($`\mathrm{rank}(J_{\text{frame}}) = 23 < 24`$, кривая $\Gamma_{16}(s)$ с кривизной $c_{16} = 0.011234563954 > 0$, хорда $`(u_1+v_1) \equiv (u_{10}+v_{10})`$ ). |
+| **Треугольник Хейльбронна $n = 16$** ([`n16_exact_500dps.json`](heilbronn_pr_package/n16_exact_500dps.json), [`artifacts/heilbronn_n16_champion.npy`](artifacts/heilbronn_n16_champion.npy)) | $\Delta_{16}^\star = \mathbf{0.018355546355461140412325363653\dots}$ | **`+5.769027637240e-14`** выше 30-значного решения Fable 5.1 & Shengtong Zhang (сентябрь 2026, `0.0183555463554034501359529610459`). Впервые доказано **расщепление $15 + 1$ с внутренним флоатером** (`p_13` имеет `0` активных треугольников, зазор `0.018532001428`) и коранг-1 вырождение каркаса ($`\mathrm{rank}(J_{\text{frame}}) = 23 < 24`$, кривая $\Gamma_{16}(s)$ с кривизной $c_{16} = 0.011234563954 > 0$, хорда $`(u_1+v_1) \equiv (u_{10}+v_{10})`$ ). |
 | **Треугольник Хейльбронна $n = 17$** ([`n17_exact_500dps.json`](heilbronn_pr_package/n17_exact_500dps.json)) | $\Delta_{17}^\star = \mathbf{0.015873844567914898558694564865\dots}$ | **`+3.4455%`** выше предыдущего локального подъёма (`0.0153451315213836`); 500-значный KKT-сертификат расщепления **$16 + 1$** (`27` активных треугольников, полноранговый якобиан каркаса $27 \times 26$, зазор флоатера `p_7` равен `0.016314496144`). |
 | **Треугольник Хейльбронна $n = 11$** ([`auto_dream_rsi.py`](auto_dream_rsi.py)) | $\Delta_{11}^\star = \mathbf{0.03651835}$ | Превышает порог `0.0365` за счёт гибридного каскада гладкого LogSumExp L-BFGS-B и точного `HiGHS Trust-Region SLP`. |
 | **Первое неравенство автокорреляции $C_1$** ([`artifacts/autocorr_c1_champion.npy`](artifacts/autocorr_c1_champion.npy)) | $C_1 \le \mathbf{1.503822792008}$ ($P = 2\,560$) | В классе односеточных ступенчатых функций при $P \le 2\,560$ пробивает классическую оценку Matolcsi & Vinuesa (2010, `1.5098`) на **`-0.00597721`** и оценку Google DeepMind AlphaEvolve v1 (2025, `1.5053`) на **`-0.00147721`** (тогда как в режиме переменного шага и сеток $P \ge 30\,000$ получены оценки `1.50314` в AlphaEvolve v2 / *ThetaEvolve* (`arXiv:2511.23473`), `1.502870` в `arXiv:2603.22929` и `1.50286` в TTT-Discover). Найдено через точную KKT-кривизну Лагранжиана на сфере $2\max(g_k - \mu, 0)$ (`2*clamp(g_a - mu, 0)`) + `Micro-Wakeup` + диадическое залечивание шрамов грубой сетки ($P=160 \to 320 \to 640 \to 1280 \to 2560$). Сертифицировано во всех $2P-1 = 5119$ сдвигах в `fractions.Fraction` при $10^{16}$ и $10^{50}$. |
@@ -344,10 +344,11 @@ print(sp_routed["spliced_code"])
 from dream_rsi_scripts.cartridge import AutoDreamRunner, BranchCandidate, TaskCartridge
 
 cartridge = TaskCartridge(
-    task_id="custom-kernel",
+    task_name="custom-kernel",
     description="Оптимизация целевой функции с защитой отложенного теста BlindVaultGuard",
     baseline_fn=lambda x: x * 0.5,
-    baseline_source="def solve(x):\n    return x * 0.5\n",
+    base_source="def solve(x):\n    return x * 0.5\n",
+    entry_func="solve",
     verify_and_score=lambda fn: (
         True,
         100.0 - abs(fn(2.0) - 4.0),
@@ -356,17 +357,18 @@ cartridge = TaskCartridge(
     ),
     initial_branches=[
         BranchCandidate(
-            branch_idx=0,
-            node_id="b0_exact",
-            hypothesis="Удвоение масштаба",
+            id="b0_exact",
+            branch=0,
+            description="Удвоение масштаба",
             fn=lambda x: x * 2.0,
             source_code="def solve(x):\n    return x * 2.0\n",
+            entry_func="solve",
         ),
     ],
     blind_vault_evaluator=lambda fn: {"vault_err": abs(fn(5.0) - 10.0)},  # физически открывается ровно 1 раз
 )
 
-summary = AutoDreamRunner(cartridge).run(verbose=True)
+summary = AutoDreamRunner(cartridge).run()
 ```
 
 ---

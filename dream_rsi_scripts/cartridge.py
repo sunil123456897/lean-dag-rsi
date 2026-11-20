@@ -92,6 +92,9 @@ class BranchCandidate:
     mechanism_tags: Dict[str, Any] = field(default_factory=dict)
     source_code: Optional[str] = None
     entry_func: Optional[str] = None
+    root_cause: Optional[str] = None
+    predicted_buckets: Optional[List[int]] = None
+    provenance: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -126,6 +129,8 @@ class TaskCartridge:
         None
     )
     noise_probe_runs: int = 1
+    provenance: Optional[Dict[str, Any]] = None
+    prior_skill_state: Optional[Dict[str, Any]] = None
 
 
 def _compile_safe_callable(
@@ -264,6 +269,17 @@ class AutoDreamRunner:
             "stage": stage_label,
             "artifact_hash": f"verified_{cand.id}",
         }
+        if cand.root_cause:
+            meta["root_cause"] = cand.root_cause
+        if cand.predicted_buckets is not None:
+            meta["predicted_buckets"] = list(cand.predicted_buckets)
+        merged_prov: Dict[str, Any] = {}
+        if isinstance(self.cartridge.provenance, dict):
+            merged_prov.update(self.cartridge.provenance)
+        if isinstance(cand.provenance, dict):
+            merged_prov.update(cand.provenance)
+        if merged_prov:
+            meta["provenance"] = merged_prov
         if secondary_parent_id:
             meta["secondary_parent_id"] = secondary_parent_id
             meta["crossover_parents"] = [cand.parent_id, secondary_parent_id]
@@ -461,6 +477,13 @@ class AutoDreamRunner:
         )
 
         skill_state = dream_engine.MutableSkillState(task=self.cartridge.task_name)
+        if isinstance(self.cartridge.prior_skill_state, dict):
+            prior_src = dream_engine.MutableSkillState.from_dict(
+                self.cartridge.prior_skill_state
+            )
+            skill_state.carry_from(
+                prior_src, target_provenance=self.cartridge.provenance
+            )
 
         # -------------------------------------------------------------------
         # ROUND 1: Parallel Exploration of Initial Branches
@@ -477,7 +500,9 @@ class AutoDreamRunner:
             self.journal.append(
                 f"[Round 1 | Branch {cand.branch}] `{cand.id}` -> {status_str}"
             )
-        skill_state.commit_cycle(tree, self.problem)
+        skill_state.commit_cycle(
+            tree, self.problem, provenance=self.cartridge.provenance
+        )
 
         # Query `ideate_over_history()` after Round 1
         ideas_r1 = dream_engine.ideate_over_history([tree], self.problem)
@@ -513,7 +538,9 @@ class AutoDreamRunner:
                 self.journal.append(
                     f"[Round 2 | Deepen Branch {ref_cand.branch}] `{ref_cand.id}` -> score={node.score:.4f}"
                 )
-        skill_state.commit_cycle(tree, self.problem)
+        skill_state.commit_cycle(
+            tree, self.problem, provenance=self.cartridge.provenance
+        )
 
         # -------------------------------------------------------------------
         # ROUND 3: Autonomous DAG `CROSSOVER(u, v)` Synthesis & Autopsy
@@ -553,7 +580,9 @@ class AutoDreamRunner:
                         f"[Round 3 | DAG CROSSOVER({u_id}, {v_id})] Synthesized `{hybrid_cand.id}` "
                         f"-> score={node.score:.4f} (projected={top_xover['projected_hybrid_score']:.4f}){fp_tag}"
                     )
-        skill_state.commit_cycle(tree, self.problem)
+        skill_state.commit_cycle(
+            tree, self.problem, provenance=self.cartridge.provenance
+        )
 
         # -------------------------------------------------------------------
         # ROUND 4: Autonomous `neuro_symbolic_splits` + RRSI Pruner + Flat-Plateau
@@ -676,7 +705,10 @@ class AutoDreamRunner:
             )
 
         skill_state.commit_cycle(
-            tree, self.problem, coupled_invariants=coupled_invariants
+            tree,
+            self.problem,
+            coupled_invariants=coupled_invariants,
+            provenance=self.cartridge.provenance,
         )
         skill_state_dict = skill_state.to_dict()
         dead_bucket_report = dream_engine.decompose_dead_buckets([tree], self.problem)

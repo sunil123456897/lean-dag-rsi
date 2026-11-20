@@ -40,6 +40,7 @@ Wire `baseline_fn` and `verify_and_score(fn) -> (ok, score, fail_class, info)` t
 Author 2–4 genuinely distinct structural mechanisms (`BranchCandidate`):
 - Attach `source_code` and `entry_func` whenever candidates are pure functions so `AutoDreamRunner` can synthesize zero-handwriting AST crossovers via `AstCodeSplicer` + `AstPolicySafetyGate`.
 - Expose continuous thresholds/weights as `tunable_params`, `tunable_bounds`, and `param_factory` — keep LLM edits focused on discrete structure rather than guessing floats.
+- Set optional `root_cause`, `predicted_buckets`, and `provenance` on `BranchCandidate` (and pass `prior_skill_state` on `TaskCartridge`) so `SKILL.state` builds a bounded `problem_ledger` tracking `fixed` vs `missed` buckets across splits or model changes.
 - For large codebases, delegate independent branches in parallel to `rsi-branch-worker` subagents (`Model: "inherit"`, `workspace: "branch"`), passing the compact JSON output of:
   ```bash
   python "$DREAM_SCRIPTS/dreamrsi.py" state --task <task_name>

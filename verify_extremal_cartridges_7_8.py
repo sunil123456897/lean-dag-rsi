@@ -516,10 +516,10 @@ def main() -> int:
             if os.path.isfile(os.path.join(_plugin_root, "engine.py"))
             else os.path.join(_plugin_root, "skills", "dream-rsi", "scripts")
         )
-        for _cand_dir in (
+        for _cand_dir in reversed((
             os.path.join(base_dir, "dream_rsi_scripts"),
             _plugin_scripts,
-        ):
+        )):
             if os.path.isdir(_cand_dir) and _cand_dir not in sys.path:
                 sys.path.insert(0, _cand_dir)
         from engine import export_lean4_certificate

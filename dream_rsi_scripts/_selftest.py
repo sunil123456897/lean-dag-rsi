@@ -1138,15 +1138,27 @@ def main() -> int:
         bound_num=1,
         bound_den=10,
     )
+    lean_cert_oob = export_lean4_certificate(
+        theorem_name="heilbronn_n4_oob",
+        points_num_den=[(0, 0), (11, 0), (0, 10), (4, 4)],
+        scale_denom=10,
+        bound_num=1,
+        bound_den=10,
+    )
     check(
         "predict_bucket_jepa, export_dag_dpo_pairs, and export_lean4_certificate verify cleanly without sorryAx",
         len(jepa_pred["predicted_margins"]) == 6
         and jepa_pred["expected_union_gain"] > 0.0
         and dpo_rep["pair_count"] >= 1
         and lean_cert["verified_exact_int"] is True
+        and lean_cert["all_in_unit_triangle"] is True
         and lean_cert["has_sorry"] is False
-        and "native_decide" in lean_cert["cert_lean_code"],
-        f"jepa_gain={jepa_pred['expected_union_gain']} dpo_pairs={dpo_rep['pair_count']} lean_verified={lean_cert['verified_exact_int']}",
+        and "heilbronnCertificateValid pts_heilbronn_n4_demo" in lean_cert["cert_lean_code"]
+        and "allTriplesMeetBound" in lean_cert["defs_lean_code"]
+        and "native_decide" in lean_cert["cert_lean_code"]
+        and lean_cert_oob["verified_exact_int"] is False
+        and lean_cert_oob["all_in_unit_triangle"] is False,
+        f"jepa_gain={jepa_pred['expected_union_gain']} dpo_pairs={dpo_rep['pair_count']} lean_verified={lean_cert['verified_exact_int']} oob_rejected={not lean_cert_oob['verified_exact_int']}",
     )
 
     # 15d. Recorded Multi-Parent DAG Merge Causality in World.legal_actions() and World.probe()
@@ -2446,6 +2458,113 @@ def main() -> int:
         )
     finally:
         shutil.rmtree(tmp_s20, ignore_errors=True)
+
+    # 20c. SIM problem_ledger & carry_from continuation across model/dataset provenance shifts
+    from cartridge import AutoDreamRunner, BranchCandidate, TaskCartridge
+
+    st_src_20c = MutableSkillState(task="sim_source_tb21", max_problems=4, max_attempts_per_problem=3)
+    t_src_20c = DiscoveryTree(task="sim_source_tb21", baseline_score=50.0)
+    t_src_20c.add(Node(id="root", parent_id=None, branch=-1, attempt=0, score=50.0))
+    t_src_20c.add(
+        Node(
+            id="s_fail_att",
+            parent_id="root",
+            branch=0,
+            attempt=1,
+            score=42.0,
+            fail_class="algorithmic_failure",
+            bucket_scores=[-0.4, -0.2, 0.3],
+            meta={
+                "description": "Naive confirmation prompt without execution check",
+                "root_cause": "premature completion without verification",
+                "predicted_buckets": [0, 1],
+            },
+        )
+    )
+    t_src_20c.add(
+        Node(
+            id="s_win_att",
+            parent_id="root",
+            branch=1,
+            attempt=1,
+            score=72.0,
+            bucket_scores=[0.6, -0.1, 0.5],
+            meta={
+                "description": "Execution interlock checks command exit state",
+                "root_cause": "Premature   Completion Without Verification",
+                "predicted_buckets": [0, 1],
+            },
+        )
+    )
+    st_src_20c.commit_cycle(t_src_20c, provenance={"model": "opus-5.5", "dataset": "tb2.1"})
+
+    tmp_20c = tempfile.mkdtemp(prefix="dreamrsi_s20c_")
+    old_pool_env = os.environ.get("DREAM_RSI_POOL")
+    os.environ["DREAM_RSI_POOL"] = tmp_20c
+    try:
+        def _sim_score(fn: Callable[..., Any]) -> Tuple[bool, float, str, Dict[str, Any]]:
+            m0 = float(fn(0))
+            m1 = float(fn(1))
+            score = 60.0 + 10.0 * (1 if m0 > 0 else 0) + 15.0 * (1 if m1 > 0 else 0)
+            return True, score, "ok", {"pass_mask": [1 if m0 > 0 else 0, 1 if m1 > 0 else 0], "bucket_scores": [m0, m1]}
+
+        cart_tgt_20c = TaskCartridge(
+            task_name="sim_target_tb4",
+            description="Continue completion gate onto feasibility+optimality tasks",
+            baseline_fn=lambda b: 0.2 if b == 0 else -0.3,
+            verify_and_score=_sim_score,
+            provenance={"model": "gemini-3.8-flash", "dataset": "tb4"},
+            prior_skill_state=st_src_20c.to_dict(),
+            initial_branches=[
+                BranchCandidate(
+                    id="tgt_opt_fix",
+                    branch=0,
+                    description="Add optimality bound check on top of interlock",
+                    fn=lambda b: 0.4,
+                    root_cause="premature completion without verification",
+                    predicted_buckets=[0, 1],
+                ),
+                BranchCandidate(
+                    id="tgt_miss_b1",
+                    branch=1,
+                    description="Heuristic warning only",
+                    fn=lambda b: 0.4 if b == 0 else -0.05,
+                    root_cause="premature completion without verification",
+                    predicted_buckets=[0, 1],
+                ),
+            ],
+        )
+        rep_20c = AutoDreamRunner(cart_tgt_20c, pool_dir=tmp_20c).run()
+        tgt_state = MutableSkillState.from_dict(rep_20c["skill_state"])
+        tgt_schema = tgt_state.validate_schema()
+        src_atts = st_src_20c.problem_ledger[0]["attempts"] if st_src_20c.problem_ledger else []
+        tgt_atts = tgt_state.problem_ledger[0]["attempts"] if tgt_state.problem_ledger else []
+        tgt_prompt = tgt_state.compact_prompt_context()
+        check(
+            "20c. SIM problem_ledger tracks predicted->fixed/missed outcomes, preserves rejected attempts, and carries across provenance shifts",
+            len(st_src_20c.problem_ledger) == 1
+            and len(src_atts) == 2
+            and src_atts[0]["accepted"] is False
+            and src_atts[0]["missed_buckets"] == [0, 1]
+            and src_atts[1]["fixed_buckets"] == [0]
+            and src_atts[1]["missed_buckets"] == [1]
+            and src_atts[1]["provenance"] == {"model": "opus-5.5", "dataset": "tb2.1"}
+            and tgt_state.carried_from is not None
+            and tgt_state.carried_from["source_task"] == "sim_source_tb21"
+            and tgt_state.carried_from["target_provenance"] == {"model": "gemini-3.8-flash", "dataset": "tb4"}
+            and len(tgt_state.problem_ledger) == 1
+            and len(tgt_atts) == 3
+            and any(a["node_id"] == "tgt_opt_fix" and a["fixed_buckets"] == [0, 1] and a["missed_buckets"] == [] for a in tgt_atts)
+            and '"problem_ledger"' in tgt_prompt
+            and tgt_schema["valid"] is True,
+            f"src_atts={len(src_atts)} tgt_atts={len(tgt_atts)} carried={tgt_state.carried_from}",
+        )
+    finally:
+        if old_pool_env is None:
+            os.environ.pop("DREAM_RSI_POOL", None)
+        else:
+            os.environ["DREAM_RSI_POOL"] = old_pool_env
+        shutil.rmtree(tmp_20c, ignore_errors=True)
 
     print()
     if FAILURES:
