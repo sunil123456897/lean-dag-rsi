@@ -109,6 +109,7 @@ if __package__:
         EigenRotationTransform,  # noqa: F401
         KktSlackTransform,  # noqa: F401
         DyadicHomotopyTransform,  # noqa: F401
+        OrientationFlipTransform,  # noqa: F401
         SpectralMetaAtlas,  # noqa: F401
         SpectralFrameLifter,  # noqa: F401
     )
@@ -122,6 +123,7 @@ else:
         EigenRotationTransform,  # noqa: F401
         KktSlackTransform,  # noqa: F401
         DyadicHomotopyTransform,  # noqa: F401
+        OrientationFlipTransform,  # noqa: F401
         SpectralMetaAtlas,  # noqa: F401
         SpectralFrameLifter,  # noqa: F401
     )
@@ -3018,6 +3020,7 @@ __all__ = [
     "EigenRotationTransform",
     "KktSlackTransform",
     "DyadicHomotopyTransform",
+    "OrientationFlipTransform",
     "SpectralMetaAtlas",
     "SpectralFrameLifter",
     "compute_hyper_crossover",

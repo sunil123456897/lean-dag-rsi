@@ -2566,6 +2566,120 @@ def main() -> int:
             os.environ["DREAM_RSI_POOL"] = old_pool_env
         shutil.rmtree(tmp_20c, ignore_errors=True)
 
+    # ------------------------------------------------------------------
+    # Suite 21: OrientationFlipTransform order-type barrier escape +
+    #           SpectralMetaAtlas automatic escalation
+    # ------------------------------------------------------------------
+    print("\nSuite 21: OrientationFlipTransform & SpectralMetaAtlas escalation")
+    from engine import KktSlackTransform, OrientationFlipTransform, SpectralFrameLifter, SpectralMetaAtlas
+    import numpy as _np
+
+    # 21a. Geometric minimax order-type trap:
+    # Fixed anchors p0=(0,0), p1=(0.4,0), p2=(0,0.4), p3=(1,1); movable point p=(x,y) in [0,1]^2.
+    # Starting at p=(0.08, 0.08) inside triangle p0-p1-p2 (area 0.08), any sign-preserving optimizer
+    # is mathematically trapped <= 2*Area/3 = 0.05333 (det). Flipping det(p1,p2,p) across x+y=0.4
+    # escapes to the open side with >2.5x larger minimum |det|.
+    anchors = _np.array([[0.0, 0.0], [0.4, 0.0], [0.0, 0.4], [1.0, 1.0]], dtype=_np.float64)
+    pairs_21 = [(0, 1), (0, 2), (1, 2), (0, 3), (1, 3), (2, 3)]
+
+    def _eval_dets_21(xy):
+        x, y = float(xy[0]), float(xy[1])
+        out = _np.empty(len(pairs_21), dtype=_np.float64)
+        for idx_p, (a, b) in enumerate(pairs_21):
+            ax, ay = anchors[a]
+            bx, by = anchors[b]
+            out[idx_p] = ax * (by - y) + bx * (y - ay) + x * (ay - by)
+        return out
+
+    def _grad_pool_21(xy, pool):
+        G = _np.empty((len(pool), 2), dtype=_np.float64)
+        for r_i, idx_p in enumerate(pool):
+            a, b = pairs_21[int(idx_p)]
+            ax, ay = anchors[a]
+            bx, by = anchors[b]
+            G[r_i, 0] = ay - by
+            G[r_i, 1] = bx - ax
+        return G
+
+    x0_21 = [0.09, 0.14]
+    g0_21 = _eval_dets_21(x0_21)
+    oft = OrientationFlipTransform(base_dim=2, time_limit=2.0)
+    cands_21 = oft.select_flip_candidates(g0_21, top_k=3)
+    # Without flipping, local TR-SLP is mathematically trapped inside p0-p1-p2 (<= 2*0.08/3 = 0.05334).
+    res_noflip = oft.solve_forced_flip_slp(
+        x_init=x0_21,
+        eval_signed_fn=_eval_dets_21,
+        grad_pool_fn=_grad_pool_21,
+        lower_bounds=[0.0, 0.0],
+        upper_bounds=[1.0, 1.0],
+        flip_indices=[],
+        r0=0.20,
+        max_flip_steps=0,
+        max_polish_steps=50,
+    )
+    # Index 2 is pair (p1, p2) = wall x + y = 0.4; flipping it escapes the <= 0.05334 trap!
+    res_flip = oft.solve_forced_flip_slp(
+        x_init=x0_21,
+        eval_signed_fn=_eval_dets_21,
+        grad_pool_fn=_grad_pool_21,
+        lower_bounds=[0.0, 0.0],
+        upper_bounds=[1.0, 1.0],
+        flip_indices=[2],
+        r0=0.20,
+        max_flip_steps=30,
+        max_polish_steps=50,
+    )
+    oft_signed = oft.with_flipped(g0_21, [2])
+    margin_before = oft_signed.evaluate_forced_sign_margin(g0_21)
+    margin_after = oft_signed.evaluate_forced_sign_margin(_eval_dets_21(res_flip["x"]))
+    check(
+        "21a. OrientationFlipTransform crosses det=0 wall and escapes mathematically trapped order-type cell (>2x over trapped SLP)",
+        res_noflip["min_abs"] <= 0.0534
+        and res_flip["initial_min_abs"] > 0.01
+        and res_flip["crossed"] is True
+        and res_flip["improved"] is True
+        and res_flip["min_abs"] > 2.0 * res_noflip["min_abs"]
+        and margin_before < 0.0
+        and margin_after > 0.0
+        and len(cands_21) == 3,
+        f"init={res_flip['initial_min_abs']:.5f} trapped={res_noflip['min_abs']:.5f} flipped={res_flip['min_abs']:.5f} crossed={res_flip['crossed']} m0={margin_before:.4f} m1={margin_after:.4f}",
+    )
+
+    # 21b. SpectralMetaAtlas automatic escalation: kkt_slack_lift -> quarantine (2 fails) -> orientation_flip
+    atlas_21 = SpectralMetaAtlas()
+    lifter_21 = SpectralFrameLifter(atlas=atlas_21)
+    g_stiff = [[1.0, 0.0], [0.0, 1e-8]]
+    lift1 = lifter_21.detect_and_lift(
+        task_name="heilbronn_tri_trap",
+        theta_anchor=[0.1, 0.2],
+        g_mat=g_stiff,
+        has_min_tie_structure=True,
+        num_tie_constraints=6,
+        has_signed_barrier=True,
+        consecutive_oos_failures=5,
+    )
+    atlas_21.record_outcome("heilbronn_tri_trap", "kkt_slack_lift", False)
+    atlas_21.record_outcome("heilbronn_tri_trap", "kkt_slack_lift", False)
+    lift2 = lifter_21.detect_and_lift(
+        task_name="heilbronn_tri_trap",
+        theta_anchor=[0.1, 0.2],
+        g_mat=g_stiff,
+        has_min_tie_structure=True,
+        num_tie_constraints=6,
+        has_signed_barrier=True,
+        consecutive_oos_failures=5,
+    )
+    check(
+        "21b. SpectralMetaAtlas escalates from quarantined kkt_slack_lift to OrientationFlipTransform",
+        lift1["operator"] == "kkt_slack_lift"
+        and isinstance(lift1["transform"], KktSlackTransform)
+        and lift2["triggered"] is True
+        and lift2["operator"] == "orientation_flip"
+        and isinstance(lift2["transform"], OrientationFlipTransform)
+        and lift2["warmup_grace_steps"] == 2,
+        f"op1={lift1['operator']} op2={lift2['operator']} grace={lift2['warmup_grace_steps']}",
+    )
+
     print()
     if FAILURES:
         print(f"RESULT: {len(FAILURES)} FAILED -> {FAILURES}")

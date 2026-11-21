@@ -752,13 +752,257 @@ class DyadicHomotopyTransform(FrameTransform):
         return fine
 
 
+class OrientationFlipTransform(FrameTransform):
+    """
+    Order-Type Barrier Escape (`Phi -> Phi_flip`) for non-smooth signed minimax
+    problems `max_{x in D} min_{k=1..K} |g_k(x)|` (e.g., Heilbronn triangle/square/convex
+    packings and signed margin arrangements).
+
+    Smooth optimizers and local KKT/SLP stall inside a single combinatorial sign cell
+    (`order type`) because crossing `g_k(x) = 0` creates a sharp zero-value barrier.
+    This operator explicitly flips the required sign `s'_k = -sign(g_k(x))` on selected
+    tight constraints and solves a lazy cutting-plane Trust-Region SLP (HiGHS) with an
+    UNBOUNDED slack variable `delta in (-inf, +inf)` and hard `time_limit` so the solver
+    pushes `x` cleanly across `g_k(x) = 0` into the opposite orientation before free
+    TR-SLP polishing.
+    """
+
+    name: str = "orientation_flip"
+
+    def __init__(
+        self,
+        base_dim: int,
+        initial_signs: Optional[Sequence[float]] = None,
+        flipped_indices: Optional[Sequence[int]] = None,
+        time_limit: float = 2.0,
+    ) -> None:
+        self.base_dim = int(base_dim)
+        self.signs: List[float] = (
+            [1.0 if float(s) >= 0.0 else -1.0 for s in initial_signs]
+            if initial_signs is not None
+            else []
+        )
+        self.flipped_indices: List[int] = (
+            [int(i) for i in flipped_indices] if flipped_indices is not None else []
+        )
+        for idx in self.flipped_indices:
+            if 0 <= idx < len(self.signs):
+                self.signs[idx] = -self.signs[idx]
+        self.time_limit = max(0.1, float(time_limit))
+        self.warmup_grace_steps = 2
+
+    def forward_project(self, x_orig: Sequence[float]) -> List[float]:
+        return [float(x_orig[i]) for i in range(self.base_dim)]
+
+    def inverse_projection(self, u_lifted: Sequence[float]) -> List[float]:
+        return [float(u_lifted[i]) for i in range(self.base_dim)]
+
+    @staticmethod
+    def select_flip_candidates(signed_vals: Sequence[float], top_k: int = 20) -> List[int]:
+        """Return indices of the `top_k` tightest `|g_k(x)|` constraints (active order-type walls)."""
+        indexed = [(abs(float(v)), i) for i, v in enumerate(signed_vals)]
+        indexed.sort(key=lambda t: t[0])
+        return [i for _, i in indexed[: max(1, min(int(top_k), len(indexed)))]]
+
+    def with_flipped(
+        self,
+        signed_vals: Sequence[float],
+        flip_indices: Sequence[int],
+    ) -> "OrientationFlipTransform":
+        """Create a transform instance whose signs match `signed_vals` except inverted on `flip_indices`."""
+        base_signs = [1.0 if float(v) >= 0.0 else -1.0 for v in signed_vals]
+        return OrientationFlipTransform(
+            base_dim=self.base_dim,
+            initial_signs=base_signs,
+            flipped_indices=flip_indices,
+            time_limit=self.time_limit,
+        )
+
+    def evaluate_forced_sign_margin(self, signed_vals: Sequence[float]) -> float:
+        """Signed margin `min_k (s'_k * g_k(x))`: negative before crossing, positive once crossed."""
+        if len(signed_vals) == 0:
+            return 0.0
+        if not self.signs or len(self.signs) != len(signed_vals):
+            return min(abs(float(v)) for v in signed_vals)
+        return min(self.signs[i] * float(signed_vals[i]) for i in range(len(signed_vals)))
+
+    def solve_forced_flip_slp(
+        self,
+        x_init: Sequence[float],
+        eval_signed_fn: Callable[[Any], Any],
+        grad_pool_fn: Callable[[Any, Any], Any],
+        lower_bounds: Sequence[float],
+        upper_bounds: Sequence[float],
+        flip_indices: Sequence[int],
+        linear_ub: Optional[Tuple[Any, Any]] = None,
+        project_fn: Optional[Callable[[Any], Any]] = None,
+        r0: float = 0.06,
+        max_flip_steps: int = 32,
+        max_polish_steps: int = 60,
+        tol: float = 1e-11,
+        pool_cap: int = 2200,
+    ) -> Dict[str, Any]:
+        """
+        Lazy cutting-plane Trust-Region SLP (HiGHS) with unbounded slack `delta in (-inf, +inf)`:
+          Phase 1: Forces `s_all[k] = -s_all[k]` for `k in flip_indices` and pushes `x` across `g_k(x) = 0`.
+          Phase 2: Releases signs to current orientation and polishes the new cell to convergence.
+
+        `eval_signed_fn(x)` -> 1D array of signed constraint values `g(x)` of shape `(K,)`.
+        `grad_pool_fn(x, pool)` -> 2D array (or sparse matrix) of shape `(len(pool), d)` with rows `grad g_k(x)`.
+        `linear_ub` -> optional `(A_lin, b_lin)` enforcing `A_lin @ x <= b_lin` (e.g., simplex `x_i + y_i <= 1`).
+        """
+        import numpy as np
+        from scipy.optimize import linprog
+        from scipy.sparse import csc_matrix, csr_matrix, hstack, issparse, vstack
+
+        x = np.asarray(x_init, dtype=np.float64).copy()
+        d = len(x)
+        lb_box = np.asarray(lower_bounds, dtype=np.float64)
+        ub_box = np.asarray(upper_bounds, dtype=np.float64)
+        if project_fn is not None:
+            x = np.asarray(project_fn(x), dtype=np.float64)
+        else:
+            x = np.clip(x, lb_box, ub_box)
+
+        g0 = np.asarray(eval_signed_fn(x), dtype=np.float64)
+        init_min_abs = float(np.abs(g0).min())
+        s_forced = np.where(g0 >= 0.0, 1.0, -1.0)
+        for idx in flip_indices:
+            s_forced[int(idx)] = -s_forced[int(idx)]
+
+        c_obj = np.zeros(d + 1, dtype=np.float64)
+        c_obj[d] = -1.0
+
+        def _solve_step(x_cur: np.ndarray, pool: np.ndarray, s_vec: np.ndarray, sc_pool: np.ndarray, r: float):
+            G_pool = grad_pool_fn(x_cur, pool)
+            m_act = len(pool)
+            neg_s = -s_vec[pool]
+            if issparse(G_pool):
+                # Multiply each row by -s_k and append +1.0 column for slack delta
+                G_scaled = csr_matrix(G_pool).multiply(neg_s[:, None])
+                slack_col = csr_matrix(np.ones((m_act, 1), dtype=np.float64))
+                A_ub = hstack([G_scaled, slack_col], format="csr")
+            else:
+                A_dense = np.empty((m_act, d + 1), dtype=np.float64)
+                A_dense[:, :d] = neg_s[:, None] * np.asarray(G_pool, dtype=np.float64)
+                A_dense[:, d] = 1.0
+                A_ub = A_dense
+            b_ub = sc_pool
+
+            if linear_ub is not None:
+                A_lin, b_lin = linear_ub
+                b_rem = np.asarray(b_lin, dtype=np.float64) - np.asarray(A_lin @ x_cur, dtype=np.float64)
+                n_lin = len(b_rem)
+                if issparse(A_ub) or issparse(A_lin):
+                    A_lin_s = hstack([csr_matrix(A_lin), csr_matrix((n_lin, 1))], format="csr")
+                    A_ub = vstack([csr_matrix(A_ub), A_lin_s], format="csr")
+                else:
+                    A_lin_d = np.zeros((n_lin, d + 1), dtype=np.float64)
+                    A_lin_d[:, :d] = np.asarray(A_lin, dtype=np.float64)
+                    A_ub = np.vstack([A_ub, A_lin_d])
+                b_ub = np.concatenate([b_ub, b_rem])
+
+            lb = np.empty(d + 1, dtype=np.float64)
+            ub = np.empty(d + 1, dtype=np.float64)
+            lb[:d] = np.maximum(lb_box - x_cur, -r)
+            ub[:d] = np.minimum(ub_box - x_cur, r)
+            lb[d] = -np.inf
+            ub[d] = np.inf
+            res = linprog(
+                c_obj,
+                A_ub=A_ub,
+                b_ub=b_ub,
+                bounds=list(zip(lb, ub)),
+                method="highs",
+                options={"presolve": False, "time_limit": self.time_limit},
+            )
+            if not res.success or res.x is None:
+                return None
+            return res.x[:d]
+
+        def _run_tr_loop(x_start: np.ndarray, s_vec: np.ndarray, r_init: float, max_it: int, stop_on_pos: bool):
+            xc = x_start.copy()
+            r = float(r_init)
+            steps = 0
+            K = len(s_vec)
+            min_pool = min(max(40, 2 * d), K)
+            for step in range(max_it):
+                steps += 1
+                sc_all = s_vec * np.asarray(eval_signed_fn(xc), dtype=np.float64)
+                mn = float(sc_all.min())
+                thresh = max(mn * 3.0, 3.0 * abs(mn), 0.002) if mn < 0.0 else 3.0 * max(mn, 1e-12)
+                pool = np.flatnonzero(sc_all <= thresh)
+                if len(pool) > pool_cap:
+                    pool = np.argpartition(sc_all, pool_cap)[:pool_cap]
+                elif len(pool) < min_pool:
+                    pool = np.argpartition(sc_all, min_pool - 1)[:min_pool] if min_pool < K else np.arange(K, dtype=np.int32)
+
+                xn = None
+                for _exp in range(4):
+                    dx = _solve_step(xc, pool, s_vec, sc_all[pool], r)
+                    if dx is None:
+                        break
+                    cand = xc + dx
+                    cand = np.asarray(project_fn(cand), dtype=np.float64) if project_fn is not None else np.clip(cand, lb_box, ub_box)
+                    sc_new = s_vec * np.asarray(eval_signed_fn(cand), dtype=np.float64)
+                    mn_new = float(sc_new.min())
+                    t_new = max(mn_new * 2.0, 2.0 * abs(mn_new), 0.001) if mn_new < 0.0 else 2.0 * max(mn_new, 1e-12)
+                    newpool = np.flatnonzero(sc_new <= t_new)
+                    if len(newpool) > pool_cap // 2:
+                        newpool = np.argpartition(sc_new, pool_cap // 2)[: pool_cap // 2]
+                    xn = cand
+                    if len(newpool) == 0 or np.isin(newpool, pool).all():
+                        break
+                    pool = np.union1d(pool, newpool)
+                    if len(pool) > int(pool_cap * 1.3):
+                        break
+
+                if xn is None:
+                    r *= 0.5
+                    if r < tol:
+                        break
+                    continue
+
+                v_new = float((s_vec * np.asarray(eval_signed_fn(xn), dtype=np.float64)).min())
+                if v_new > mn + 1e-14:
+                    xc = xn
+                    r = min(r * 1.5, 0.25)
+                    if stop_on_pos and v_new > 0.0 and step >= 8:
+                        break
+                else:
+                    r *= 0.5
+                    if r < tol:
+                        break
+            return xc, steps
+
+        # Phase 1: push flipped constraints across 0 into opposite orientation
+        x_p1, steps1 = _run_tr_loop(x, s_forced, r0, max_flip_steps, stop_on_pos=True)
+        g_p1 = np.asarray(eval_signed_fn(x_p1), dtype=np.float64)
+        crossed = bool(all(s_forced[int(idx)] * g_p1[int(idx)] > 0.0 for idx in flip_indices))
+
+        # Phase 2: release signs to current cell and polish freely
+        s_free = np.where(g_p1 >= 0.0, 1.0, -1.0)
+        x_final, steps2 = _run_tr_loop(x_p1, s_free, min(r0, 0.04), max_polish_steps, stop_on_pos=False)
+        g_final = np.asarray(eval_signed_fn(x_final), dtype=np.float64)
+        final_min_abs = float(np.abs(g_final).min())
+
+        return {
+            "x": x_final.tolist(),
+            "min_abs": final_min_abs,
+            "initial_min_abs": init_min_abs,
+            "crossed": crossed,
+            "improved": bool(final_min_abs > init_min_abs + 1e-12),
+            "steps": steps1 + steps2,
+        }
+
+
 class SpectralMetaAtlas:
     """
     Cross-Task Spectral Operator Atlas (`meta_operator_atlas`):
     Indexes verified structural transformations (`eigen_rotation`, `kkt_slack_lift`,
-    `dyadic_homotopy`) by dimensionless stall signatures and task geometry, with
-    automatic provenance quarantine if a transferred operator fails to produce
-    positive gain within `max_trial_probes = 2` evaluations.
+    `orientation_flip`, `dyadic_homotopy`) by dimensionless stall signatures and task
+    geometry, with automatic provenance quarantine if a transferred operator fails to
+    produce positive gain within `max_trial_probes = 2` evaluations.
     """
 
     def __init__(self) -> None:
@@ -769,6 +1013,12 @@ class SpectralMetaAtlas:
                 "min_log10_kappa": 6.0,
                 "requires_min_tie": True,
                 "description": "Lifts non-smooth min-tie bottleneck into smooth KKT slack variables with active-set condensation.",
+            },
+            {
+                "operator": "orientation_flip",
+                "task_family": "geometric_extremal",
+                "requires_signed_barrier": True,
+                "description": "Flips sign of tightest near-collinear constraints and solves unbounded-slack TR-SLP to escape order-type walls.",
             },
             {
                 "operator": "dyadic_homotopy",
@@ -802,6 +1052,7 @@ class SpectralMetaAtlas:
         diagnostics: Dict[str, Any],
         has_min_tie_structure: bool = False,
         consecutive_oos_failures: int = 0,
+        has_signed_barrier: bool = False,
     ) -> Optional[str]:
         log10_k = float(diagnostics.get("log10_kappa_eff", 0.0))
         d = int(diagnostics.get("d", 0))
@@ -812,6 +1063,8 @@ class SpectralMetaAtlas:
         candidates: List[str] = []
         if has_min_tie_structure:
             candidates.append("kkt_slack_lift")
+        if has_signed_barrier:
+            candidates.append("orientation_flip")
         if d >= 64:
             candidates.append("dyadic_homotopy")
         candidates.append("eigen_rotation")
@@ -826,7 +1079,7 @@ class SpectralFrameLifter:
     """
     Stage 2 Coordinator: inspects Gauss-Newton matrix `G = (1/M) J^T J` and DAG OOS
     trajectory, queries `SpectralMetaAtlas`, and instantiates the matching `FrameTransform`
-    with a mandatory inverse projection `Phi^-1` and 1-step warmup grace budget.
+    with a mandatory inverse projection `Phi^-1` and warmup grace budget.
     """
 
     def __init__(self, atlas: Optional[SpectralMetaAtlas] = None) -> None:
@@ -846,6 +1099,7 @@ class SpectralFrameLifter:
         num_tie_constraints: int = 0,
         consecutive_oos_failures: int = 0,
         j_mat: Optional[Sequence[Sequence[float]]] = None,
+        has_signed_barrier: bool = False,
     ) -> Dict[str, Any]:
         diag = compute_spectral_diagnostics(
             g_mat=g_mat,
@@ -860,6 +1114,7 @@ class SpectralFrameLifter:
             diagnostics=diag,
             has_min_tie_structure=has_min_tie_structure,
             consecutive_oos_failures=consecutive_oos_failures,
+            has_signed_barrier=has_signed_barrier,
         )
         if op_name is None:
             return {
@@ -875,6 +1130,8 @@ class SpectralFrameLifter:
                 base_dim=len(theta_anchor),
                 num_constraints=num_tie_constraints,
             )
+        elif op_name == "orientation_flip":
+            transform = OrientationFlipTransform(base_dim=len(theta_anchor))
         elif op_name == "dyadic_homotopy":
             transform = DyadicHomotopyTransform(fine_dim=len(theta_anchor), level=2)
         else:
@@ -900,6 +1157,7 @@ __all__ = [
     "EigenRotationTransform",
     "KktSlackTransform",
     "DyadicHomotopyTransform",
+    "OrientationFlipTransform",
     "SpectralMetaAtlas",
     "SpectralFrameLifter",
 ]
