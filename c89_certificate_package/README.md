@@ -7,7 +7,7 @@ $$
 c_4(W^{(7680)}) = \frac{544416702963479534354424655876570459894446711323}{18063603610809804744643931800845172819844136960000} = 0.03013887564703225514685795\ldots
 $$
 
-Hence **$C_{89} \le 0.0301388757$**, strictly improving the prior record `[SK2026]` (`0.03013887931325598096...`, `<= 0.0301388794`) by **`-3.666223725820686e-9`** (exact margin `-1059603394108337953046406402486682724992272 / 289017657772956875914302908813522765117506191360000`).
+Hence **$C_{89} \le 0.0301388757$**, strictly improving the prior record `[SK2026]` (`0.03013887931325598096...`, `<= 0.0301388794`) by **`-3.666223725820686e-9`** (exact reduced margin `-22075070710590374021800133385139223437339 / 6021201203603268248214643933615057606614712320000`).
 
 ## Method (Continuous Balanced Sign-Split Refinement)
 
@@ -23,7 +23,7 @@ $$
 c_4(W^{(7680)}) - c_4(W^{(3840)}) = \Delta_3(d) + \Delta_4(d) = \frac{N_3 + N_4}{3840^4 \cdot (2^{20})^6}.
 $$
 
-Unlike `[Kos2026]` (which fixed amplitudes to $|d_{ij}| = \min(R_{ij}, D - R_{ij})$ and optimized only discrete signs on the older `[VSJ2026]` base for `-1.87e-9`), we optimize **all `221,460` continuous fractional amplitudes** $d_{ij} \in [-\text{cap}_{ij}, +\text{cap}_{ij}]$ freely on GPU (RTX 5060, per-chunk exact backward):
+Unlike `[Kos2026]` (which fixed amplitudes to $|d_{ij}| = \min(R_{ij}, D - R_{ij})$ and optimized only discrete signs on the older `[VSJ2026]` base for `-1.87e-9`), we optimize **all `221,460` continuous fractional amplitudes** $`d_{ij} \in [-\mathrm{cap}_{ij}, +\mathrm{cap}_{ij}]`$ freely on GPU (RTX 5060, per-chunk exact backward):
 - Cubic sign ascent alone gave $\Delta_3 = -4.873\times 10^{-9}$, $\Delta_4 = +3.417\times 10^{-9}$ ($\Delta = -1.456\times 10^{-9}$).
 - Continuous amplitude optimization slashed the quartic penalty $\Delta_4$ nearly **3x** (`+3.417e-9 -> +1.175e-9`) while preserving $\Delta_3 = -4.842\times 10^{-9}$, yielding **`Delta = -3.6662237258e-9`**.
 
