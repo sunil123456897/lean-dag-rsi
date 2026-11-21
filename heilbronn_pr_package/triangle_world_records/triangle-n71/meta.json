@@ -1,0 +1,5 @@
+{
+  "ref": "Staroselets2026-tri-flip",
+  "credit": "Ivan Staroselets, November 2026",
+  "note": "Found by iterative orientation-flip trust-region SLP (HiGHS) escaping order-type collinearity barriers from the prior n=71 record (+1.091%); coordinates truncated toward zero to 30 decimals and verified in exact rational arithmetic."
+}
