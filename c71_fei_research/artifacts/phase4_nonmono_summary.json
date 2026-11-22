@@ -1,0 +1,398 @@
+{
+  "device": "cuda",
+  "gpu_name": "NVIDIA GeForce RTX 5060",
+  "seed": 20260722,
+  "from_scratch_verified": true,
+  "peak_vram_mb": 32.18,
+  "within_4_5_gib_cap": true,
+  "total_elapsed_sec": 362.87,
+  "tracer1_a2_nonmono_tier1_eq_tier2": {
+    "passed": true,
+    "d": 6,
+    "k_subcubes": 2,
+    "n_effective": 8,
+    "is_unate_full": false,
+    "I_exact_str": "77/32",
+    "L_cert_prefix": "2.5230582872021764599493401529"
+  },
+  "best_strictly_non_unate_per_d": {
+    "d=5": {
+      "label": "th_SA_nonunate_A2_d5",
+      "source": "theory_seed",
+      "d": 5,
+      "essential_vars": 5,
+      "k_subcubes": 3,
+      "n_effective": 8,
+      "OT": 6.1759104418,
+      "I": 1.6875,
+      "H": 4.24593843,
+      "is_unate_g0": false,
+      "is_unate_full": false
+    },
+    "d=6": {
+      "label": "T1_d6_nu",
+      "source": "track1_nonunate",
+      "d": 6,
+      "essential_vars": 6,
+      "k_subcubes": 2,
+      "n_effective": 8,
+      "OT": 6.2492064094,
+      "I": 1.6875,
+      "H": 4.29632941,
+      "is_unate_g0": false,
+      "is_unate_full": false
+    },
+    "d=7": {
+      "label": "T1_d7_nu",
+      "source": "track1_nonunate",
+      "d": 7,
+      "essential_vars": 7,
+      "k_subcubes": 0,
+      "n_effective": 7,
+      "OT": 6.2687313511,
+      "I": 1.65625,
+      "H": 4.11385495,
+      "is_unate_g0": false,
+      "is_unate_full": false
+    },
+    "d=8": {
+      "label": "T1_d8_nu",
+      "source": "track1_nonunate",
+      "d": 8,
+      "essential_vars": 8,
+      "k_subcubes": 0,
+      "n_effective": 8,
+      "OT": 6.2810591364,
+      "I": 1.65625,
+      "H": 4.12194506,
+      "is_unate_g0": false,
+      "is_unate_full": false
+    },
+    "d=9": {
+      "label": "T1_d9_nu",
+      "source": "track1_nonunate",
+      "d": 9,
+      "essential_vars": 9,
+      "k_subcubes": 9,
+      "n_effective": 18,
+      "OT": 6.5014767175,
+      "I": 2.0390625,
+      "H": 6.75544065,
+      "is_unate_g0": false,
+      "is_unate_full": false
+    },
+    "d=10": {
+      "label": "T1_d10_ov",
+      "source": "track1_unconstrained",
+      "d": 10,
+      "essential_vars": 10,
+      "k_subcubes": 9,
+      "n_effective": 19,
+      "OT": 6.5101085493,
+      "I": 2.04101562,
+      "H": 6.77712472,
+      "is_unate_g0": false,
+      "is_unate_full": false
+    },
+    "d=11": {
+      "label": "th_RM_AG23_sparseXOR_k4_d11",
+      "source": "theory_seed",
+      "d": 11,
+      "essential_vars": 11,
+      "k_subcubes": 11,
+      "n_effective": 22,
+      "OT": 6.4959871888,
+      "I": 2.04785156,
+      "H": 6.80683033,
+      "is_unate_g0": false,
+      "is_unate_full": false
+    },
+    "d=12": {
+      "label": "AG12_esc_nu",
+      "source": "track2_AG12_esc_nonunate",
+      "d": 12,
+      "essential_vars": 12,
+      "k_subcubes": 9,
+      "n_effective": 21,
+      "OT": 6.5067801067,
+      "I": 2.04492188,
+      "H": 6.79907687,
+      "is_unate_g0": false,
+      "is_unate_full": false
+    }
+  },
+  "best_unconstrained_overall_per_d": {
+    "d=5": {
+      "label": "th_SA_nonunate_A2_d5",
+      "source": "theory_seed",
+      "d": 5,
+      "essential_vars": 5,
+      "k_subcubes": 3,
+      "n_effective": 8,
+      "OT": 6.1759104418,
+      "I": 1.6875,
+      "is_unate_full": false
+    },
+    "d=6": {
+      "label": "T1_d6_ov",
+      "source": "track1_unconstrained",
+      "d": 6,
+      "essential_vars": 6,
+      "k_subcubes": 2,
+      "n_effective": 8,
+      "OT": 6.3639694463,
+      "I": 1.65625,
+      "is_unate_full": true
+    },
+    "d=7": {
+      "label": "T1_d7_ov",
+      "source": "track1_unconstrained",
+      "d": 7,
+      "essential_vars": 6,
+      "k_subcubes": 0,
+      "n_effective": 7,
+      "OT": 6.2789452527,
+      "I": 1.625,
+      "is_unate_full": true
+    },
+    "d=8": {
+      "label": "T1_d8_ov",
+      "source": "track1_unconstrained",
+      "d": 8,
+      "essential_vars": 8,
+      "k_subcubes": 0,
+      "n_effective": 8,
+      "OT": 6.2810591364,
+      "I": 1.65625,
+      "is_unate_full": true
+    },
+    "d=9": {
+      "label": "th_AG23_d9_1comparable_0D_split",
+      "source": "theory_seed",
+      "d": 9,
+      "essential_vars": 9,
+      "k_subcubes": 9,
+      "n_effective": 18,
+      "OT": 6.5218457109,
+      "I": 2.0390625,
+      "is_unate_full": true
+    },
+    "d=10": {
+      "label": "T1_d10_ov",
+      "source": "track1_unconstrained",
+      "d": 10,
+      "essential_vars": 10,
+      "k_subcubes": 9,
+      "n_effective": 19,
+      "OT": 6.5101085493,
+      "I": 2.04101562,
+      "is_unate_full": false
+    },
+    "d=11": {
+      "label": "th_RM_AG23_sparseXOR_k4_d11",
+      "source": "theory_seed",
+      "d": 11,
+      "essential_vars": 11,
+      "k_subcubes": 11,
+      "n_effective": 22,
+      "OT": 6.4959871888,
+      "I": 2.04785156,
+      "is_unate_full": false
+    },
+    "d=12": {
+      "label": "AG12_esc_ov",
+      "source": "track2_AG12_esc_overall",
+      "d": 12,
+      "essential_vars": 9,
+      "k_subcubes": 9,
+      "n_effective": 21,
+      "OT": 6.5218457109,
+      "I": 2.0390625,
+      "is_unate_full": true
+    }
+  },
+  "track2_ag23_escape_telemetry": [
+    {
+      "branch": "AG9_esc",
+      "d": 9,
+      "initial_kicks": [
+        1,
+        16
+      ],
+      "total_evals": 537824,
+      "elapsed_sec": 47.51,
+      "non_unate_traj_frac": 0.9998,
+      "overall_OT": 6.5014767175,
+      "overall_is_unate": false,
+      "overall_beats_num2026": false,
+      "nonunate_OT": 6.5014767175,
+      "nonunate_I": 2.039062,
+      "nonunate_k": 9
+    },
+    {
+      "branch": "AG10_Z10_esc",
+      "d": 10,
+      "initial_kicks": [
+        1,
+        12
+      ],
+      "total_evals": 307392,
+      "elapsed_sec": 33.43,
+      "non_unate_traj_frac": 1.0,
+      "overall_OT": 6.4572114264,
+      "overall_is_unate": false,
+      "overall_beats_num2026": false,
+      "nonunate_OT": 6.4572114264,
+      "nonunate_I": 2.054688,
+      "nonunate_k": 8
+    },
+    {
+      "branch": "AG10_pure_esc",
+      "d": 10,
+      "initial_kicks": [
+        1,
+        16
+      ],
+      "total_evals": 307392,
+      "elapsed_sec": 33.08,
+      "non_unate_traj_frac": 1.0,
+      "overall_OT": 6.5074723457,
+      "overall_is_unate": false,
+      "overall_beats_num2026": false,
+      "nonunate_OT": 6.5074723457,
+      "nonunate_I": 2.042969,
+      "nonunate_k": 11
+    },
+    {
+      "branch": "AG11_esc",
+      "d": 11,
+      "initial_kicks": [
+        1,
+        14
+      ],
+      "total_evals": 128128,
+      "elapsed_sec": 18.59,
+      "non_unate_traj_frac": 1.0,
+      "overall_OT": 6.489016519,
+      "overall_is_unate": false,
+      "overall_beats_num2026": false,
+      "nonunate_OT": 6.489016519,
+      "nonunate_I": 2.049805,
+      "nonunate_k": 9
+    },
+    {
+      "branch": "AG12_esc",
+      "d": 12,
+      "initial_kicks": [
+        1,
+        14
+      ],
+      "total_evals": 62496,
+      "elapsed_sec": 12.43,
+      "non_unate_traj_frac": 1.0,
+      "overall_OT": 6.5218457109,
+      "overall_is_unate": true,
+      "overall_beats_num2026": false,
+      "nonunate_OT": 6.5067801067,
+      "nonunate_I": 2.044922,
+      "nonunate_k": 9
+    }
+  ],
+  "best_nonmono_certified": {
+    "label": "T1_d10_ov",
+    "source": "track1_unconstrained",
+    "d": 10,
+    "essential_vars": 10,
+    "k_subcubes": 9,
+    "n_effective": 19,
+    "is_unate_g0": false,
+    "is_unate_full": false,
+    "is_monotone": false,
+    "I_exact_str": "1045/512",
+    "L_cert": "6.510108549349742972806391082390114931419494681716122804332847",
+    "U_cert": "6.510108549349742972806391082390114931419494681716122804332848",
+    "interval_width_L": 1e-84,
+    "exact_balance": true,
+    "parseval_verified": true,
+    "tier1_crosscheck": "PASS",
+    "beats_num2026": false,
+    "sha256": "4a2135b2e758b5467f58cb9c40e25a592d7dcbec6982e93ff6ca63f3175ca81b"
+  },
+  "any_unconstrained_beats_num2026": false,
+  "best_unconstrained_overall": {
+    "label": "th_AG23_d9_1comparable_0D_split",
+    "d": 9,
+    "OT": 6.5218457109,
+    "I": 2.0390625,
+    "is_unate_full": true
+  },
+  "sleep_dag_diagnostics": {
+    "track1": {
+      "max_tilted_objective_tau4": {
+        "J_tau": 6.654740521639892,
+        "n_scores": 5,
+        "max_score": 6.5101
+      },
+      "lean_dag_policy_replay": {
+        "entropic_tau": 4.0,
+        "quality": 62.1518,
+        "v_lean": 59.6918,
+        "probes": 46
+      },
+      "backward_subgoal_decomposer": {
+        "solved_buckets": [
+          0,
+          1,
+          2,
+          3,
+          5,
+          6
+        ],
+        "dead_buckets": [
+          4
+        ],
+        "next_stepping_stone": "assert bucket_margins[4] >= -0.0059455"
+      }
+    },
+    "track2": {
+      "max_tilted_objective_tau4": {
+        "J_tau": 6.836112723866088,
+        "n_scores": 4,
+        "max_score": 6.5075
+      },
+      "lean_dag_policy_replay": {
+        "entropic_tau": 4.0,
+        "quality": 6.5101,
+        "v_lean": 6.420100000000001,
+        "probes": 4
+      },
+      "backward_subgoal_decomposer": {
+        "solved_buckets": [
+          0,
+          1,
+          2,
+          3,
+          5,
+          6
+        ],
+        "dead_buckets": [
+          4
+        ],
+        "next_stepping_stone": "assert bucket_margins[4] >= -0.007264"
+      }
+    },
+    "track2_blind_vault": {
+      "label": "T1_d10_ov",
+      "d": 10,
+      "n_effective": 19,
+      "is_unate_full": false,
+      "is_monotone": false,
+      "I_exact_str": "1045/512",
+      "L_cert": "6.510108549349742972806391082390114931419494681716122804332847",
+      "beats_num2026": false,
+      "sha256": "4a2135b2e758b5467f58cb9c40e25a592d7dcbec6982e93ff6ca63f3175ca81b",
+      "blind_vault_call_count": 1
+    }
+  },
+  "num2026_strict_bar": "6.5218457109230465"
+}

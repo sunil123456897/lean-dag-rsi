@@ -1,0 +1,283 @@
+{
+  "device": "cuda",
+  "gpu_name": "NVIDIA GeForce RTX 5060",
+  "seed": 20260712,
+  "from_scratch_verified": true,
+  "peak_vram_mb": 265.76,
+  "within_4_5_gib_cap": true,
+  "total_elapsed_sec": 189.4,
+  "baseline": {
+    "label": "phase1_from_scratch_d14",
+    "d": 14,
+    "OT": 6.480691236160043,
+    "I": 2.029296875
+  },
+  "cycles": [
+    {
+      "cycle": 1,
+      "elapsed_sec": 130.76,
+      "best_OT": 6.50672402,
+      "best_label": "c1_b3_d9_host12_r0",
+      "best_d": 9,
+      "best_n_eff": 16,
+      "best_I": 2.03125,
+      "runner_best_score": 6.5067,
+      "sleep_dag_diagnostics": {
+        "max_tilted_objective_tau4": {
+          "J_tau": 6.789036183490972,
+          "n_scores": 6,
+          "max_score": 6.5067
+        },
+        "lean_dag_policy_replay": {
+          "entropic_tau": 4.0,
+          "quality": 6.518,
+          "v_lean": 4.058,
+          "probes": 46
+        },
+        "backward_subgoal_decomposer": {
+          "solved_buckets": [
+            0,
+            1,
+            5,
+            6,
+            7,
+            8,
+            9
+          ],
+          "dead_buckets": [
+            2,
+            3,
+            4
+          ],
+          "next_stepping_stone": "assert bucket_margins[2] >= -0.001638"
+        }
+      },
+      "journal_tail": [
+        "[Round 1 | Branch 2] `c1_b2_fresh_d12` -> score=5.3247",
+        "[Round 1 | Branch 3] `c1_b3_d9_a2` -> score=6.5067",
+        "[Round 2 | Deepen Branch 0] `c1_b0_ref_d16` -> score=6.4891",
+        "[Round 3 | DAG CROSSOVER(c1_b3_d9_a2, c1_b0_ref_d16)] Synthesized `c1_xover_c1_b3_d9_a2_c1_b0_ref_d16` -> score=5.4000 (projected=6.5095) | Error-Fingerprint Union=70.00% (+10.00% gain, unique_u=1, unique_v=1)",
+        "[Blind Vault | Single-Shot Sealed Audit] Champion `c1_b3_d9_a2` -> {'exact_L_cert': '6.506724016198906110377613987983369541695192478252992741664416', 'exact_U_cert': '6.506724016198906110377613987983369541695192478252992741664417', 'I_exact_str': '65/32', 'is_monotone': True, 'exact_balance': True, 'parseval_verified': True, 'beats_num2026': False, 'sha256': '3310a2857c2500c847c0e4b0d9ca7ae79bbe35b391f17cd9349c5f45fecc5496', 'blind_vault_call_count': 1}",
+        "[DiscoveryRSI v3 Gates] Credit Active=3/6 (Proposition-1 conserved=True) | Masked-SFT(context=7, zero_loss_dead_ends=6, supervised_lineage=1, M=0.50) | 2x2 Gate=('theta_0', 'psi_0') (score=6.5067, synergy=+0.0000)"
+      ]
+    },
+    {
+      "cycle": 2,
+      "elapsed_sec": 56.94,
+      "ingested_structural_seeds": 18,
+      "best_OT": 6.52184571,
+      "best_label": "c2_b2_AG23_2v2_d9_pol",
+      "best_d": 9,
+      "best_n_eff": 18,
+      "best_I": 2.0390625,
+      "runner_best_score": 6.5218,
+      "sleep_dag_diagnostics": {
+        "max_tilted_objective_tau4": {
+          "J_tau": 6.776730359801482,
+          "n_scores": 3,
+          "max_score": 6.5218
+        },
+        "lean_dag_policy_replay": {
+          "entropic_tau": 4.0,
+          "quality": 6.5218,
+          "v_lean": 6.4418,
+          "probes": 3
+        },
+        "backward_subgoal_decomposer": {
+          "solved_buckets": [
+            0,
+            1,
+            2,
+            5,
+            6,
+            7,
+            8,
+            9
+          ],
+          "dead_buckets": [
+            3,
+            4
+          ],
+          "next_stepping_stone": "assert bucket_margins[3] >= -7.7e-05"
+        }
+      },
+      "journal_tail": [
+        "[Pre-Commitment Gate | H=(c,pi,d,a)] Contract verified: valid=True (tri-state criteria=support/weaken/inconclusive, confounders=2)",
+        "[Round 1 | Branch 0] `c2_b0_ladder17` -> score=6.4916",
+        "[Round 1 | Branch 1] `c2_b1_alt_d15` -> score=6.4916",
+        "[Round 1 | Branch 2] `c2_b2_struct_or_d13` -> score=6.5218",
+        "[Blind Vault | Single-Shot Sealed Audit] Champion `c2_b2_struct_or_d13` -> {'exact_L_cert': '6.521845710923046575658143972948578468366662292229938598252894', 'exact_U_cert': '6.521845710923046575658143972948578468366662292229938598252895', 'I_exact_str': '261/128', 'is_monotone': True, 'exact_balance': True, 'parseval_verified': True, 'beats_num2026': False, 'sha256': '039745d375bd2b3776dc2716beddc130841c977bee3af0b00722d4f8c765179d', 'blind_vault_call_count': 1}",
+        "[DiscoveryRSI v3 Gates] Credit Active=1/3 (Proposition-1 conserved=True) | Masked-SFT(context=4, zero_loss_dead_ends=3, supervised_lineage=1, M=0.50) | 2x2 Gate=('theta_0', 'psi_0') (score=6.5218, synergy=+0.0000)"
+      ]
+    },
+    {
+      "cycle": 3,
+      "elapsed_sec": 1.18,
+      "ingested_structural_seeds": 18,
+      "best_OT": 6.52184571,
+      "best_label": "c2_b2_AG23_2v2_d9_pol",
+      "best_d": 9,
+      "best_n_eff": 18,
+      "best_I": 2.0390625,
+      "runner_best_score": 6.5218,
+      "blind_vault_report": {
+        "exact_L_cert": "6.521845710923046575658143972948578468366662292229938598252894",
+        "exact_U_cert": "6.521845710923046575658143972948578468366662292229938598252895",
+        "I_exact_str": "261/128",
+        "is_monotone": true,
+        "exact_balance": true,
+        "parseval_verified": true,
+        "beats_num2026": false,
+        "sha256": "039745d375bd2b3776dc2716beddc130841c977bee3af0b00722d4f8c765179d",
+        "blind_vault_call_count": 1
+      },
+      "sleep_dag_diagnostics": {
+        "max_tilted_objective_tau4": {
+          "J_tau": 6.786786158260156,
+          "n_scores": 3,
+          "max_score": 6.5218
+        },
+        "lean_dag_policy_replay": {
+          "entropic_tau": 4.0,
+          "quality": 6.5218,
+          "v_lean": 6.4418,
+          "probes": 3
+        },
+        "backward_subgoal_decomposer": {
+          "solved_buckets": [
+            0,
+            1,
+            2,
+            5,
+            6,
+            7,
+            8,
+            9
+          ],
+          "dead_buckets": [
+            3,
+            4
+          ],
+          "next_stepping_stone": "assert bucket_margins[3] >= -7.7e-05"
+        }
+      },
+      "journal_tail": [
+        "[Pre-Commitment Gate | H=(c,pi,d,a)] Contract verified: valid=True (tri-state criteria=support/weaken/inconclusive, confounders=2)",
+        "[Round 1 | Branch 0] `c3_b0_deep_polish` -> score=6.5218",
+        "[Round 1 | Branch 1] `c3_b1_multisplit_n20` -> score=6.4916",
+        "[Round 1 | Branch 2] `c3_b2_tier2_a2` -> score=6.5218",
+        "[Blind Vault | Single-Shot Sealed Audit] Champion `root` -> {'exact_L_cert': '6.521845710923046575658143972948578468366662292229938598252894', 'exact_U_cert': '6.521845710923046575658143972948578468366662292229938598252895', 'I_exact_str': '261/128', 'is_monotone': True, 'exact_balance': True, 'parseval_verified': True, 'beats_num2026': False, 'sha256': '039745d375bd2b3776dc2716beddc130841c977bee3af0b00722d4f8c765179d', 'blind_vault_call_count': 1}",
+        "[DiscoveryRSI v3 Gates] Credit Active=0/3 (Proposition-1 conserved=True) | Masked-SFT(context=4, zero_loss_dead_ends=4, supervised_lineage=0, M=0.00) | 2x2 Gate=('theta_0', 'psi_0') (score=6.5218, synergy=+0.0000)"
+      ]
+    }
+  ],
+  "best_overall_certified": {
+    "label": "c2_b2_AG23_2v2_d9_pol",
+    "source": "cycle2_struct_pol",
+    "tier": 2,
+    "d": 9,
+    "k_subcubes": 9,
+    "n_effective": 18,
+    "I_exact_str": "261/128",
+    "L_cert": "6.521845710923046575658143972948578468366662292229938598252894",
+    "U_cert": "6.521845710923046575658143972948578468366662292229938598252895",
+    "interval_width_L": 1e-84,
+    "is_monotone": true,
+    "exact_balance": true,
+    "parseval_verified": true,
+    "beats_num2026": false,
+    "sha256": "039745d375bd2b3776dc2716beddc130841c977bee3af0b00722d4f8c765179d"
+  },
+  "best_tier1_certified": {
+    "label": "c2_b2_AG23_2v2_d9_pol",
+    "tier": 2,
+    "d": 9,
+    "k_subcubes": 9,
+    "n_effective": 18,
+    "I_exact_str": "261/128",
+    "L_cert": "6.521845710923046575658143972948578468366662292229938598252894",
+    "is_monotone": true,
+    "beats_num2026": false,
+    "sha256": "039745d375bd2b3776dc2716beddc130841c977bee3af0b00722d4f8c765179d"
+  },
+  "num2026_strict_bar": "6.5218457109230465",
+  "final_skill_state": {
+    "task": "c71_fei_phase2_cycle3",
+    "round_index": 4,
+    "best_invariants": [
+      {
+        "node_id": "c2_b2_struct_or_d13",
+        "branch": 2,
+        "score": 6.5218,
+        "tunable_params": null,
+        "coupled_invariants": [],
+        "signature": "c2_b2_struct_or_d13:6.5218",
+        "updated_round": 4
+      },
+      {
+        "node_id": "c1_b3_d9_a2",
+        "branch": 3,
+        "score": 6.5067,
+        "tunable_params": null,
+        "coupled_invariants": [],
+        "signature": "c1_b3_d9_a2:6.5067",
+        "updated_round": 4
+      },
+      {
+        "node_id": "c1_b0_d14_deep",
+        "branch": 0,
+        "score": 6.4895,
+        "tunable_params": null,
+        "coupled_invariants": [],
+        "signature": "c1_b0_d14_deep:6.4895",
+        "updated_round": 4
+      },
+      {
+        "node_id": "c1_b0_ref_d16",
+        "branch": 0,
+        "score": 6.4891,
+        "tunable_params": null,
+        "coupled_invariants": [],
+        "signature": "c1_b0_ref_d16:6.4891",
+        "updated_round": 4
+      }
+    ],
+    "dead_end_fingerprints": [],
+    "unsolved_buckets": [
+      {
+        "bucket_id": 4,
+        "bucket_name": "bucket_4",
+        "anchor_node_id": "c3_b0_deep_polish",
+        "current_best_margin": -0.013154,
+        "stepping_stone_target": -0.006577,
+        "assert_expr": "assert bucket_margins[4] >= -0.006577",
+        "updated_round": 4
+      },
+      {
+        "bucket_id": 3,
+        "bucket_name": "bucket_3",
+        "anchor_node_id": "c3_b0_deep_polish",
+        "current_best_margin": -0.000154,
+        "stepping_stone_target": -7.7e-05,
+        "assert_expr": "assert bucket_margins[3] >= -7.7e-05",
+        "updated_round": 4
+      }
+    ],
+    "active_library_primitives": [],
+    "problem_ledger": [],
+    "carried_from": {
+      "source_task": "c71_fei_phase2_cycle2",
+      "source_round": 4,
+      "target_provenance": {}
+    },
+    "discarded_raw_traces_count": 16,
+    "caps": {
+      "max_invariants": 8,
+      "max_dead_ends": 16,
+      "max_unsolved_buckets": 32,
+      "max_primitives": 12,
+      "max_problems": 8,
+      "max_attempts_per_problem": 3
+    }
+  }
+}
