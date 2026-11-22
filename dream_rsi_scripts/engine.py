@@ -31,6 +31,7 @@ Design constraints inherited from the paper (Zheng et al., 2026, §3 & Appendix 
 
 from __future__ import annotations
 
+import hashlib
 import linecache
 import math
 import random
@@ -390,7 +391,11 @@ class World:
                 pair = (min(u, v), max(u, v))
                 self._used_crossovers.add(pair)
                 self._cf_counter += 1
-                cid = f"xover_{self._cf_counter}_{u}_{v}"
+                if len(u) <= 24 and len(v) <= 24:
+                    cid = f"xover_{self._cf_counter}_{u}_{v}"
+                else:
+                    pair_hash = hashlib.sha1(f"{u}|{v}".encode("utf-8")).hexdigest()[:12]
+                    cid = f"xover_{self._cf_counter}_{pair_hash}"
                 su = self.problem.score(node_u)
                 sv = self.problem.score(node_v)
                 fp = compute_error_fingerprint(

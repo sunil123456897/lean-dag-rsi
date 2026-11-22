@@ -1,0 +1,342 @@
+{
+  "metadata": {
+    "as_of_date": "2026-11-22",
+    "status": "VERIFIED",
+    "workstation_profile": "RTX 5060 8 GB + 12-core CPU + uint64 C++/CUDA Flip-Graph + Hensel/SAT/Z3 Lifting + SLEEP-DAG-RSI",
+    "primary_sources_audited": [
+      {
+        "name": "Université de Lille FMM Database (Alexandre Sedoglavic)",
+        "url": "https://fmm.univ-lille.fr/",
+        "mirror_digest": "https://github.com/sedoglavic/fmm_digest/blob/master/fmm_sota.json",
+        "snapshot_date": "2026-11-15"
+      },
+      {
+        "name": "Perminov FastMatrixMultiplication Catalog",
+        "url": "https://github.com/dronperminov/FastMatrixMultiplication",
+        "snapshot_date": "2026-11-16"
+      },
+      {
+        "name": "Lacelle Matrix Multiplication Catalog (arXiv:2606.13408)",
+        "url": "https://github.com/solven-eu/matmulcatalog",
+        "snapshot_date": "2026-11-16"
+      },
+      {
+        "name": "Sidebottom mat_mul Records (2026)",
+        "url": "https://github.com/gsidebottom/mat_mul",
+        "snapshot_date": "2026-11-21"
+      },
+      {
+        "name": "Canli quantavane-fmm-records (2026)",
+        "url": "https://github.com/arhancanli/quantavane-fmm-records",
+        "snapshot_date": "2026-11-21"
+      },
+      {
+        "name": "Medley, Gokul, Luu, Manolios — GPU-Accelerated Search over F2",
+        "url": "https://arxiv.org/abs/2609.17533",
+        "snapshot_date": "2026-10-26"
+      },
+      {
+        "name": "Kauers & Wood — Exploring the Meta Flip Graph",
+        "url": "https://arxiv.org/abs/2510.19787",
+        "repo": "https://github.com/mkauers/matrix-multiplication",
+        "snapshot_date": "2025-10-22"
+      },
+      {
+        "name": "Perminov — Ternary Meta Flip Graphs / Open-Source Framework / Serendipitous Product",
+        "urls": [
+          "https://arxiv.org/abs/2511.20317",
+          "https://arxiv.org/abs/2603.02398",
+          "https://arxiv.org/abs/2606.02480"
+        ],
+        "snapshot_date": "2026-06-05"
+      },
+      {
+        "name": "Arai, Ichikawa, Hukushima — Adaptive Flip Graph (ISSAC 2024)",
+        "url": "https://arxiv.org/abs/2312.16960",
+        "snapshot_date": "2024-07-01"
+      },
+      {
+        "name": "Zaru — Exact Symmetry-Stratified Search over F2 (FastMatrixF2)",
+        "url": "https://github.com/big-brain-zaru/FastMatrixF2",
+        "doi": "https://doi.org/10.5281/zenodo.22823114",
+        "snapshot_date": "2026-09-18"
+      },
+      {
+        "name": "Tomar — The rank of 3x3 matrix multiplication over F2 is 23 (Lean 4)",
+        "url": "https://arxiv.org/abs/2610.11823",
+        "snapshot_date": "2026-10-19"
+      }
+    ],
+    "notes": "All 8 primary targets satisfy max(m*n, n*p, m*p) <= 64 (single uint64 bit-packed word per factor) and are confirmed genuinely open as of 2026-11-22."
+  },
+  "top_targets": [
+    {
+      "priority": 1,
+      "track": "Track A (Z2 -> ZT/Z/Q Lifting Gap)",
+      "format": [4, 5, 5],
+      "format_str": "4x5x5",
+      "max_flat_dim": 25,
+      "R_Z2": 73,
+      "R_ZT": 76,
+      "R_Z": 76,
+      "R_Q": 76,
+      "R_C": 76,
+      "omega_current_Q": 2.821220,
+      "omega_target": 2.812592,
+      "omega_stretch": 2.794984,
+      "target_ring": "ZT",
+      "fallback_target_rings": ["Z", "Q"],
+      "target_rank": 75,
+      "stretch_rank": 73,
+      "source_2026": {
+        "Z2": "VERIFIED: Arai, Ichikawa & Hukushima (ISSAC 2024, arXiv:2312.16960, Table 10) — R_Z2 = 73",
+        "ZT_Z_Q": "VERIFIED: Fawzi et al. (AlphaTensor, Nature 2022) & Perminov ZT (FastMatrixMultiplication status.json 2026-11-16) & Lille fmm_sota.json (2026-11-15) — R = 76"
+      },
+      "confidence": "high",
+      "rationale": "Largest open small-format Z2-vs-char0 lifting gap in FMM (3 multiplications: 73 vs 76), untouched in char 0 since 2022. Tiny max_flat=25 enables >1B steps/s uint64 GPU walks; any char-0 scheme with R<=75 is an instant world record, and R<=74 breaks Strassen's exponent (omega=2.803848 < 2.807355).",
+      "attack_strategy": "Dual-prong: (1) GPU uint64 Z2 flip-graph harvesting diverse non-isomorphic basins at R=75, 74, 73 filtered by an inline mod-4 / mod-8 Hensel-liftability oracle + OR-Tools/Z3 ternary sign solver; (2) SLEEP-DAG-RSI direct ZT meta-flip tunneling bridging 4x4x5:61 (extend), 5x5x5:93 (project), and 4x5x6:90 (project) plus Z3/Z5 walks to capture Z[1/2] lifts."
+    },
+    {
+      "priority": 2,
+      "track": "Track A (Z2 -> ZT/Z/Q Lifting Gap)",
+      "format": [4, 5, 6],
+      "format_str": "4x5x6",
+      "max_flat_dim": 30,
+      "R_Z2": 89,
+      "R_ZT": 90,
+      "R_Z": 90,
+      "R_Q": 90,
+      "R_C": 90,
+      "omega_current_Q": 2.819729,
+      "omega_target": 2.812727,
+      "omega_stretch": 2.812727,
+      "target_ring": "ZT",
+      "fallback_target_rings": ["Z", "Q"],
+      "target_rank": 89,
+      "stretch_rank": 89,
+      "source_2026": {
+        "Z2": "VERIFIED: Kauers & Wood (Oct 2025, arXiv:2510.19787 Table 5; github.com/mkauers/matrix-multiplication/456/*.mod2.exp) & Perminov (Nov 2025, arXiv:2511.20317 Table 3) — R_Z2 = 89",
+        "ZT_Z_Q": "VERIFIED: Novikov et al. (AlphaEvolve May 2025, arXiv:2506.13131), Kauers & Wood (Oct 2025, mkauers/456 Z=90), Perminov ZT (status.json 2026-11-16), Lille (2026-11-15) — R = 90"
+      },
+      "confidence": "high",
+      "rationale": "Active 2025-2026 1-rank lifting gap (89 vs 90); sits +1.0 above linear midpoint (89.0) of 3x5x6:68 and 5x5x6:110. Only 2 mod-2 schemes were archived in mkauers/456; max_flat=30 fits in a single uint32 word.",
+      "attack_strategy": "Massively sample diverse Z2 rank-89 orbits on RTX 5060 (warp-level generalized flips + plus-tunneling from mkauers/456 mod2 seeds and ZT 90 seeds) paired with mod-4 Hensel-oracle ranking and guided constrained lifting (Perminov Sec 4.6) + ZT meta-flip projection from 5x5x6:110 and 4x5x7:104."
+    },
+    {
+      "priority": 3,
+      "track": "Track B (Pure Rank Reduction — Ridge Collapse)",
+      "format": [6, 6, 7],
+      "format_str": "6x6x7",
+      "max_flat_dim": 42,
+      "R_Z2": 183,
+      "R_ZT": 183,
+      "R_Z": 183,
+      "R_Q": 183,
+      "R_C": 183,
+      "omega_current_Q": 2.826414,
+      "omega_target": 2.823442,
+      "omega_stretch": 2.817446,
+      "target_ring": "ZT",
+      "fallback_target_rings": ["Z2", "Q"],
+      "target_rank": 182,
+      "stretch_rank": 180,
+      "source_2026": {
+        "Z2": "VERIFIED: inherits from ZT/Z = 183 (no lower Z2 published as of 2026-11-22)",
+        "ZT_Z_Q": "VERIFIED: Kauers & Wood (Oct 2025, arXiv:2510.19787 Table 5) & Perminov ZT (status.json 2026-11-16) & Lille (2026-11-15) — R = 183"
+      },
+      "confidence": "high",
+      "rationale": "Extreme +5.0 convexity ridge between 6x6x6:153 (Moosbauer-Poole 2025) and 6x6x8:203 (<2,2,2:7> x <3,3,4:29>, midpoint=178.0); +6.32 multiplications above Strassen scaling (omega=2.826414). Fits cleanly inside single uint64 (max_flat=42).",
+      "attack_strategy": "SLEEP-DAG-RSI bidirectional meta-flip search: simultaneously project 6x6x8:203 -> 6x6x7 and extend 6x6x6:153 -> 6x6x7 in both ZT and Z2, apply generalized multi-summand flips (Medley et al. 2026) and entropic plus-tunneling (tau=4.0) to collapse the +5.0 ridge; Hensel-lift any Z2<=182 hit to ZT/Q."
+    },
+    {
+      "priority": 4,
+      "track": "Track B (Pure Rank Reduction — Composite Barrier)",
+      "format": [5, 8, 8],
+      "format_str": "5x8x8",
+      "max_flat_dim": 64,
+      "R_Z2": 230,
+      "R_ZT": 230,
+      "R_Z": 230,
+      "R_Q": 230,
+      "R_C": 230,
+      "omega_current_Q": 2.828247,
+      "omega_target": 2.825981,
+      "omega_stretch": 2.819123,
+      "target_ring": "ZT",
+      "fallback_target_rings": ["Z2", "Q"],
+      "target_rank": 229,
+      "stretch_rank": 226,
+      "source_2026": {
+        "Z2": "VERIFIED: inherits from composite ZT = 230 (no lower Z2 published as of 2026-11-22)",
+        "ZT_Z_Q": "VERIFIED: Lille fmm.univ-lille.fr (2026-11-15) purely composite 3*<2x4x4:26> + 4*<3x4x4:38> = 230 & Perminov ZT (status.json 2026-11-16) — R = 230"
+      },
+      "confidence": "high",
+      "rationale": "#1 largest convexity ridge in the entire [4..8]^3 cube (+7.0 above linear midpoint 223.0 of 4x8x8:180 and 6x8x8:266!), +9.06 above Strassen scaling (omega=2.828247), and STILL a 100% naive block split never beaten by an atomic scheme. Hits exact uint64 boundary (max_flat=64).",
+      "attack_strategy": "Initialize GPU uint64 Z2 and C++/OpenMP ZT flip-graph pools from multiple diverse decompositions (3*<2,4,4:26>+4*<3,4,4:38>, <5,8,4:118>+<5,8,4:118> projection, 6x8x8:266 projection, 4x8x8:180 extension); run SLEEP-DAG-RSI block-boundary crossover + warp-level generalized flips to annihilate inter-block redundancy."
+    },
+    {
+      "priority": 5,
+      "track": "Track A+B Hybrid (Square 7x7 Composite Barrier & Z2 Gap)",
+      "format": [7, 7, 7],
+      "format_str": "7x7x7",
+      "max_flat_dim": 49,
+      "R_Z2": 245,
+      "R_ZT": 250,
+      "R_Z": 250,
+      "R_Q": 249,
+      "R_C": 249,
+      "omega_current_Q": 2.835410,
+      "omega_target": 2.833342,
+      "omega_stretch": 2.827087,
+      "target_ring": "ZT",
+      "fallback_target_rings": ["Q", "Z", "Z2"],
+      "target_rank": 248,
+      "stretch_rank": 245,
+      "source_2026": {
+        "Z2": "VERIFIED: Medley, Gokul, Luu & Manolios (Oct 2026, arXiv:2609.17533v2) — R_Z2 = 245 (improved from Perminov Nov 2025 R_Z2 = 248)",
+        "Q": "VERIFIED: Lille fmm.univ-lille.fr (2026-11-15) composite <4x4x4:48> + 3*<3x3x4:29> + 3*<3x4x4:38> = 249 (denominators 1/2..1/8)",
+        "ZT_Z": "VERIFIED: Perminov FastMatrixMultiplication (status.json 2026-11-16) composite with <4x4x4:49> — R_ZT = R_Z = 250"
+      },
+      "confidence": "high",
+      "rationale": "Highest omega (2.835410, +13.23 above Strassen scaling!) in all of [4..8]^3, +4.5 ridge (6x7x7:212 & 7x7x8:277 -> mid 244.5), 4-rank Z2-to-Q gap / 5-rank Z2-to-ZT gap, and STILL purely composite in char 0! max_flat=49 fits comfortably inside single uint64.",
+      "attack_strategy": "Two parallel lanes: (1) Direct C++/OpenMP ZT flip-graph + meta-flip extension from 6x7x7:212 (ZT) and 6x6x6:153 (ZT) + symmetry-constrained Moosbauer-Poole cyclic C3/S3 walks targeting ZT <= 248 (instantly beating both ZT=250 and Lille Q=249!); (2) GPU uint64 Z2 walks seeded from Medley 245 + 6x7x7:212 targeting liftable basins at R=246..248 (and pushing Z2 <= 244)."
+    },
+    {
+      "priority": 6,
+      "track": "Track B (Pure Rank Reduction — Active 2026 Ridge)",
+      "format": [5, 7, 8],
+      "format_str": "5x7x8",
+      "max_flat_dim": 56,
+      "R_Z2": 204,
+      "R_ZT": 204,
+      "R_Z": 204,
+      "R_Q": 204,
+      "R_C": 204,
+      "omega_current_Q": 2.831403,
+      "omega_target": 2.828787,
+      "omega_stretch": 2.823515,
+      "target_ring": "ZT",
+      "fallback_target_rings": ["Z2", "Q"],
+      "target_rank": 203,
+      "stretch_rank": 201,
+      "source_2026": {
+        "Z2": "VERIFIED: inherits from ZT = 204 (no lower Z2 published as of 2026-11-22)",
+        "ZT_Z_Q": "VERIFIED: Perminov (2026, arXiv:2603.02398 / status.json 2026-11-16, lowered 205 -> 204 in ZT) & Lille (2026-11-15) — R = 204"
+      },
+      "confidence": "high",
+      "rationale": "2nd highest omega (2.831403, +9.01 above Strassen) in [4..8]^3 and +4.5 convexity ridge between 4x7x8:161 and 6x7x8:238 (midpoint=199.5). Actively dropped in 2026; fits cleanly in single uint64 (max_flat=56).",
+      "attack_strategy": "Bidirectional meta-flip between 4x7x8:161 (extend), 6x7x8:238 (project), and 5x6x8:170 (extend) in GPU Z2 + C++ ZT pools with SLEEP-DAG-RSI BackwardSubGoalDecomposer targeting sparse low-bud basins and generalized multi-summand flips."
+    },
+    {
+      "priority": 7,
+      "track": "Track A (Dual Lifting Gap: Z2 < Q < ZT)",
+      "format": [4, 4, 8],
+      "format_str": "4x4x8",
+      "max_flat_dim": 32,
+      "R_Z2": 94,
+      "R_ZT": 96,
+      "R_Z": 96,
+      "R_Q": 95,
+      "R_C": 95,
+      "omega_current_Q": 2.815652,
+      "omega_target": 2.815652,
+      "omega_stretch": 2.809110,
+      "target_ring": "ZT",
+      "fallback_target_rings": ["Q", "Z"],
+      "target_rank": 95,
+      "stretch_rank": 94,
+      "source_2026": {
+        "Z2": "VERIFIED: Perminov (Nov 2025, arXiv:2511.20317 Table 3; also 2*<4x4x4:47>) — R_Z2 = 94",
+        "Q": "VERIFIED: Perminov (2026, status.json 2026-11-16, schemes/results/Q/4x4x8_m95_Q.json, denominators 2,3,4,5) & Lille (2026-11-15) — R_Q = 95",
+        "ZT_Z": "VERIFIED: AlphaEvolve (May 2025) & Perminov ZT (Nov 2025, arXiv:2511.20317) — R_ZT = R_Z = 96"
+      },
+      "confidence": "medium-high",
+      "rationale": "Clean two-step open ladder (Z2=94 < Q=95 < ZT=96), tiny max_flat=32 (single uint32 word!). Closing ZT to 95 eliminates rational denominators {2,3,4,5}; lifting Z2=94 to Q/ZT sets an outright world record (omega=2.809110, nearly matching Strassen!).",
+      "attack_strategy": "Avoid naive doubled flip-isolated <4,4,4:47>; instead project Perminov's sub-Strassen 4x4x10:115 (ZT) down via 4x4x10 -> 4x4x9 -> 4x4x8 in ZT & Z2, and run GPU Z2 walks from 4x4x8:96 ZT seeds to harvest non-split rank-94/95 basins passing the mod-4 Hensel oracle."
+    },
+    {
+      "priority": 8,
+      "track": "Track A (Prestige AlphaEvolve-Beating & Sub-Strassen Lifting Gap)",
+      "format": [4, 4, 5],
+      "format_str": "4x4x5",
+      "max_flat_dim": 20,
+      "R_Z2": 60,
+      "R_ZT": 61,
+      "R_Z": 61,
+      "R_Q": 61,
+      "R_C": 61,
+      "omega_current_Q": 2.814365,
+      "omega_target": 2.803049,
+      "omega_stretch": 2.803049,
+      "target_ring": "Q",
+      "fallback_target_rings": ["ZT", "Z"],
+      "target_rank": 60,
+      "stretch_rank": 60,
+      "source_2026": {
+        "Z2": "VERIFIED: Kauers & Moosbauer (2023, arXiv:2212.01175, Table 29) — R_Z2 = 60",
+        "ZT_Z_Q": "VERIFIED: Novikov et al. (AlphaEvolve May 2025, arXiv:2506.13131) & Perminov ZT (Nov 2025, status.json 2026-11-16) & Lille (2026-11-15) — R = 61"
+      },
+      "confidence": "medium",
+      "rationale": "Ultra-small tensor (max_flat=20) with massive scientific payoff: lifting R=60 to Q (even Z[1/2]) or ZT beats AlphaEvolve 2025 AND crosses Strassen's exponent (omega=2.803049 < 2.807355)! Harder than #1-#2 because known K&M rank-60 Z2 basins resisted naive Hensel lifting.",
+      "attack_strategy": "Combine three orthogonal escape hatches: (1) GPU Z3 and Z5 flip-graph search (admits 1/2 denominators invisible to Z2, scaling 100x deeper than Kauers & Wood's CPU probe); (2) mod-4/mod-8 liftability-guided Z2 flip walks searching for new non-isomorphic rank-60 orbits; (3) direct ZT plus-tunneling + SAT partial-fixing (find_alternative_schemes style) around 4x4x5:61 ZT."
+    }
+  ],
+  "secondary_and_moonshot_targets": [
+    {
+      "format": [4, 4, 9],
+      "format_str": "4x4x9",
+      "max_flat_dim": 36,
+      "R_Z2": 107,
+      "R_ZT": 107,
+      "R_Z": 107,
+      "R_Q": 104,
+      "target_ring": "ZT",
+      "target_rank": 106,
+      "stretch_rank": 104,
+      "confidence": "medium-high",
+      "note": "3-rank Q-vs-ZT/Z2 gap (Smirnov 2022 Q=104 uses denominators 2,3,8,9,16); direct projection from Perminov Mar 2026 4x4x10:115 (ZT) is an ideal Track A (Q->ZT) experiment."
+    },
+    {
+      "format": [7, 7, 8],
+      "format_str": "7x7x8",
+      "max_flat_dim": 56,
+      "R_Z2": 275,
+      "R_ZT": 278,
+      "R_Z": 278,
+      "R_Q": 277,
+      "target_ring": "ZT",
+      "target_rank": 276,
+      "stretch_rank": 275,
+      "confidence": "medium-high",
+      "note": "Composite in char 0 (<3,3,4:29>+2<4,4,4:48>+4<3,4,4:38>), +5.0 ridge (mid 272.0), Z2=275 (Perminov Nov 2025)."
+    },
+    {
+      "format": [3, 3, 6],
+      "format_str": "3x3x6",
+      "max_flat_dim": 18,
+      "R_Z2": 42,
+      "R_ZT": 42,
+      "R_Z": 42,
+      "R_Q": 40,
+      "target_ring": "ZT",
+      "target_rank": 41,
+      "stretch_rank": 40,
+      "confidence": "low-medium",
+      "note": "Famous ring-gap mystery (Perminov arXiv:2603.02398 Sec 7.4): Smirnov 2013 Q=40 (omega=2.7743) uses +/-1/8; ZT/Z/Z2 stalled at 42."
+    },
+    {
+      "format": [4, 4, 4],
+      "format_str": "4x4x4",
+      "max_flat_dim": 16,
+      "R_Z2": 47,
+      "R_ZT": 49,
+      "R_Z": 49,
+      "R_Q": 48,
+      "target_ring": "ZT",
+      "target_rank": 48,
+      "stretch_rank": 47,
+      "confidence": "low",
+      "note": "Prestige moonshot: Zaru (Sep 2026) proved both known F2 rank-47 schemes are flip-isolated & obstructed mod 4; Agarwal (Sep 2026) proved local rank radius >=12 around D(2) over C. Eliminating 1/2 from DPS/AlphaEvolve rank-48 to obtain Z/ZT rank-48 remains open."
+    }
+  ]
+}

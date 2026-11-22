@@ -1,0 +1,241 @@
+{
+  "device": "NVIDIA GeForce RTX 5060",
+  "arch": "compute_120",
+  "records_saved": [],
+  "block_library_ranks": {
+    "2x2x2": 7,
+    "2x2x3": 11,
+    "3x3x3": 23,
+    "4x4x4": 49,
+    "2x3x3": 15,
+    "2x4x4": 26,
+    "3x3x4": 29,
+    "3x4x4": 38,
+    "4x5x2": 36,
+    "4x5x3": 54
+  },
+  "f2_pool_stage": {
+    "pool_path": "e:\\эксперименты\\исследования\\fmm_discovery\\artifacts\\f2_pool_phase1.json",
+    "total_schemes": 511,
+    "elapsed_s": 190.4,
+    "formats": {
+      "4x4x5": {
+        "best_rank": 64,
+        "pool_count": 160,
+        "rank_histogram": {
+          "64": 160
+        },
+        "waves": 8,
+        "elapsed_s": 33.85,
+        "executed_flips": 2126204880,
+        "flips_per_s": 62817091.9,
+        "peak_vram_mib": 18.14
+      },
+      "4x5x5": {
+        "best_rank": 81,
+        "pool_count": 31,
+        "rank_histogram": {
+          "81": 31
+        },
+        "waves": 17,
+        "elapsed_s": 47.41,
+        "executed_flips": 4031671217,
+        "flips_per_s": 85033891.1,
+        "peak_vram_mib": 36.14
+      },
+      "4x5x6": {
+        "best_rank": 93,
+        "pool_count": 160,
+        "rank_histogram": {
+          "93": 160
+        },
+        "waves": 11,
+        "elapsed_s": 44.4,
+        "executed_flips": 2040419377,
+        "flips_per_s": 45960428.4,
+        "peak_vram_mib": 36.14
+      },
+      "4x4x8": {
+        "best_rank": 98,
+        "pool_count": 160,
+        "rank_histogram": {
+          "98": 160
+        },
+        "waves": 9,
+        "elapsed_s": 40.13,
+        "executed_flips": 1625855475,
+        "flips_per_s": 40512184.2,
+        "peak_vram_mib": 36.14
+      }
+    },
+    "records_saved": []
+  },
+  "updated_at": "2026-11-22T15:38:13.067759+00:00",
+  "zt_assault_stage": {
+    "elapsed_s": 448.0,
+    "targets": {
+      "5x8x8": {
+        "format": "5x8x8",
+        "shape": [
+          5,
+          8,
+          8
+        ],
+        "sota_zt": 230,
+        "sota_q": 230,
+        "start_rank": 234,
+        "best_rank": 234,
+        "best_nnz": 3310,
+        "best_naive_additions": 2802,
+        "best_sha256": "f7af41c7d7cd2998282dc9b6e90ff2b0b491480302a2a9dd63c45d2df9cd55ad",
+        "beat_sota_zt": false,
+        "beat_sota_q": false,
+        "waves": 4,
+        "distinct_elites": 183,
+        "decomposer_triggers": 1,
+        "elapsed_s": 110.57,
+        "executed_flips": 141129274,
+        "executed_plus": 1775050,
+        "executed_reduces": 1543425,
+        "flips_per_s": 1276363.7,
+        "peak_vram_mib": 40.05,
+        "autodream_champion_score": -0.1415,
+        "blind_vault_verified": true,
+        "blind_vault_rank": 234,
+        "sentinel_gate_passed": true,
+        "tree_node_count": 20
+      },
+      "7x7x7": {
+        "format": "7x7x7",
+        "shape": [
+          7,
+          7,
+          7
+        ],
+        "sota_zt": 250,
+        "sota_q": 249,
+        "start_rank": 253,
+        "best_rank": 253,
+        "best_nnz": 3403,
+        "best_naive_additions": 2848,
+        "best_sha256": "82b8a581199565a47c1a1b38192fd4a5d4250ccc0bc4719d86dc1fb4a0bd7999",
+        "beat_sota_zt": false,
+        "beat_sota_q": false,
+        "waves": 3,
+        "distinct_elites": 144,
+        "decomposer_triggers": 0,
+        "elapsed_s": 102.98,
+        "executed_flips": 106680065,
+        "executed_plus": 2616802,
+        "executed_reduces": 2272771,
+        "flips_per_s": 1035908.1,
+        "peak_vram_mib": 40.05,
+        "autodream_champion_score": -0.1343,
+        "blind_vault_verified": true,
+        "blind_vault_rank": 253,
+        "sentinel_gate_passed": true,
+        "tree_node_count": 17
+      },
+      "6x6x7": {
+        "format": "6x6x7",
+        "shape": [
+          6,
+          6,
+          7
+        ],
+        "sota_zt": 183,
+        "sota_q": 183,
+        "start_rank": 185,
+        "best_rank": 185,
+        "best_nnz": 2397,
+        "best_naive_additions": 1985,
+        "best_sha256": "46e752e307b956be67ac593ec24b29f41e1bb1a525785d47434d73303e573576",
+        "beat_sota_zt": false,
+        "beat_sota_q": false,
+        "waves": 5,
+        "distinct_elites": 228,
+        "decomposer_triggers": 1,
+        "elapsed_s": 87.93,
+        "executed_flips": 246244399,
+        "executed_plus": 6287184,
+        "executed_reduces": 5449743,
+        "flips_per_s": 2800391.1,
+        "peak_vram_mib": 36.07,
+        "autodream_champion_score": -0.1296,
+        "blind_vault_verified": true,
+        "blind_vault_rank": 185,
+        "sentinel_gate_passed": true,
+        "tree_node_count": 24
+      },
+      "4x5x5": {
+        "format": "4x5x5",
+        "shape": [
+          4,
+          5,
+          5
+        ],
+        "sota_zt": 76,
+        "sota_q": 76,
+        "start_rank": 81,
+        "best_rank": 81,
+        "best_nnz": 739,
+        "best_naive_additions": 557,
+        "best_sha256": "2cecf7659f57f70d94f426a7a2a007bac1e400722499957c689234f94b7b609a",
+        "beat_sota_zt": false,
+        "beat_sota_q": false,
+        "waves": 11,
+        "distinct_elites": 490,
+        "decomposer_triggers": 3,
+        "elapsed_s": 76.21,
+        "executed_flips": 2119463231,
+        "executed_plus": 6327895,
+        "executed_reduces": 5454968,
+        "flips_per_s": 27811919.8,
+        "peak_vram_mib": 36.14,
+        "autodream_champion_score": -0.0912,
+        "blind_vault_verified": true,
+        "blind_vault_rank": 81,
+        "sentinel_gate_passed": true,
+        "tree_node_count": 46
+      },
+      "4x5x6": {
+        "format": "4x5x6",
+        "shape": [
+          4,
+          5,
+          6
+        ],
+        "sota_zt": 90,
+        "sota_q": 90,
+        "start_rank": 93,
+        "best_rank": 93,
+        "best_nnz": 1117,
+        "best_naive_additions": 907,
+        "best_sha256": "40db629c096fd7fbd004c99215c643c92de4021908f1bd40de9de23e10ba8882",
+        "beat_sota_zt": false,
+        "beat_sota_q": false,
+        "waves": 7,
+        "distinct_elites": 251,
+        "decomposer_triggers": 2,
+        "elapsed_s": 69.33,
+        "executed_flips": 1411784586,
+        "executed_plus": 6262620,
+        "executed_reduces": 5389131,
+        "flips_per_s": 20362829.0,
+        "peak_vram_mib": 72.14,
+        "autodream_champion_score": -0.1201,
+        "blind_vault_verified": true,
+        "blind_vault_rank": 93,
+        "sentinel_gate_passed": true,
+        "tree_node_count": 25
+      }
+    },
+    "skill_state_summary": {
+      "round_index": 5,
+      "invariants_count": 8,
+      "unsolved_buckets_count": 5,
+      "serialized_bytes": 2678
+    }
+  },
+  "total_wall_s": 506.3
+}

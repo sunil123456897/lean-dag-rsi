@@ -13,6 +13,7 @@ connecting user project benchmarks directly to `engine.py`:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -367,8 +368,13 @@ class AutoDreamRunner:
         if fn_spliced is None or comp_err is not None:
             return None
 
+        ast_xover_id = (
+            f"ast_xover_{u_cand.id}_{v_cand.id}"
+            if len(u_cand.id) <= 24 and len(v_cand.id) <= 24
+            else f"ast_xover_{hashlib.sha1(f'{u_cand.id}|{v_cand.id}'.encode('utf-8')).hexdigest()[:12]}"
+        )
         return BranchCandidate(
-            id=f"ast_xover_{u_cand.id}_{v_cand.id}",
+            id=ast_xover_id,
             branch=max(u_cand.branch, v_cand.branch) + 1,
             parent_id=u_cand.id,
             attempt=max(u_cand.attempt, v_cand.attempt) + 1,

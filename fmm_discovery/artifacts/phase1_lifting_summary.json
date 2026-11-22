@@ -1,0 +1,1230 @@
+{
+  "phase": "Phase 1 Lifting & Liftability-Guided CPU Search",
+  "hardware": "CPU-only (Numba 12T + Z3 5.1.0, ZERO GPU usage)",
+  "zero_external_leakage": true,
+  "seed_primitives": [
+    "strassen_222 (<2,2,2:7>)",
+    "laderman_333 (<3,3,3:23>)",
+    "schoolbook (<1,1,1:1>)"
+  ],
+  "sleep_dag_rsi_components": [
+    "DiscoveryTree",
+    "LeanDAGPolicy(entropic_tau=4.0)",
+    "BackwardSubGoalDecomposer",
+    "MutableSkillState"
+  ],
+  "total_f2_schemes_screened": 3237,
+  "cpu_guided_search": {
+    "4x4x5": {
+      "format": [
+        4,
+        4,
+        5
+      ],
+      "sota_F2": 60,
+      "sota_char0": 61,
+      "target_sub_char0_rank_hi": 60,
+      "seed_rank_min": 64,
+      "best_F2_rank_reached": 63,
+      "total_flips": 540720000,
+      "flips_per_sec": 12070801.8,
+      "unique_schemes_screened": 1172,
+      "guided_oracle_evals": 1263,
+      "sub_char0_unique_basins": 0,
+      "min_coker_viol_4_overall": 0,
+      "min_coker_viol_4_at_best_R": 0,
+      "min_coker_viol_4_at_target": null,
+      "coker_viol_4_hist_all": {
+        "0": 955,
+        "1": 2,
+        "2": 3,
+        "3": 2,
+        "4": 3,
+        "6": 4,
+        "7": 1,
+        "8": 4,
+        "9": 1,
+        "10": 17,
+        "12": 3,
+        "13": 1,
+        "14": 107,
+        "15": 2,
+        "17": 2
+      },
+      "coker_viol_4_hist_best_R": {
+        "0": 416,
+        "2": 2,
+        "10": 9,
+        "14": 105,
+        "15": 2,
+        "17": 1,
+        "18": 6,
+        "22": 2,
+        "24": 3,
+        "25": 8,
+        "26": 4,
+        "27": 11,
+        "28": 12,
+        "29": 9,
+        "32": 1
+      },
+      "coker_viol_4_hist_sub_char0": {},
+      "lift_attempts": 4,
+      "lifted_hits": 4,
+      "lift_details_sample": [
+        {
+          "format": [
+            4,
+            4,
+            5
+          ],
+          "rank": 63,
+          "supp_coker_4": 0,
+          "supp_free_bits": 17,
+          "supp_rank_J1": 390,
+          "nnz_total": 533,
+          "unres_coker_4": null,
+          "lifted": true,
+          "lifted_ring": "ZT",
+          "lifted_status": "verified_ZT",
+          "attempts": [
+            {
+              "stage": "L2_ZT",
+              "method": "z3_pbeq_ternary_ZT",
+              "status": "verified_ZT",
+              "ms": 149.79
+            }
+          ]
+        },
+        {
+          "format": [
+            4,
+            4,
+            5
+          ],
+          "rank": 63,
+          "supp_coker_4": 0,
+          "supp_free_bits": 17,
+          "supp_rank_J1": 390,
+          "nnz_total": 533,
+          "unres_coker_4": null,
+          "lifted": true,
+          "lifted_ring": "ZT",
+          "lifted_status": "verified_ZT",
+          "attempts": [
+            {
+              "stage": "L2_ZT",
+              "method": "z3_pbeq_ternary_ZT",
+              "status": "verified_ZT",
+              "ms": 89.375
+            }
+          ]
+        },
+        {
+          "format": [
+            4,
+            4,
+            5
+          ],
+          "rank": 63,
+          "supp_coker_4": 0,
+          "supp_free_bits": 18,
+          "supp_rank_J1": 390,
+          "nnz_total": 534,
+          "unres_coker_4": null,
+          "lifted": true,
+          "lifted_ring": "ZT",
+          "lifted_status": "verified_ZT",
+          "attempts": [
+            {
+              "stage": "L2_ZT",
+              "method": "z3_pbeq_ternary_ZT",
+              "status": "verified_ZT",
+              "ms": 89.581
+            }
+          ]
+        },
+        {
+          "format": [
+            4,
+            4,
+            5
+          ],
+          "rank": 63,
+          "supp_coker_4": 0,
+          "supp_free_bits": 18,
+          "supp_rank_J1": 390,
+          "nnz_total": 534,
+          "unres_coker_4": null,
+          "lifted": true,
+          "lifted_ring": "ZT",
+          "lifted_status": "verified_ZT",
+          "attempts": [
+            {
+              "stage": "L2_ZT",
+              "method": "z3_pbeq_ternary_ZT",
+              "status": "verified_ZT",
+              "ms": 92.113
+            }
+          ]
+        }
+      ],
+      "dead_buckets_cycle1": [
+        0,
+        1,
+        3
+      ],
+      "policy_summary": {
+        "entropic_tau": 4.0,
+        "j_tau": -127.5184,
+        "effective_sample_size": 344.6147,
+        "nodes": 1100
+      },
+      "elapsed_s": 44.8
+    },
+    "4x5x5": {
+      "format": [
+        4,
+        5,
+        5
+      ],
+      "sota_F2": 73,
+      "sota_char0": 76,
+      "target_sub_char0_rank_hi": 75,
+      "seed_rank_min": 81,
+      "best_F2_rank_reached": 81,
+      "total_flips": 665160000,
+      "flips_per_sec": 10996940.5,
+      "unique_schemes_screened": 828,
+      "guided_oracle_evals": 1256,
+      "sub_char0_unique_basins": 0,
+      "min_coker_viol_4_overall": 0,
+      "min_coker_viol_4_at_best_R": 0,
+      "min_coker_viol_4_at_target": null,
+      "coker_viol_4_hist_all": {
+        "0": 791,
+        "1": 1,
+        "4": 5,
+        "8": 5,
+        "10": 1,
+        "11": 2,
+        "12": 2,
+        "17": 1,
+        "20": 2,
+        "21": 1,
+        "24": 1,
+        "25": 1,
+        "29": 1,
+        "36": 1,
+        "42": 1
+      },
+      "coker_viol_4_hist_best_R": {
+        "0": 789,
+        "1": 1,
+        "4": 5,
+        "8": 5,
+        "10": 1,
+        "11": 2,
+        "12": 2,
+        "17": 1,
+        "20": 2,
+        "24": 1,
+        "25": 1,
+        "29": 1,
+        "36": 1,
+        "42": 1,
+        "49": 1
+      },
+      "coker_viol_4_hist_sub_char0": {},
+      "lift_attempts": 4,
+      "lifted_hits": 4,
+      "lift_details_sample": [
+        {
+          "format": [
+            4,
+            5,
+            5
+          ],
+          "rank": 81,
+          "supp_coker_4": 0,
+          "supp_free_bits": 31,
+          "supp_rank_J1": 583,
+          "nnz_total": 776,
+          "unres_coker_4": null,
+          "lifted": true,
+          "lifted_ring": "ZT",
+          "lifted_status": "verified_ZT",
+          "attempts": [
+            {
+              "stage": "L2_ZT",
+              "method": "z3_pbeq_ternary_ZT",
+              "status": "verified_ZT",
+              "ms": 358.011
+            }
+          ]
+        },
+        {
+          "format": [
+            4,
+            5,
+            5
+          ],
+          "rank": 81,
+          "supp_coker_4": 0,
+          "supp_free_bits": 31,
+          "supp_rank_J1": 583,
+          "nnz_total": 776,
+          "unres_coker_4": null,
+          "lifted": true,
+          "lifted_ring": "ZT",
+          "lifted_status": "verified_ZT",
+          "attempts": [
+            {
+              "stage": "L2_ZT",
+              "method": "z3_pbeq_ternary_ZT",
+              "status": "verified_ZT",
+              "ms": 245.183
+            }
+          ]
+        },
+        {
+          "format": [
+            4,
+            5,
+            5
+          ],
+          "rank": 81,
+          "supp_coker_4": 0,
+          "supp_free_bits": 31,
+          "supp_rank_J1": 583,
+          "nnz_total": 776,
+          "unres_coker_4": null,
+          "lifted": true,
+          "lifted_ring": "ZT",
+          "lifted_status": "verified_ZT",
+          "attempts": [
+            {
+              "stage": "L2_ZT",
+              "method": "z3_pbeq_ternary_ZT",
+              "status": "verified_ZT",
+              "ms": 246.565
+            }
+          ]
+        },
+        {
+          "format": [
+            4,
+            5,
+            5
+          ],
+          "rank": 81,
+          "supp_coker_4": 0,
+          "supp_free_bits": 33,
+          "supp_rank_J1": 588,
+          "nnz_total": 783,
+          "unres_coker_4": null,
+          "lifted": true,
+          "lifted_ring": "ZT",
+          "lifted_status": "verified_ZT",
+          "attempts": [
+            {
+              "stage": "L2_ZT",
+              "method": "z3_pbeq_ternary_ZT",
+              "status": "verified_ZT",
+              "ms": 248.861
+            }
+          ]
+        }
+      ],
+      "dead_buckets_cycle1": [
+        0,
+        1,
+        3
+      ],
+      "policy_summary": {
+        "entropic_tau": 4.0,
+        "j_tau": -478.8717,
+        "effective_sample_size": 3.1431,
+        "nodes": 756
+      },
+      "elapsed_s": 60.49
+    },
+    "4x5x6": {
+      "format": [
+        4,
+        5,
+        6
+      ],
+      "sota_F2": 89,
+      "sota_char0": 90,
+      "target_sub_char0_rank_hi": 89,
+      "seed_rank_min": 93,
+      "best_F2_rank_reached": 93,
+      "total_flips": 475560000,
+      "flips_per_sec": 10065290.5,
+      "unique_schemes_screened": 726,
+      "guided_oracle_evals": 1290,
+      "sub_char0_unique_basins": 0,
+      "min_coker_viol_4_overall": 0,
+      "min_coker_viol_4_at_best_R": 0,
+      "min_coker_viol_4_at_target": null,
+      "coker_viol_4_hist_all": {
+        "0": 697,
+        "4": 5,
+        "8": 3,
+        "14": 1,
+        "16": 1,
+        "22": 2,
+        "23": 1,
+        "24": 1,
+        "26": 1,
+        "38": 2,
+        "40": 1,
+        "41": 1,
+        "44": 1,
+        "52": 1,
+        "55": 1
+      },
+      "coker_viol_4_hist_best_R": {
+        "0": 694,
+        "4": 5,
+        "8": 3,
+        "14": 1,
+        "16": 1,
+        "22": 2,
+        "23": 1,
+        "24": 1,
+        "26": 1,
+        "38": 2,
+        "40": 1,
+        "41": 1,
+        "44": 1,
+        "52": 1,
+        "55": 1
+      },
+      "coker_viol_4_hist_sub_char0": {},
+      "lift_attempts": 4,
+      "lifted_hits": 4,
+      "lift_details_sample": [
+        {
+          "format": [
+            4,
+            5,
+            6
+          ],
+          "rank": 93,
+          "supp_coker_4": 0,
+          "supp_free_bits": 37,
+          "supp_rank_J1": 865,
+          "nnz_total": 1088,
+          "unres_coker_4": null,
+          "lifted": true,
+          "lifted_ring": "ZT",
+          "lifted_status": "verified_ZT",
+          "attempts": [
+            {
+              "stage": "L2_ZT",
+              "method": "z3_pbeq_ternary_ZT",
+              "status": "verified_ZT",
+              "ms": 488.903
+            }
+          ]
+        },
+        {
+          "format": [
+            4,
+            5,
+            6
+          ],
+          "rank": 93,
+          "supp_coker_4": 0,
+          "supp_free_bits": 37,
+          "supp_rank_J1": 865,
+          "nnz_total": 1088,
+          "unres_coker_4": null,
+          "lifted": true,
+          "lifted_ring": "ZT",
+          "lifted_status": "verified_ZT",
+          "attempts": [
+            {
+              "stage": "L2_ZT",
+              "method": "z3_pbeq_ternary_ZT",
+              "status": "verified_ZT",
+              "ms": 497.995
+            }
+          ]
+        },
+        {
+          "format": [
+            4,
+            5,
+            6
+          ],
+          "rank": 93,
+          "supp_coker_4": 0,
+          "supp_free_bits": 37,
+          "supp_rank_J1": 865,
+          "nnz_total": 1088,
+          "unres_coker_4": null,
+          "lifted": true,
+          "lifted_ring": "ZT",
+          "lifted_status": "verified_ZT",
+          "attempts": [
+            {
+              "stage": "L2_ZT",
+              "method": "z3_pbeq_ternary_ZT",
+              "status": "verified_ZT",
+              "ms": 460.331
+            }
+          ]
+        },
+        {
+          "format": [
+            4,
+            5,
+            6
+          ],
+          "rank": 93,
+          "supp_coker_4": 0,
+          "supp_free_bits": 38,
+          "supp_rank_J1": 867,
+          "nnz_total": 1091,
+          "unres_coker_4": null,
+          "lifted": true,
+          "lifted_ring": "ZT",
+          "lifted_status": "verified_ZT",
+          "attempts": [
+            {
+              "stage": "L2_ZT",
+              "method": "z3_pbeq_ternary_ZT",
+              "status": "verified_ZT",
+              "ms": 456.982
+            }
+          ]
+        }
+      ],
+      "dead_buckets_cycle1": [
+        0,
+        1,
+        3
+      ],
+      "policy_summary": {
+        "entropic_tau": 4.0,
+        "j_tau": -280.4271,
+        "effective_sample_size": 6.9271,
+        "nodes": 654
+      },
+      "elapsed_s": 47.25
+    }
+  },
+  "gpu_pool_ingestion": {
+    "found": true,
+    "path": "e:\\эксперименты\\исследования\\fmm_discovery\\artifacts\\f2_pool_phase1.json",
+    "total_entries": 511,
+    "valid_f2_screened": 511,
+    "invalid_f2_skipped": 0,
+    "total_mod4_clean": 455,
+    "total_lifted": 18,
+    "per_format": {
+      "4x4x5": {
+        "format": [
+          4,
+          4,
+          5
+        ],
+        "total_screened": 160,
+        "ranks_seen": [
+          {
+            "rank": 64,
+            "count": 160,
+            "min_coker_4": 0,
+            "median_coker_4": 0,
+            "max_coker_4": 118,
+            "clean_count": 131,
+            "free_bits_min_max": [
+              19,
+              34
+            ]
+          }
+        ],
+        "min_rank": 64,
+        "min_coker_viol_4": 0,
+        "max_coker_viol_4": 118,
+        "mod4_clean_count": 131,
+        "l0_batch_ms": 28.72,
+        "coker_hist": {
+          "0": 131,
+          "4": 1,
+          "6": 1,
+          "8": 1,
+          "9": 1,
+          "10": 1,
+          "12": 1,
+          "16": 3,
+          "17": 2,
+          "20": 2,
+          "23": 1,
+          "28": 1,
+          "30": 2,
+          "34": 1,
+          "40": 1,
+          "41": 1,
+          "42": 1,
+          "52": 1,
+          "56": 2,
+          "59": 1
+        },
+        "coker_repair_demo": {
+          "rank": 64,
+          "obstructed_tested": 12,
+          "before_coker_min_max": [
+            4,
+            20
+          ],
+          "after_coker_min_max": [
+            0,
+            8
+          ],
+          "improved_count": 12,
+          "repaired_to_zero_count": 10,
+          "oracle_evals": 197
+        },
+        "lift_attempts": [
+          {
+            "format": [
+              4,
+              4,
+              5
+            ],
+            "rank": 64,
+            "supp_coker_4": 0,
+            "supp_free_bits": 23,
+            "supp_rank_J1": 408,
+            "nnz_total": 559,
+            "unres_coker_4": null,
+            "lifted": true,
+            "lifted_ring": "ZT",
+            "lifted_status": "verified_ZT",
+            "attempts": [
+              {
+                "stage": "L2_ZT",
+                "method": "z3_pbeq_ternary_ZT",
+                "status": "verified_ZT",
+                "ms": 127.07
+              }
+            ],
+            "label": "4x4x5_R64_000"
+          },
+          {
+            "format": [
+              4,
+              4,
+              5
+            ],
+            "rank": 64,
+            "supp_coker_4": 0,
+            "supp_free_bits": 22,
+            "supp_rank_J1": 411,
+            "nnz_total": 561,
+            "unres_coker_4": null,
+            "lifted": true,
+            "lifted_ring": "ZT",
+            "lifted_status": "verified_ZT",
+            "attempts": [
+              {
+                "stage": "L2_ZT",
+                "method": "z3_pbeq_ternary_ZT",
+                "status": "verified_ZT",
+                "ms": 87.072
+              }
+            ],
+            "label": "4x4x5_R64_001"
+          },
+          {
+            "format": [
+              4,
+              4,
+              5
+            ],
+            "rank": 64,
+            "supp_coker_4": 0,
+            "supp_free_bits": 20,
+            "supp_rank_J1": 422,
+            "nnz_total": 570,
+            "unres_coker_4": null,
+            "lifted": true,
+            "lifted_ring": "ZT",
+            "lifted_status": "verified_ZT",
+            "attempts": [
+              {
+                "stage": "L2_ZT",
+                "method": "z3_pbeq_ternary_ZT",
+                "status": "verified_ZT",
+                "ms": 89.111
+              }
+            ],
+            "label": "4x4x5_R64_002"
+          },
+          {
+            "format": [
+              4,
+              4,
+              5
+            ],
+            "rank": 64,
+            "supp_coker_4": 0,
+            "supp_free_bits": 24,
+            "supp_rank_J1": 419,
+            "nnz_total": 571,
+            "unres_coker_4": null,
+            "lifted": true,
+            "lifted_ring": "ZT",
+            "lifted_status": "verified_ZT",
+            "attempts": [
+              {
+                "stage": "L2_ZT",
+                "method": "z3_pbeq_ternary_ZT",
+                "status": "verified_ZT",
+                "ms": 96.141
+              }
+            ],
+            "label": "4x4x5_R64_003"
+          },
+          {
+            "format": [
+              4,
+              4,
+              5
+            ],
+            "rank": 64,
+            "supp_coker_4": 4,
+            "supp_free_bits": 28,
+            "supp_rank_J1": 487,
+            "nnz_total": 643,
+            "unres_coker_4": 0,
+            "lifted": true,
+            "lifted_ring": "Z",
+            "lifted_status": "verified_Z",
+            "attempts": [
+              {
+                "stage": "L1_hensel_unres",
+                "status": "verified_Z",
+                "coker_4": 0,
+                "max_level": 64,
+                "ms": 135.398
+              }
+            ],
+            "label": "4x4x5_R64_056_obs_probe"
+          }
+        ],
+        "lifted_count": 5
+      },
+      "4x4x8": {
+        "format": [
+          4,
+          4,
+          8
+        ],
+        "total_screened": 160,
+        "ranks_seen": [
+          {
+            "rank": 98,
+            "count": 160,
+            "min_coker_4": 0,
+            "median_coker_4": 0,
+            "max_coker_4": 0,
+            "clean_count": 160,
+            "free_bits_min_max": [
+              48,
+              90
+            ]
+          }
+        ],
+        "min_rank": 98,
+        "min_coker_viol_4": 0,
+        "max_coker_viol_4": 0,
+        "mod4_clean_count": 160,
+        "l0_batch_ms": 23.15,
+        "coker_hist": {
+          "0": 160
+        },
+        "coker_repair_demo": null,
+        "lift_attempts": [
+          {
+            "format": [
+              4,
+              4,
+              8
+            ],
+            "rank": 98,
+            "supp_coker_4": 0,
+            "supp_free_bits": 90,
+            "supp_rank_J1": 578,
+            "nnz_total": 864,
+            "unres_coker_4": null,
+            "lifted": true,
+            "lifted_ring": "ZT",
+            "lifted_status": "verified_ZT",
+            "attempts": [
+              {
+                "stage": "L2_ZT",
+                "method": "z3_pbeq_ternary_ZT",
+                "status": "verified_ZT",
+                "ms": 206.135
+              }
+            ],
+            "label": "4x4x8_R98_000"
+          },
+          {
+            "format": [
+              4,
+              4,
+              8
+            ],
+            "rank": 98,
+            "supp_coker_4": 0,
+            "supp_free_bits": 90,
+            "supp_rank_J1": 578,
+            "nnz_total": 864,
+            "unres_coker_4": null,
+            "lifted": true,
+            "lifted_ring": "ZT",
+            "lifted_status": "verified_ZT",
+            "attempts": [
+              {
+                "stage": "L2_ZT",
+                "method": "z3_pbeq_ternary_ZT",
+                "status": "verified_ZT",
+                "ms": 166.37
+              }
+            ],
+            "label": "4x4x8_R98_001"
+          },
+          {
+            "format": [
+              4,
+              4,
+              8
+            ],
+            "rank": 98,
+            "supp_coker_4": 0,
+            "supp_free_bits": 90,
+            "supp_rank_J1": 578,
+            "nnz_total": 864,
+            "unres_coker_4": null,
+            "lifted": true,
+            "lifted_ring": "ZT",
+            "lifted_status": "verified_ZT",
+            "attempts": [
+              {
+                "stage": "L2_ZT",
+                "method": "z3_pbeq_ternary_ZT",
+                "status": "verified_ZT",
+                "ms": 165.315
+              }
+            ],
+            "label": "4x4x8_R98_002"
+          },
+          {
+            "format": [
+              4,
+              4,
+              8
+            ],
+            "rank": 98,
+            "supp_coker_4": 0,
+            "supp_free_bits": 90,
+            "supp_rank_J1": 578,
+            "nnz_total": 864,
+            "unres_coker_4": null,
+            "lifted": true,
+            "lifted_ring": "ZT",
+            "lifted_status": "verified_ZT",
+            "attempts": [
+              {
+                "stage": "L2_ZT",
+                "method": "z3_pbeq_ternary_ZT",
+                "status": "verified_ZT",
+                "ms": 169.822
+              }
+            ],
+            "label": "4x4x8_R98_003"
+          }
+        ],
+        "lifted_count": 4
+      },
+      "4x5x5": {
+        "format": [
+          4,
+          5,
+          5
+        ],
+        "total_screened": 31,
+        "ranks_seen": [
+          {
+            "rank": 81,
+            "count": 31,
+            "min_coker_4": 0,
+            "median_coker_4": 0,
+            "max_coker_4": 69,
+            "clean_count": 27,
+            "free_bits_min_max": [
+              31,
+              46
+            ]
+          }
+        ],
+        "min_rank": 81,
+        "min_coker_viol_4": 0,
+        "max_coker_viol_4": 69,
+        "mod4_clean_count": 27,
+        "l0_batch_ms": 6.49,
+        "coker_hist": {
+          "0": 27,
+          "4": 1,
+          "8": 1,
+          "41": 1,
+          "69": 1
+        },
+        "coker_repair_demo": {
+          "rank": 81,
+          "obstructed_tested": 4,
+          "before_coker_min_max": [
+            4,
+            69
+          ],
+          "after_coker_min_max": [
+            0,
+            4
+          ],
+          "improved_count": 4,
+          "repaired_to_zero_count": 3,
+          "oracle_evals": 67
+        },
+        "lift_attempts": [
+          {
+            "format": [
+              4,
+              5,
+              5
+            ],
+            "rank": 81,
+            "supp_coker_4": 0,
+            "supp_free_bits": 31,
+            "supp_rank_J1": 583,
+            "nnz_total": 776,
+            "unres_coker_4": null,
+            "lifted": true,
+            "lifted_ring": "ZT",
+            "lifted_status": "verified_ZT",
+            "attempts": [
+              {
+                "stage": "L2_ZT",
+                "method": "z3_pbeq_ternary_ZT",
+                "status": "verified_ZT",
+                "ms": 317.847
+              }
+            ],
+            "label": "4x5x5_R81_000"
+          },
+          {
+            "format": [
+              4,
+              5,
+              5
+            ],
+            "rank": 81,
+            "supp_coker_4": 0,
+            "supp_free_bits": 31,
+            "supp_rank_J1": 583,
+            "nnz_total": 776,
+            "unres_coker_4": null,
+            "lifted": true,
+            "lifted_ring": "ZT",
+            "lifted_status": "verified_ZT",
+            "attempts": [
+              {
+                "stage": "L2_ZT",
+                "method": "z3_pbeq_ternary_ZT",
+                "status": "verified_ZT",
+                "ms": 265.643
+              }
+            ],
+            "label": "4x5x5_R81_001"
+          },
+          {
+            "format": [
+              4,
+              5,
+              5
+            ],
+            "rank": 81,
+            "supp_coker_4": 0,
+            "supp_free_bits": 31,
+            "supp_rank_J1": 583,
+            "nnz_total": 776,
+            "unres_coker_4": null,
+            "lifted": true,
+            "lifted_ring": "ZT",
+            "lifted_status": "verified_ZT",
+            "attempts": [
+              {
+                "stage": "L2_ZT",
+                "method": "z3_pbeq_ternary_ZT",
+                "status": "verified_ZT",
+                "ms": 265.548
+              }
+            ],
+            "label": "4x5x5_R81_002"
+          },
+          {
+            "format": [
+              4,
+              5,
+              5
+            ],
+            "rank": 81,
+            "supp_coker_4": 0,
+            "supp_free_bits": 37,
+            "supp_rank_J1": 635,
+            "nnz_total": 834,
+            "unres_coker_4": null,
+            "lifted": true,
+            "lifted_ring": "ZT",
+            "lifted_status": "verified_ZT",
+            "attempts": [
+              {
+                "stage": "L2_ZT",
+                "method": "z3_pbeq_ternary_ZT",
+                "status": "verified_ZT",
+                "ms": 285.013
+              }
+            ],
+            "label": "4x5x5_R81_003"
+          },
+          {
+            "format": [
+              4,
+              5,
+              5
+            ],
+            "rank": 81,
+            "supp_coker_4": 4,
+            "supp_free_bits": 39,
+            "supp_rank_J1": 720,
+            "nnz_total": 921,
+            "unres_coker_4": 0,
+            "lifted": false,
+            "lifted_ring": null,
+            "lifted_status": "obstructed_mod4",
+            "attempts": [
+              {
+                "stage": "L1_hensel_unres",
+                "status": "obstructed_mod2k",
+                "coker_4": 0,
+                "max_level": 3,
+                "ms": 213.168
+              }
+            ],
+            "label": "4x5x5_R81_015_obs_probe"
+          }
+        ],
+        "lifted_count": 4
+      },
+      "4x5x6": {
+        "format": [
+          4,
+          5,
+          6
+        ],
+        "total_screened": 160,
+        "ranks_seen": [
+          {
+            "rank": 93,
+            "count": 160,
+            "min_coker_4": 0,
+            "median_coker_4": 0,
+            "max_coker_4": 59,
+            "clean_count": 137,
+            "free_bits_min_max": [
+              37,
+              49
+            ]
+          }
+        ],
+        "min_rank": 93,
+        "min_coker_viol_4": 0,
+        "max_coker_viol_4": 59,
+        "mod4_clean_count": 137,
+        "l0_batch_ms": 81.35,
+        "coker_hist": {
+          "0": 137,
+          "4": 1,
+          "12": 3,
+          "14": 1,
+          "20": 1,
+          "22": 1,
+          "25": 1,
+          "26": 2,
+          "28": 1,
+          "29": 1,
+          "30": 2,
+          "32": 1,
+          "35": 1,
+          "37": 1,
+          "40": 1,
+          "41": 1,
+          "58": 3,
+          "59": 1
+        },
+        "coker_repair_demo": {
+          "rank": 93,
+          "obstructed_tested": 12,
+          "before_coker_min_max": [
+            4,
+            29
+          ],
+          "after_coker_min_max": [
+            0,
+            16
+          ],
+          "improved_count": 9,
+          "repaired_to_zero_count": 3,
+          "oracle_evals": 383
+        },
+        "lift_attempts": [
+          {
+            "format": [
+              4,
+              5,
+              6
+            ],
+            "rank": 93,
+            "supp_coker_4": 0,
+            "supp_free_bits": 37,
+            "supp_rank_J1": 865,
+            "nnz_total": 1088,
+            "unres_coker_4": null,
+            "lifted": true,
+            "lifted_ring": "ZT",
+            "lifted_status": "verified_ZT",
+            "attempts": [
+              {
+                "stage": "L2_ZT",
+                "method": "z3_pbeq_ternary_ZT",
+                "status": "verified_ZT",
+                "ms": 596.273
+              }
+            ],
+            "label": "4x5x6_R93_000"
+          },
+          {
+            "format": [
+              4,
+              5,
+              6
+            ],
+            "rank": 93,
+            "supp_coker_4": 0,
+            "supp_free_bits": 37,
+            "supp_rank_J1": 865,
+            "nnz_total": 1088,
+            "unres_coker_4": null,
+            "lifted": true,
+            "lifted_ring": "ZT",
+            "lifted_status": "verified_ZT",
+            "attempts": [
+              {
+                "stage": "L2_ZT",
+                "method": "z3_pbeq_ternary_ZT",
+                "status": "verified_ZT",
+                "ms": 449.681
+              }
+            ],
+            "label": "4x5x6_R93_001"
+          },
+          {
+            "format": [
+              4,
+              5,
+              6
+            ],
+            "rank": 93,
+            "supp_coker_4": 0,
+            "supp_free_bits": 37,
+            "supp_rank_J1": 865,
+            "nnz_total": 1088,
+            "unres_coker_4": null,
+            "lifted": true,
+            "lifted_ring": "ZT",
+            "lifted_status": "verified_ZT",
+            "attempts": [
+              {
+                "stage": "L2_ZT",
+                "method": "z3_pbeq_ternary_ZT",
+                "status": "verified_ZT",
+                "ms": 524.243
+              }
+            ],
+            "label": "4x5x6_R93_002"
+          },
+          {
+            "format": [
+              4,
+              5,
+              6
+            ],
+            "rank": 93,
+            "supp_coker_4": 0,
+            "supp_free_bits": 42,
+            "supp_rank_J1": 880,
+            "nnz_total": 1108,
+            "unres_coker_4": null,
+            "lifted": true,
+            "lifted_ring": "ZT",
+            "lifted_status": "verified_ZT",
+            "attempts": [
+              {
+                "stage": "L2_ZT",
+                "method": "z3_pbeq_ternary_ZT",
+                "status": "verified_ZT",
+                "ms": 448.424
+              }
+            ],
+            "label": "4x5x6_R93_003"
+          },
+          {
+            "format": [
+              4,
+              5,
+              6
+            ],
+            "rank": 93,
+            "supp_coker_4": 4,
+            "supp_free_bits": 44,
+            "supp_rank_J1": 972,
+            "nnz_total": 1202,
+            "unres_coker_4": 0,
+            "lifted": true,
+            "lifted_ring": "Z",
+            "lifted_status": "verified_Z",
+            "attempts": [
+              {
+                "stage": "L1_hensel_unres",
+                "status": "verified_Z",
+                "coker_4": 0,
+                "max_level": 64,
+                "ms": 652.328
+              }
+            ],
+            "label": "4x5x6_R93_122_obs_probe"
+          }
+        ],
+        "lifted_count": 5
+      }
+    },
+    "elapsed_s": 6.25
+  },
+  "lifted_world_records": [],
+  "elapsed_total_s": 212.5
+}

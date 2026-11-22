@@ -1,0 +1,1168 @@
+{
+  "phase": "Phase 2 (Option B - Track 2) Direct + Plus-Relaxed F2 -> Z_T/Z/Q Lifting Assault",
+  "hardware": "CPU-only (Numba 12T + 64-bit Linear Hensel + Z3 5.1.0, ZERO GPU usage)",
+  "seed_manifest": "e:\\эксперименты\\исследования\\fmm_discovery\\artifacts\\public_f2_seeds\\manifest.json",
+  "public_seeds_loaded": 7,
+  "total_oracle_evals": 477424,
+  "total_unique_basins_screened": 755,
+  "targets": [
+    {
+      "target_label": "P5_4x4x5_R60_unres",
+      "format": [
+        4,
+        4,
+        5
+      ],
+      "R_target": 60,
+      "extra_ranks_relaxed": 0,
+      "sa_mode": "UNRES",
+      "total_oracle_evals": 38059,
+      "unique_schemes_archived": 32,
+      "min_unres_coker_4": 14,
+      "min_supp_coker_4": 21,
+      "hit_zero_and_lifted": false,
+      "lift_attempts": [],
+      "top_basins": [
+        {
+          "rank": 60,
+          "supp_coker_4": 24,
+          "unres_coker_4": 14,
+          "nnz": 720
+        },
+        {
+          "rank": 60,
+          "supp_coker_4": 22,
+          "unres_coker_4": 17,
+          "nnz": 755
+        },
+        {
+          "rank": 60,
+          "supp_coker_4": 28,
+          "unres_coker_4": 17,
+          "nnz": 753
+        },
+        {
+          "rank": 60,
+          "supp_coker_4": 33,
+          "unres_coker_4": 21,
+          "nnz": 760
+        },
+        {
+          "rank": 60,
+          "supp_coker_4": 37,
+          "unres_coker_4": 21,
+          "nnz": 719
+        }
+      ],
+      "dead_buckets": [
+        2,
+        3
+      ],
+      "policy_j_tau": -10.1553,
+      "elapsed_s": 130.04,
+      "provenance": {
+        "source_repo": "jakobmoosbauer/flips",
+        "paper": "Kauers & Moosbauer (ISSAC 2023, arXiv:2212.01175)",
+        "url": "https://raw.githubusercontent.com/jakobmoosbauer/flips/e31a0a0f0d25/solutions/445-60-mod2.exp",
+        "commit_sha": "e31a0a0f0d25",
+        "raw_sha256": "3b134ae7c85225084185dc02d98c3889b11038b796bd37b85f7913472b0e15b7",
+        "convention_detected": "trace_tr_ABCt_transposed_to_C_eq_AB",
+        "canonical_sha256": "810294e61aa183202ce2af714b14ff928a358bf8ee9fbffbb74c4ea616776087",
+        "verified_brent_Z2": true
+      }
+    },
+    {
+      "target_label": "P1_4x5x5_R75_plus2_unres",
+      "format": [
+        4,
+        5,
+        5
+      ],
+      "R_target": 75,
+      "extra_ranks_relaxed": 2,
+      "sa_mode": "UNRES",
+      "total_oracle_evals": 8251,
+      "unique_schemes_archived": 32,
+      "min_unres_coker_4": 51,
+      "min_supp_coker_4": 58,
+      "hit_zero_and_lifted": false,
+      "lift_attempts": [],
+      "top_basins": [
+        {
+          "rank": 73,
+          "supp_coker_4": 158,
+          "unres_coker_4": 51,
+          "nnz": 1108
+        },
+        {
+          "rank": 74,
+          "supp_coker_4": 218,
+          "unres_coker_4": 51,
+          "nnz": 1124
+        },
+        {
+          "rank": 73,
+          "supp_coker_4": 92,
+          "unres_coker_4": 53,
+          "nnz": 1111
+        },
+        {
+          "rank": 74,
+          "supp_coker_4": 60,
+          "unres_coker_4": 62,
+          "nnz": 1119
+        },
+        {
+          "rank": 73,
+          "supp_coker_4": 165,
+          "unres_coker_4": 64,
+          "nnz": 1111
+        }
+      ],
+      "dead_buckets": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "policy_j_tau": -19.2782,
+      "elapsed_s": 91.98,
+      "provenance": {
+        "source_repo": "yamato-arai/adap",
+        "paper": "Arai, Ichikawa, Hukushima (ISSAC 2024, arXiv:2312.16960)",
+        "url": "https://raw.githubusercontent.com/yamato-arai/adap/fe7b20408a32/data/455_73.m",
+        "commit_sha": "fe7b20408a32",
+        "raw_sha256": "cbb0fbf1be1cda95113abe2a6ec0e59cfc7b071b316e4463981100751512dc26",
+        "convention_detected": "trace_tr_ABCt_transposed_to_C_eq_AB",
+        "canonical_sha256": "b91ed2c19a4d38476459f8dc15a1fb8caa2d7a16b62aeb5a3e8ef39f55c8a57e",
+        "verified_brent_Z2": true
+      }
+    },
+    {
+      "target_label": "P1_4x5x5_R75_plus2_supp",
+      "format": [
+        4,
+        5,
+        5
+      ],
+      "R_target": 75,
+      "extra_ranks_relaxed": 2,
+      "sa_mode": "SUPP",
+      "total_oracle_evals": 72370,
+      "unique_schemes_archived": 74,
+      "min_unres_coker_4": 7,
+      "min_supp_coker_4": 7,
+      "hit_zero_and_lifted": false,
+      "lift_attempts": [],
+      "top_basins": [
+        {
+          "rank": 75,
+          "supp_coker_4": 7,
+          "unres_coker_4": 7,
+          "nnz": 1152
+        },
+        {
+          "rank": 75,
+          "supp_coker_4": 7,
+          "unres_coker_4": 7,
+          "nnz": 1152
+        },
+        {
+          "rank": 75,
+          "supp_coker_4": 7,
+          "unres_coker_4": 7,
+          "nnz": 1155
+        },
+        {
+          "rank": 75,
+          "supp_coker_4": 7,
+          "unres_coker_4": 7,
+          "nnz": 1155
+        },
+        {
+          "rank": 75,
+          "supp_coker_4": 7,
+          "unres_coker_4": 7,
+          "nnz": 1157
+        }
+      ],
+      "dead_buckets": [
+        2,
+        3
+      ],
+      "policy_j_tau": -6.5954,
+      "elapsed_s": 49.85,
+      "provenance": {
+        "source_repo": "yamato-arai/adap",
+        "paper": "Arai, Ichikawa, Hukushima (ISSAC 2024, arXiv:2312.16960)",
+        "url": "https://raw.githubusercontent.com/yamato-arai/adap/fe7b20408a32/data/455_73.m",
+        "commit_sha": "fe7b20408a32",
+        "raw_sha256": "cbb0fbf1be1cda95113abe2a6ec0e59cfc7b071b316e4463981100751512dc26",
+        "convention_detected": "trace_tr_ABCt_transposed_to_C_eq_AB",
+        "canonical_sha256": "b91ed2c19a4d38476459f8dc15a1fb8caa2d7a16b62aeb5a3e8ef39f55c8a57e",
+        "verified_brent_Z2": true
+      }
+    },
+    {
+      "target_label": "P1_4x5x5_R74_plus1_unres",
+      "format": [
+        4,
+        5,
+        5
+      ],
+      "R_target": 74,
+      "extra_ranks_relaxed": 1,
+      "sa_mode": "UNRES",
+      "total_oracle_evals": 5157,
+      "unique_schemes_archived": 28,
+      "min_unres_coker_4": 48,
+      "min_supp_coker_4": 71,
+      "hit_zero_and_lifted": false,
+      "lift_attempts": [],
+      "top_basins": [
+        {
+          "rank": 73,
+          "supp_coker_4": 107,
+          "unres_coker_4": 48,
+          "nnz": 1103
+        },
+        {
+          "rank": 73,
+          "supp_coker_4": 173,
+          "unres_coker_4": 51,
+          "nnz": 1107
+        },
+        {
+          "rank": 73,
+          "supp_coker_4": 84,
+          "unres_coker_4": 53,
+          "nnz": 1111
+        },
+        {
+          "rank": 73,
+          "supp_coker_4": 77,
+          "unres_coker_4": 64,
+          "nnz": 1104
+        },
+        {
+          "rank": 73,
+          "supp_coker_4": 151,
+          "unres_coker_4": 108,
+          "nnz": 1096
+        }
+      ],
+      "dead_buckets": [
+        1,
+        2,
+        3
+      ],
+      "policy_j_tau": -19.8553,
+      "elapsed_s": 56.94,
+      "provenance": {
+        "source_repo": "yamato-arai/adap",
+        "paper": "Arai, Ichikawa, Hukushima (ISSAC 2024, arXiv:2312.16960)",
+        "url": "https://raw.githubusercontent.com/yamato-arai/adap/fe7b20408a32/data/455_73.m",
+        "commit_sha": "fe7b20408a32",
+        "raw_sha256": "cbb0fbf1be1cda95113abe2a6ec0e59cfc7b071b316e4463981100751512dc26",
+        "convention_detected": "trace_tr_ABCt_transposed_to_C_eq_AB",
+        "canonical_sha256": "b91ed2c19a4d38476459f8dc15a1fb8caa2d7a16b62aeb5a3e8ef39f55c8a57e",
+        "verified_brent_Z2": true
+      }
+    },
+    {
+      "target_label": "P1_4x5x5_R73_direct_supp",
+      "format": [
+        4,
+        5,
+        5
+      ],
+      "R_target": 73,
+      "extra_ranks_relaxed": 0,
+      "sa_mode": "SUPP",
+      "total_oracle_evals": 66093,
+      "unique_schemes_archived": 59,
+      "min_unres_coker_4": 118,
+      "min_supp_coker_4": 14,
+      "hit_zero_and_lifted": false,
+      "lift_attempts": [],
+      "top_basins": [
+        {
+          "rank": 73,
+          "supp_coker_4": 14,
+          "unres_coker_4": 371,
+          "nnz": 1247
+        },
+        {
+          "rank": 73,
+          "supp_coker_4": 15,
+          "unres_coker_4": 679,
+          "nnz": 1136
+        },
+        {
+          "rank": 73,
+          "supp_coker_4": 15,
+          "unres_coker_4": 215,
+          "nnz": 1137
+        },
+        {
+          "rank": 73,
+          "supp_coker_4": 15,
+          "unres_coker_4": 520,
+          "nnz": 1141
+        },
+        {
+          "rank": 73,
+          "supp_coker_4": 16,
+          "unres_coker_4": 198,
+          "nnz": 1123
+        }
+      ],
+      "dead_buckets": [
+        2,
+        3
+      ],
+      "policy_j_tau": -10.1943,
+      "elapsed_s": 38.14,
+      "provenance": {
+        "source_repo": "yamato-arai/adap",
+        "paper": "Arai, Ichikawa, Hukushima (ISSAC 2024, arXiv:2312.16960)",
+        "url": "https://raw.githubusercontent.com/yamato-arai/adap/fe7b20408a32/data/455_73.m",
+        "commit_sha": "fe7b20408a32",
+        "raw_sha256": "cbb0fbf1be1cda95113abe2a6ec0e59cfc7b071b316e4463981100751512dc26",
+        "convention_detected": "trace_tr_ABCt_transposed_to_C_eq_AB",
+        "canonical_sha256": "b91ed2c19a4d38476459f8dc15a1fb8caa2d7a16b62aeb5a3e8ef39f55c8a57e",
+        "verified_brent_Z2": true
+      }
+    },
+    {
+      "target_label": "P2_4x5x6_R89_unres",
+      "format": [
+        4,
+        5,
+        6
+      ],
+      "R_target": 89,
+      "extra_ranks_relaxed": 0,
+      "sa_mode": "UNRES",
+      "total_oracle_evals": 1721,
+      "unique_schemes_archived": 35,
+      "min_unres_coker_4": 124,
+      "min_supp_coker_4": 76,
+      "hit_zero_and_lifted": false,
+      "lift_attempts": [],
+      "top_basins": [
+        {
+          "rank": 89,
+          "supp_coker_4": 126,
+          "unres_coker_4": 124,
+          "nnz": 1456
+        },
+        {
+          "rank": 89,
+          "supp_coker_4": 102,
+          "unres_coker_4": 125,
+          "nnz": 1457
+        },
+        {
+          "rank": 89,
+          "supp_coker_4": 152,
+          "unres_coker_4": 126,
+          "nnz": 1468
+        },
+        {
+          "rank": 89,
+          "supp_coker_4": 88,
+          "unres_coker_4": 127,
+          "nnz": 1458
+        },
+        {
+          "rank": 89,
+          "supp_coker_4": 489,
+          "unres_coker_4": 136,
+          "nnz": 1478
+        }
+      ],
+      "dead_buckets": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "policy_j_tau": -112.0715,
+      "elapsed_s": 90.09,
+      "provenance": {
+        "source_repo": "mkauers/matrix-multiplication",
+        "paper": "Kauers & Wood (2025), Meta-Flip Graphs",
+        "url": "https://raw.githubusercontent.com/mkauers/matrix-multiplication/12c26b29a545/456/k08dcabe7aa6634b.mod2.exp",
+        "commit_sha": "12c26b29a545",
+        "raw_sha256": "848598e02b5b4972b6e3aad7f30340fdadd9e9776d4f5250c42615e4e2ddfbc5",
+        "convention_detected": "trace_tr_ABCt_transposed_to_C_eq_AB",
+        "canonical_sha256": "9e9c8ea7bb663b75d3ee8b076099af5ca53cf7914e15772c44cbf1c6f5228f17",
+        "verified_brent_Z2": true
+      }
+    },
+    {
+      "target_label": "P2_4x5x6_R89_supp",
+      "format": [
+        4,
+        5,
+        6
+      ],
+      "R_target": 89,
+      "extra_ranks_relaxed": 0,
+      "sa_mode": "SUPP",
+      "total_oracle_evals": 35402,
+      "unique_schemes_archived": 71,
+      "min_unres_coker_4": 223,
+      "min_supp_coker_4": 21,
+      "hit_zero_and_lifted": false,
+      "lift_attempts": [],
+      "top_basins": [
+        {
+          "rank": 89,
+          "supp_coker_4": 21,
+          "unres_coker_4": 719,
+          "nnz": 1638
+        },
+        {
+          "rank": 89,
+          "supp_coker_4": 23,
+          "unres_coker_4": 263,
+          "nnz": 1678
+        },
+        {
+          "rank": 89,
+          "supp_coker_4": 24,
+          "unres_coker_4": 383,
+          "nnz": 1584
+        },
+        {
+          "rank": 89,
+          "supp_coker_4": 24,
+          "unres_coker_4": 391,
+          "nnz": 1585
+        },
+        {
+          "rank": 89,
+          "supp_coker_4": 35,
+          "unres_coker_4": null,
+          "nnz": 1612
+        }
+      ],
+      "dead_buckets": [
+        1,
+        2,
+        3
+      ],
+      "policy_j_tau": -21.3613,
+      "elapsed_s": 49.99,
+      "provenance": {
+        "source_repo": "mkauers/matrix-multiplication",
+        "paper": "Kauers & Wood (2025), Meta-Flip Graphs",
+        "url": "https://raw.githubusercontent.com/mkauers/matrix-multiplication/12c26b29a545/456/k08dcabe7aa6634b.mod2.exp",
+        "commit_sha": "12c26b29a545",
+        "raw_sha256": "848598e02b5b4972b6e3aad7f30340fdadd9e9776d4f5250c42615e4e2ddfbc5",
+        "convention_detected": "trace_tr_ABCt_transposed_to_C_eq_AB",
+        "canonical_sha256": "9e9c8ea7bb663b75d3ee8b076099af5ca53cf7914e15772c44cbf1c6f5228f17",
+        "verified_brent_Z2": true
+      }
+    },
+    {
+      "target_label": "P3_4x4x8_R95_plus1_unres",
+      "format": [
+        4,
+        4,
+        8
+      ],
+      "R_target": 95,
+      "extra_ranks_relaxed": 1,
+      "sa_mode": "UNRES",
+      "total_oracle_evals": 1815,
+      "unique_schemes_archived": 40,
+      "min_unres_coker_4": 78,
+      "min_supp_coker_4": 64,
+      "hit_zero_and_lifted": false,
+      "lift_attempts": [],
+      "top_basins": [
+        {
+          "rank": 94,
+          "supp_coker_4": 120,
+          "unres_coker_4": 78,
+          "nnz": 1323
+        },
+        {
+          "rank": 94,
+          "supp_coker_4": 136,
+          "unres_coker_4": 88,
+          "nnz": 1260
+        },
+        {
+          "rank": 95,
+          "supp_coker_4": 162,
+          "unres_coker_4": 88,
+          "nnz": 1295
+        },
+        {
+          "rank": 94,
+          "supp_coker_4": 127,
+          "unres_coker_4": 89,
+          "nnz": 1326
+        },
+        {
+          "rank": 94,
+          "supp_coker_4": 122,
+          "unres_coker_4": 91,
+          "nnz": 1364
+        }
+      ],
+      "dead_buckets": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "policy_j_tau": -87.6493,
+      "elapsed_s": 64.17,
+      "provenance": {
+        "source_repo": "jakobmoosbauer/flips (direct_sum_p of 444-47-mod2.exp x2)",
+        "paper": "Kauers & Moosbauer (ISSAC 2023) 4x4x4:47 direct sum along p",
+        "url": "https://raw.githubusercontent.com/jakobmoosbauer/flips/e31a0a0f0d25/solutions/444-47-mod2.exp",
+        "commit_sha": "e31a0a0f0d25",
+        "raw_sha256": "3f7d141d494a93fd4a674bae2a31e96e413a8eaa05a224d986afd98641e8051e",
+        "convention_detected": "trace_tr_ABCt_transposed_to_C_eq_AB -> direct_sum_p",
+        "canonical_sha256": "2be965fac0dc021db1f28284896bd41d276e3d335fa7982435839884abdf2688",
+        "verified_brent_Z2": true
+      }
+    },
+    {
+      "target_label": "P3_4x4x8_R94_direct_unres",
+      "format": [
+        4,
+        4,
+        8
+      ],
+      "R_target": 94,
+      "extra_ranks_relaxed": 0,
+      "sa_mode": "UNRES",
+      "total_oracle_evals": 1272,
+      "unique_schemes_archived": 42,
+      "min_unres_coker_4": 52,
+      "min_supp_coker_4": 49,
+      "hit_zero_and_lifted": false,
+      "lift_attempts": [],
+      "top_basins": [
+        {
+          "rank": 94,
+          "supp_coker_4": 98,
+          "unres_coker_4": 52,
+          "nnz": 1426
+        },
+        {
+          "rank": 94,
+          "supp_coker_4": 111,
+          "unres_coker_4": 54,
+          "nnz": 1432
+        },
+        {
+          "rank": 94,
+          "supp_coker_4": 126,
+          "unres_coker_4": 56,
+          "nnz": 1431
+        },
+        {
+          "rank": 94,
+          "supp_coker_4": 119,
+          "unres_coker_4": 59,
+          "nnz": 1405
+        },
+        {
+          "rank": 94,
+          "supp_coker_4": 69,
+          "unres_coker_4": 60,
+          "nnz": 1425
+        }
+      ],
+      "dead_buckets": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "policy_j_tau": -49.093,
+      "elapsed_s": 53.25,
+      "provenance": {
+        "source_repo": "jakobmoosbauer/flips (direct_sum_p of 444-47-mod2.exp x2)",
+        "paper": "Kauers & Moosbauer (ISSAC 2023) 4x4x4:47 direct sum along p",
+        "url": "https://raw.githubusercontent.com/jakobmoosbauer/flips/e31a0a0f0d25/solutions/444-47-mod2.exp",
+        "commit_sha": "e31a0a0f0d25",
+        "raw_sha256": "3f7d141d494a93fd4a674bae2a31e96e413a8eaa05a224d986afd98641e8051e",
+        "convention_detected": "trace_tr_ABCt_transposed_to_C_eq_AB -> direct_sum_p",
+        "canonical_sha256": "2be965fac0dc021db1f28284896bd41d276e3d335fa7982435839884abdf2688",
+        "verified_brent_Z2": true
+      }
+    },
+    {
+      "target_label": "P4_7x7x7_R248_plus3_supp",
+      "format": [
+        7,
+        7,
+        7
+      ],
+      "R_target": 248,
+      "extra_ranks_relaxed": 3,
+      "sa_mode": "SUPP",
+      "total_oracle_evals": 864,
+      "unique_schemes_archived": 32,
+      "min_unres_coker_4": null,
+      "min_supp_coker_4": 62,
+      "hit_zero_and_lifted": false,
+      "lift_attempts": [],
+      "top_basins": [
+        {
+          "rank": 245,
+          "supp_coker_4": 62,
+          "unres_coker_4": null,
+          "nnz": 4786
+        },
+        {
+          "rank": 245,
+          "supp_coker_4": 78,
+          "unres_coker_4": null,
+          "nnz": 4875
+        },
+        {
+          "rank": 245,
+          "supp_coker_4": 79,
+          "unres_coker_4": null,
+          "nnz": 4859
+        },
+        {
+          "rank": 245,
+          "supp_coker_4": 80,
+          "unres_coker_4": null,
+          "nnz": 4819
+        },
+        {
+          "rank": 245,
+          "supp_coker_4": 84,
+          "unres_coker_4": null,
+          "nnz": 5000
+        }
+      ],
+      "dead_buckets": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "policy_j_tau": -72.5195,
+      "elapsed_s": 59.08,
+      "provenance": {
+        "source_repo": "arXiv:2609.17533v2 (Appendix A BEGIN-RANK245-7X7X7-ZLIB-BASE32)",
+        "paper": "Medley, Gokul, Luu, Manolios (Sep 2026 / ALENEX 2027)",
+        "url": "https://arxiv.org/e-print/2609.17533v2",
+        "commit_sha": "arXiv:2609.17533v2",
+        "raw_sha256": "4f77bf87753fe4f0a509f1c597b1d691b41fec64ced830982e9625390ab92bd3",
+        "tarball_sha256": "f35d135e9fe15580c2f2d4ed98c47821e49ea10840fbe71b09b6a888d935eb28",
+        "convention_detected": "C_eq_AB_row_major",
+        "canonical_sha256": "a05042d0284d58acd1cd2353f53d6b0d2c0ddec43d526a962886e104d03b7b9a",
+        "verified_brent_Z2": true
+      }
+    },
+    {
+      "target_label": "P4_7x7x7_R246_plus1_supp",
+      "format": [
+        7,
+        7,
+        7
+      ],
+      "R_target": 246,
+      "extra_ranks_relaxed": 1,
+      "sa_mode": "SUPP",
+      "total_oracle_evals": 862,
+      "unique_schemes_archived": 32,
+      "min_unres_coker_4": null,
+      "min_supp_coker_4": 60,
+      "hit_zero_and_lifted": false,
+      "lift_attempts": [],
+      "top_basins": [
+        {
+          "rank": 246,
+          "supp_coker_4": 60,
+          "unres_coker_4": null,
+          "nnz": 4938
+        },
+        {
+          "rank": 245,
+          "supp_coker_4": 76,
+          "unres_coker_4": null,
+          "nnz": 4877
+        },
+        {
+          "rank": 245,
+          "supp_coker_4": 76,
+          "unres_coker_4": null,
+          "nnz": 4904
+        },
+        {
+          "rank": 245,
+          "supp_coker_4": 78,
+          "unres_coker_4": null,
+          "nnz": 4833
+        },
+        {
+          "rank": 245,
+          "supp_coker_4": 80,
+          "unres_coker_4": null,
+          "nnz": 4868
+        }
+      ],
+      "dead_buckets": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "policy_j_tau": -67.8177,
+      "elapsed_s": 69.28,
+      "provenance": {
+        "source_repo": "arXiv:2609.17533v2 (Appendix A BEGIN-RANK245-7X7X7-ZLIB-BASE32)",
+        "paper": "Medley, Gokul, Luu, Manolios (Sep 2026 / ALENEX 2027)",
+        "url": "https://arxiv.org/e-print/2609.17533v2",
+        "commit_sha": "arXiv:2609.17533v2",
+        "raw_sha256": "4f77bf87753fe4f0a509f1c597b1d691b41fec64ced830982e9625390ab92bd3",
+        "tarball_sha256": "f35d135e9fe15580c2f2d4ed98c47821e49ea10840fbe71b09b6a888d935eb28",
+        "convention_detected": "C_eq_AB_row_major",
+        "canonical_sha256": "a05042d0284d58acd1cd2353f53d6b0d2c0ddec43d526a962886e104d03b7b9a",
+        "verified_brent_Z2": true
+      }
+    },
+    {
+      "target_label": "P4_7x7x7_R245_direct_supp",
+      "format": [
+        7,
+        7,
+        7
+      ],
+      "R_target": 245,
+      "extra_ranks_relaxed": 0,
+      "sa_mode": "SUPP",
+      "total_oracle_evals": 831,
+      "unique_schemes_archived": 32,
+      "min_unres_coker_4": null,
+      "min_supp_coker_4": 57,
+      "hit_zero_and_lifted": false,
+      "lift_attempts": [],
+      "top_basins": [
+        {
+          "rank": 245,
+          "supp_coker_4": 57,
+          "unres_coker_4": null,
+          "nnz": 4957
+        },
+        {
+          "rank": 245,
+          "supp_coker_4": 74,
+          "unres_coker_4": null,
+          "nnz": 4760
+        },
+        {
+          "rank": 245,
+          "supp_coker_4": 74,
+          "unres_coker_4": null,
+          "nnz": 4818
+        },
+        {
+          "rank": 245,
+          "supp_coker_4": 74,
+          "unres_coker_4": null,
+          "nnz": 4902
+        },
+        {
+          "rank": 245,
+          "supp_coker_4": 77,
+          "unres_coker_4": null,
+          "nnz": 4928
+        }
+      ],
+      "dead_buckets": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "policy_j_tau": -64.8612,
+      "elapsed_s": 70.0,
+      "provenance": {
+        "source_repo": "arXiv:2609.17533v2 (Appendix A BEGIN-RANK245-7X7X7-ZLIB-BASE32)",
+        "paper": "Medley, Gokul, Luu, Manolios (Sep 2026 / ALENEX 2027)",
+        "url": "https://arxiv.org/e-print/2609.17533v2",
+        "commit_sha": "arXiv:2609.17533v2",
+        "raw_sha256": "4f77bf87753fe4f0a509f1c597b1d691b41fec64ced830982e9625390ab92bd3",
+        "tarball_sha256": "f35d135e9fe15580c2f2d4ed98c47821e49ea10840fbe71b09b6a888d935eb28",
+        "convention_detected": "C_eq_AB_row_major",
+        "canonical_sha256": "a05042d0284d58acd1cd2353f53d6b0d2c0ddec43d526a962886e104d03b7b9a",
+        "verified_brent_Z2": true
+      }
+    },
+    {
+      "target_label": "B6_4x4x4_R48_plus1_unres",
+      "format": [
+        4,
+        4,
+        4
+      ],
+      "R_target": 48,
+      "extra_ranks_relaxed": 1,
+      "sa_mode": "UNRES",
+      "total_oracle_evals": 29310,
+      "unique_schemes_archived": 11,
+      "min_unres_coker_4": 15,
+      "min_supp_coker_4": 23,
+      "hit_zero_and_lifted": false,
+      "lift_attempts": [],
+      "top_basins": [
+        {
+          "rank": 48,
+          "supp_coker_4": 25,
+          "unres_coker_4": 15,
+          "nnz": 549
+        },
+        {
+          "rank": 48,
+          "supp_coker_4": 42,
+          "unres_coker_4": 15,
+          "nnz": 554
+        },
+        {
+          "rank": 48,
+          "supp_coker_4": 34,
+          "unres_coker_4": 17,
+          "nnz": 553
+        },
+        {
+          "rank": 48,
+          "supp_coker_4": 23,
+          "unres_coker_4": 20,
+          "nnz": 539
+        },
+        {
+          "rank": 48,
+          "supp_coker_4": 36,
+          "unres_coker_4": 20,
+          "nnz": 558
+        }
+      ],
+      "dead_buckets": [
+        2,
+        3
+      ],
+      "policy_j_tau": -17.9797,
+      "elapsed_s": 35.13,
+      "provenance": {
+        "source_repo": "jakobmoosbauer/flips",
+        "paper": "Kauers & Moosbauer (ISSAC 2023, arXiv:2212.01175)",
+        "url": "https://raw.githubusercontent.com/jakobmoosbauer/flips/e31a0a0f0d25/solutions/444-47-mod2.exp",
+        "commit_sha": "e31a0a0f0d25",
+        "raw_sha256": "3f7d141d494a93fd4a674bae2a31e96e413a8eaa05a224d986afd98641e8051e",
+        "convention_detected": "trace_tr_ABCt_transposed_to_C_eq_AB",
+        "canonical_sha256": "1891b8bd0004371209cc9f0c3bd773c7d246434b413754f312ab43b9eabf17dd",
+        "verified_brent_Z2": true
+      }
+    },
+    {
+      "target_label": "S1_4x5x5_R75_keepR_supp",
+      "format": [
+        4,
+        5,
+        5
+      ],
+      "R_target": 75,
+      "extra_ranks_relaxed": 2,
+      "sa_mode": "SUPP",
+      "total_oracle_evals": 148911,
+      "unique_schemes_archived": 76,
+      "min_unres_coker_4": 24,
+      "min_supp_coker_4": 9,
+      "hit_zero_and_lifted": false,
+      "lift_attempts": [],
+      "top_basins": [
+        {
+          "rank": 75,
+          "supp_coker_4": 9,
+          "unres_coker_4": 24,
+          "nnz": 1285
+        },
+        {
+          "rank": 75,
+          "supp_coker_4": 10,
+          "unres_coker_4": 95,
+          "nnz": 1139
+        },
+        {
+          "rank": 75,
+          "supp_coker_4": 10,
+          "unres_coker_4": 165,
+          "nnz": 1140
+        },
+        {
+          "rank": 75,
+          "supp_coker_4": 10,
+          "unres_coker_4": 84,
+          "nnz": 1142
+        },
+        {
+          "rank": 75,
+          "supp_coker_4": 10,
+          "unres_coker_4": 191,
+          "nnz": 1144
+        }
+      ],
+      "dead_buckets": [
+        2,
+        3
+      ],
+      "policy_j_tau": -9.3125,
+      "elapsed_s": 101.33,
+      "provenance": {
+        "source_repo": "yamato-arai/adap",
+        "paper": "Arai, Ichikawa, Hukushima (ISSAC 2024, arXiv:2312.16960)",
+        "url": "https://raw.githubusercontent.com/yamato-arai/adap/fe7b20408a32/data/455_73.m",
+        "commit_sha": "fe7b20408a32",
+        "raw_sha256": "cbb0fbf1be1cda95113abe2a6ec0e59cfc7b071b316e4463981100751512dc26",
+        "convention_detected": "trace_tr_ABCt_transposed_to_C_eq_AB",
+        "canonical_sha256": "b91ed2c19a4d38476459f8dc15a1fb8caa2d7a16b62aeb5a3e8ef39f55c8a57e",
+        "verified_brent_Z2": true
+      }
+    },
+    {
+      "target_label": "S2_4x4x8_R95_keepR_supp",
+      "format": [
+        4,
+        4,
+        8
+      ],
+      "R_target": 95,
+      "extra_ranks_relaxed": 1,
+      "sa_mode": "SUPP",
+      "total_oracle_evals": 25271,
+      "unique_schemes_archived": 55,
+      "min_unres_coker_4": 114,
+      "min_supp_coker_4": 14,
+      "hit_zero_and_lifted": false,
+      "lift_attempts": [],
+      "top_basins": [
+        {
+          "rank": 95,
+          "supp_coker_4": 14,
+          "unres_coker_4": 432,
+          "nnz": 1747
+        },
+        {
+          "rank": 95,
+          "supp_coker_4": 14,
+          "unres_coker_4": 569,
+          "nnz": 1747
+        },
+        {
+          "rank": 95,
+          "supp_coker_4": 14,
+          "unres_coker_4": 399,
+          "nnz": 1760
+        },
+        {
+          "rank": 95,
+          "supp_coker_4": 15,
+          "unres_coker_4": 457,
+          "nnz": 1753
+        },
+        {
+          "rank": 95,
+          "supp_coker_4": 16,
+          "unres_coker_4": 466,
+          "nnz": 1695
+        }
+      ],
+      "dead_buckets": [
+        2,
+        3
+      ],
+      "policy_j_tau": -13.3388,
+      "elapsed_s": 51.21,
+      "provenance": {
+        "source_repo": "jakobmoosbauer/flips (direct_sum_p of 444-47-mod2.exp x2)",
+        "paper": "Kauers & Moosbauer (ISSAC 2023) 4x4x4:47 direct sum along p",
+        "url": "https://raw.githubusercontent.com/jakobmoosbauer/flips/e31a0a0f0d25/solutions/444-47-mod2.exp",
+        "commit_sha": "e31a0a0f0d25",
+        "raw_sha256": "3f7d141d494a93fd4a674bae2a31e96e413a8eaa05a224d986afd98641e8051e",
+        "convention_detected": "trace_tr_ABCt_transposed_to_C_eq_AB -> direct_sum_p",
+        "canonical_sha256": "2be965fac0dc021db1f28284896bd41d276e3d335fa7982435839884abdf2688",
+        "verified_brent_Z2": true
+      }
+    },
+    {
+      "target_label": "S3_4x5x6_R89_deep_supp",
+      "format": [
+        4,
+        5,
+        6
+      ],
+      "R_target": 89,
+      "extra_ranks_relaxed": 0,
+      "sa_mode": "SUPP",
+      "total_oracle_evals": 40385,
+      "unique_schemes_archived": 72,
+      "min_unres_coker_4": 150,
+      "min_supp_coker_4": 29,
+      "hit_zero_and_lifted": false,
+      "lift_attempts": [],
+      "top_basins": [
+        {
+          "rank": 89,
+          "supp_coker_4": 29,
+          "unres_coker_4": 197,
+          "nnz": 1447
+        },
+        {
+          "rank": 89,
+          "supp_coker_4": 29,
+          "unres_coker_4": 199,
+          "nnz": 1453
+        },
+        {
+          "rank": 89,
+          "supp_coker_4": 29,
+          "unres_coker_4": 199,
+          "nnz": 1456
+        },
+        {
+          "rank": 89,
+          "supp_coker_4": 29,
+          "unres_coker_4": 222,
+          "nnz": 1458
+        },
+        {
+          "rank": 89,
+          "supp_coker_4": 29,
+          "unres_coker_4": 197,
+          "nnz": 1459
+        }
+      ],
+      "dead_buckets": [
+        1,
+        2,
+        3
+      ],
+      "policy_j_tau": -31.4444,
+      "elapsed_s": 38.7,
+      "provenance": {
+        "source_repo": "mkauers/matrix-multiplication",
+        "paper": "Kauers & Wood (2025), Meta-Flip Graphs",
+        "url": "https://raw.githubusercontent.com/mkauers/matrix-multiplication/12c26b29a545/456/k08dcabe7aa6634b.mod2.exp",
+        "commit_sha": "12c26b29a545",
+        "raw_sha256": "848598e02b5b4972b6e3aad7f30340fdadd9e9776d4f5250c42615e4e2ddfbc5",
+        "convention_detected": "trace_tr_ABCt_transposed_to_C_eq_AB",
+        "canonical_sha256": "9e9c8ea7bb663b75d3ee8b076099af5ca53cf7914e15772c44cbf1c6f5228f17",
+        "verified_brent_Z2": true
+      }
+    },
+    {
+      "target_label": "S4_7x7x7_R248_keepR_supp",
+      "format": [
+        7,
+        7,
+        7
+      ],
+      "R_target": 248,
+      "extra_ranks_relaxed": 3,
+      "sa_mode": "SUPP",
+      "total_oracle_evals": 850,
+      "unique_schemes_archived": 32,
+      "min_unres_coker_4": null,
+      "min_supp_coker_4": 62,
+      "hit_zero_and_lifted": false,
+      "lift_attempts": [],
+      "top_basins": [
+        {
+          "rank": 248,
+          "supp_coker_4": 62,
+          "unres_coker_4": null,
+          "nnz": 4835
+        },
+        {
+          "rank": 248,
+          "supp_coker_4": 78,
+          "unres_coker_4": null,
+          "nnz": 4963
+        },
+        {
+          "rank": 248,
+          "supp_coker_4": 81,
+          "unres_coker_4": null,
+          "nnz": 4929
+        },
+        {
+          "rank": 248,
+          "supp_coker_4": 82,
+          "unres_coker_4": null,
+          "nnz": 5265
+        },
+        {
+          "rank": 248,
+          "supp_coker_4": 87,
+          "unres_coker_4": null,
+          "nnz": 5130
+        }
+      ],
+      "dead_buckets": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "policy_j_tau": -72.1101,
+      "elapsed_s": 65.63,
+      "provenance": {
+        "source_repo": "arXiv:2609.17533v2 (Appendix A BEGIN-RANK245-7X7X7-ZLIB-BASE32)",
+        "paper": "Medley, Gokul, Luu, Manolios (Sep 2026 / ALENEX 2027)",
+        "url": "https://arxiv.org/e-print/2609.17533v2",
+        "commit_sha": "arXiv:2609.17533v2",
+        "raw_sha256": "4f77bf87753fe4f0a509f1c597b1d691b41fec64ced830982e9625390ab92bd3",
+        "tarball_sha256": "f35d135e9fe15580c2f2d4ed98c47821e49ea10840fbe71b09b6a888d935eb28",
+        "convention_detected": "C_eq_AB_row_major",
+        "canonical_sha256": "a05042d0284d58acd1cd2353f53d6b0d2c0ddec43d526a962886e104d03b7b9a",
+        "verified_brent_Z2": true
+      }
+    }
+  ],
+  "f3_odd_prime_diagnostics": [
+    {
+      "format": [
+        4,
+        4,
+        5
+      ],
+      "rank": 60,
+      "ring": "F3_support",
+      "active_triples": 1422,
+      "status": "unsat",
+      "elapsed_ms": 452.51,
+      "seed_id": "4x4x5_R60_km"
+    },
+    {
+      "format": [
+        4,
+        4,
+        4
+      ],
+      "rank": 47,
+      "ring": "F3_support",
+      "active_triples": 855,
+      "status": "unsat",
+      "elapsed_ms": 291.74,
+      "seed_id": "4x4x4_R47_km"
+    }
+  ],
+  "lifted_world_records": [],
+  "elapsed_total_s": 1260.28
+}

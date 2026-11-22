@@ -1,0 +1,219 @@
+{
+  "created_at": "2026-11-22T16:06:52Z",
+  "convention": "C_eq_AB_row_major",
+  "total_seeds": 7,
+  "elapsed_s": 7.61,
+  "seeds": [
+    {
+      "seed_id": "4x5x5_R73_arai",
+      "file": "e:\\эксперименты\\исследования\\fmm_discovery\\artifacts\\public_f2_seeds\\4x5x5_R73_arai.json",
+      "format": [
+        4,
+        5,
+        5
+      ],
+      "rank": 73,
+      "nnz_total": 1932,
+      "flip_edges": 4,
+      "supp_coker_4": 2647,
+      "supp_free_bits": 11,
+      "supp_rank_J1": 1775,
+      "supp_oracle_ms": 35.8081,
+      "unres_coker_4": 1026,
+      "unres_free_bits": 72,
+      "unres_rank_J1": 4527,
+      "unres_oracle_ms": 439.0373,
+      "provenance": {
+        "source_repo": "yamato-arai/adap",
+        "paper": "Arai, Ichikawa, Hukushima (ISSAC 2024, arXiv:2312.16960)",
+        "url": "https://raw.githubusercontent.com/yamato-arai/adap/fe7b20408a32/data/455_73.m",
+        "commit_sha": "fe7b20408a32",
+        "raw_sha256": "cbb0fbf1be1cda95113abe2a6ec0e59cfc7b071b316e4463981100751512dc26",
+        "convention_detected": "trace_tr_ABCt_transposed_to_C_eq_AB",
+        "canonical_sha256": "b91ed2c19a4d38476459f8dc15a1fb8caa2d7a16b62aeb5a3e8ef39f55c8a57e",
+        "verified_brent_Z2": true
+      }
+    },
+    {
+      "seed_id": "4x5x6_R89_kauers_a",
+      "file": "e:\\эксперименты\\исследования\\fmm_discovery\\artifacts\\public_f2_seeds\\4x5x6_R89_kauers_a.json",
+      "format": [
+        4,
+        5,
+        6
+      ],
+      "rank": 89,
+      "nnz_total": 1756,
+      "flip_edges": 12,
+      "supp_coker_4": 1237,
+      "supp_free_bits": 12,
+      "supp_rank_J1": 1566,
+      "supp_oracle_ms": 11.9809,
+      "unres_coker_4": 491,
+      "unres_free_bits": 107,
+      "unres_rank_J1": 6301,
+      "unres_oracle_ms": 1359.2671,
+      "provenance": {
+        "source_repo": "mkauers/matrix-multiplication",
+        "paper": "Kauers & Wood (2025), Meta-Flip Graphs",
+        "url": "https://raw.githubusercontent.com/mkauers/matrix-multiplication/12c26b29a545/456/k08dcabe7aa6634b.mod2.exp",
+        "commit_sha": "12c26b29a545",
+        "raw_sha256": "848598e02b5b4972b6e3aad7f30340fdadd9e9776d4f5250c42615e4e2ddfbc5",
+        "convention_detected": "trace_tr_ABCt_transposed_to_C_eq_AB",
+        "canonical_sha256": "9e9c8ea7bb663b75d3ee8b076099af5ca53cf7914e15772c44cbf1c6f5228f17",
+        "verified_brent_Z2": true
+      }
+    },
+    {
+      "seed_id": "4x5x6_R89_kauers_b",
+      "file": "e:\\эксперименты\\исследования\\fmm_discovery\\artifacts\\public_f2_seeds\\4x5x6_R89_kauers_b.json",
+      "format": [
+        4,
+        5,
+        6
+      ],
+      "rank": 89,
+      "nnz_total": 1781,
+      "flip_edges": 13,
+      "supp_coker_4": 1237,
+      "supp_free_bits": 14,
+      "supp_rank_J1": 1589,
+      "supp_oracle_ms": 13.0845,
+      "unres_coker_4": 549,
+      "unres_free_bits": 106,
+      "unres_rank_J1": 6302,
+      "unres_oracle_ms": 1193.8807,
+      "provenance": {
+        "source_repo": "mkauers/matrix-multiplication",
+        "paper": "Kauers & Wood (2025), Meta-Flip Graphs",
+        "url": "https://raw.githubusercontent.com/mkauers/matrix-multiplication/12c26b29a545/456/k0e35aeb54b662ba.mod2.exp",
+        "commit_sha": "12c26b29a545",
+        "raw_sha256": "418b048d164481f60175a91c7da38a0ee3c3a0583872a3e8edfa50a3800541af",
+        "convention_detected": "trace_tr_ABCt_transposed_to_C_eq_AB",
+        "canonical_sha256": "9ffb52fee5bbf7a62b727ef8bcf8510715a60521a1252ceddc4b5ccc7ed579cb",
+        "verified_brent_Z2": true
+      }
+    },
+    {
+      "seed_id": "4x4x4_R47_km",
+      "file": "e:\\эксперименты\\исследования\\fmm_discovery\\artifacts\\public_f2_seeds\\4x4x4_R47_km.json",
+      "format": [
+        4,
+        4,
+        4
+      ],
+      "rank": 47,
+      "nnz_total": 677,
+      "flip_edges": 0,
+      "supp_coker_4": 134,
+      "supp_free_bits": 9,
+      "supp_rank_J1": 574,
+      "supp_oracle_ms": 0.9273,
+      "unres_coker_4": 311,
+      "unres_free_bits": 45,
+      "unres_rank_J1": 2117,
+      "unres_oracle_ms": 30.3289,
+      "provenance": {
+        "source_repo": "jakobmoosbauer/flips",
+        "paper": "Kauers & Moosbauer (ISSAC 2023, arXiv:2212.01175)",
+        "url": "https://raw.githubusercontent.com/jakobmoosbauer/flips/e31a0a0f0d25/solutions/444-47-mod2.exp",
+        "commit_sha": "e31a0a0f0d25",
+        "raw_sha256": "3f7d141d494a93fd4a674bae2a31e96e413a8eaa05a224d986afd98641e8051e",
+        "convention_detected": "trace_tr_ABCt_transposed_to_C_eq_AB",
+        "canonical_sha256": "1891b8bd0004371209cc9f0c3bd773c7d246434b413754f312ab43b9eabf17dd",
+        "verified_brent_Z2": true
+      }
+    },
+    {
+      "seed_id": "4x4x8_R94_km_ds",
+      "file": "e:\\эксперименты\\исследования\\fmm_discovery\\artifacts\\public_f2_seeds\\4x4x8_R94_km_ds.json",
+      "format": [
+        4,
+        4,
+        8
+      ],
+      "rank": 94,
+      "nnz_total": 1354,
+      "flip_edges": 47,
+      "supp_coker_4": 234,
+      "supp_free_bits": 18,
+      "supp_rank_J1": 1148,
+      "supp_oracle_ms": 4.2769,
+      "unres_coker_4": 488,
+      "unres_free_bits": 214,
+      "unres_rank_J1": 7118,
+      "unres_oracle_ms": 410.4152,
+      "provenance": {
+        "source_repo": "jakobmoosbauer/flips (direct_sum_p of 444-47-mod2.exp x2)",
+        "paper": "Kauers & Moosbauer (ISSAC 2023) 4x4x4:47 direct sum along p",
+        "url": "https://raw.githubusercontent.com/jakobmoosbauer/flips/e31a0a0f0d25/solutions/444-47-mod2.exp",
+        "commit_sha": "e31a0a0f0d25",
+        "raw_sha256": "3f7d141d494a93fd4a674bae2a31e96e413a8eaa05a224d986afd98641e8051e",
+        "convention_detected": "trace_tr_ABCt_transposed_to_C_eq_AB -> direct_sum_p",
+        "canonical_sha256": "2be965fac0dc021db1f28284896bd41d276e3d335fa7982435839884abdf2688",
+        "verified_brent_Z2": true
+      }
+    },
+    {
+      "seed_id": "7x7x7_R245_medley",
+      "file": "e:\\эксперименты\\исследования\\fmm_discovery\\artifacts\\public_f2_seeds\\7x7x7_R245_medley.json",
+      "format": [
+        7,
+        7,
+        7
+      ],
+      "rank": 245,
+      "nnz_total": 3915,
+      "flip_edges": 52,
+      "supp_coker_4": 408,
+      "supp_free_bits": 96,
+      "supp_rank_J1": 3329,
+      "supp_oracle_ms": 31.4189,
+      "unres_coker_4": null,
+      "unres_free_bits": null,
+      "unres_rank_J1": null,
+      "unres_oracle_ms": null,
+      "provenance": {
+        "source_repo": "arXiv:2609.17533v2 (Appendix A BEGIN-RANK245-7X7X7-ZLIB-BASE32)",
+        "paper": "Medley, Gokul, Luu, Manolios (Sep 2026 / ALENEX 2027)",
+        "url": "https://arxiv.org/e-print/2609.17533v2",
+        "commit_sha": "arXiv:2609.17533v2",
+        "raw_sha256": "4f77bf87753fe4f0a509f1c597b1d691b41fec64ced830982e9625390ab92bd3",
+        "tarball_sha256": "f35d135e9fe15580c2f2d4ed98c47821e49ea10840fbe71b09b6a888d935eb28",
+        "convention_detected": "C_eq_AB_row_major",
+        "canonical_sha256": "a05042d0284d58acd1cd2353f53d6b0d2c0ddec43d526a962886e104d03b7b9a",
+        "verified_brent_Z2": true
+      }
+    },
+    {
+      "seed_id": "4x4x5_R60_km",
+      "file": "e:\\эксперименты\\исследования\\fmm_discovery\\artifacts\\public_f2_seeds\\4x4x5_R60_km.json",
+      "format": [
+        4,
+        4,
+        5
+      ],
+      "rank": 60,
+      "nnz_total": 957,
+      "flip_edges": 10,
+      "supp_coker_4": 128,
+      "supp_free_bits": 13,
+      "supp_rank_J1": 824,
+      "supp_oracle_ms": 2.1235,
+      "unres_coker_4": 143,
+      "unres_free_bits": 77,
+      "unres_rank_J1": 3163,
+      "unres_oracle_ms": 85.5497,
+      "provenance": {
+        "source_repo": "jakobmoosbauer/flips",
+        "paper": "Kauers & Moosbauer (ISSAC 2023, arXiv:2212.01175)",
+        "url": "https://raw.githubusercontent.com/jakobmoosbauer/flips/e31a0a0f0d25/solutions/445-60-mod2.exp",
+        "commit_sha": "e31a0a0f0d25",
+        "raw_sha256": "3b134ae7c85225084185dc02d98c3889b11038b796bd37b85f7913472b0e15b7",
+        "convention_detected": "trace_tr_ABCt_transposed_to_C_eq_AB",
+        "canonical_sha256": "810294e61aa183202ce2af714b14ff928a358bf8ee9fbffbb74c4ea616776087",
+        "verified_brent_Z2": true
+      }
+    }
+  ]
+}

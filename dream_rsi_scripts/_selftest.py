@@ -2680,6 +2680,34 @@ def main() -> int:
         f"op1={lift1['operator']} op2={lift2['operator']} grace={lift2['warmup_grace_steps']}",
     )
 
+    # 21c. Chained CROSSOVER node IDs stay O(1) bounded without exponential MemoryError
+    t_xover = DiscoveryTree(task="xover-bound", baseline_score=0.0, max_parallelism=2)
+    t_xover.add(Node(id="root", parent_id=None, branch=-1, attempt=0, score=0.0))
+    t_xover.add(Node(id="b0", parent_id="root", branch=0, attempt=1, score=1.0, pass_mask=[1, 0]))
+    t_xover.add(Node(id="b1", parent_id="root", branch=1, attempt=1, score=1.0, pass_mask=[0, 1]))
+    lw_xo = LeanDAGWorld(t_xover, Problem())
+    lw_xo.probe(["root", "root"])
+    prev_a, prev_b = "b0", "b1"
+    xo_ids = []
+    last_xo_child = None
+    expected_parent_a, expected_parent_b = prev_a, prev_b
+    for _ in range(40):
+        expected_parent_a, expected_parent_b = prev_a, prev_b
+        res_xo = lw_xo.probe([f"CROSSOVER({prev_a},{prev_b})"])
+        last_xo_child = res_xo[0]
+        xo_ids.append(last_xo_child.id)
+        prev_a, prev_b = prev_b, last_xo_child.id
+    check(
+        "21c. Chained CROSSOVER node IDs stay O(1) bounded without exponential MemoryError",
+        len(xo_ids) == 40
+        and len(set(xo_ids)) == 40
+        and max(len(x) for x in xo_ids) <= 64
+        and last_xo_child is not None
+        and last_xo_child.parent_id == expected_parent_a
+        and last_xo_child.meta.get("secondary_parent_id") == expected_parent_b,
+        f"count={len(xo_ids)} unique={len(set(xo_ids))} max_len={max(len(x) for x in xo_ids)}",
+    )
+
     print()
     if FAILURES:
         print(f"RESULT: {len(FAILURES)} FAILED -> {FAILURES}")

@@ -44,3 +44,7 @@ c71_fei_research/artifacts/phase3_catalog_seeds.json
 c71_fei_research/artifacts/sleep_dag_trees*/
 fmm_discovery/artifacts/raw_runs/
 fmm_discovery/artifacts/checkpoints/
+*.nbc
+*.nbi
+fmm_discovery/artifacts/f2_pool_phase1.json
+fmm_discovery/artifacts/f3_pool_phase3.json
